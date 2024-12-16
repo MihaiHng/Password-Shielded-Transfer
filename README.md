@@ -1,66 +1,30 @@
-## Foundry
+# Password Shielded Transfer(PST) Platform
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+# About
 
-Foundry consists of:
+The main functionality of this system is the addition of an extra security layer to tranfer operations
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+  A Password Shielded Transfer(PST) will require the following steps:
 
-## Documentation
+  - [Person A] sends an [amount] to [Person B] via the PST Platform
+  - [Person A] sets up a [secure password] for the created transfer which is entered into the platform
+  - [Person A] sends the [secure password] to Person B by a communication methodof its choice(whatsapp, email, phonecall etc.)
+  - At this point there is a transfer created in the system, waiting to be unlocked and claimed with the [secure password] provided by [Person A]
+  - [Person B] accesses the pending transfer and enters the [secure password] received from [Person A]
+  - If the password entered by [Person B] matches the password which was set up by [Person A] the transfer will be unlocked for [Person B]
+  - At this point [Person B] can claim [amount] sent by [Person A]
 
-https://book.getfoundry.sh/
+  The added layer of security provided by the [secure password] allows [Person A] to cancel the tranfer and claim back the [amount] at any point before the receiver [Person B] claims the [amount]
 
-## Usage
+  function cancelTransfer(address receiver, uint256 transferIndex) external returns (bool) {
+        bool canceledTransfer = false;
 
-### Build
+        (, s_senderTotalAmounts[msg.sender]) =
+            s_senderTotalAmounts[msg.sender].trySub(s_receiverIndexedAmountToClaim[receiver][transferIndex]);
 
-```shell
-$ forge build
-```
+        s_receiverIndexedAmountToClaim[receiver][transferIndex] = 0;
+        emit TransferCanceled(msg.sender, receiver, transferIndex);
+        canceledTransfer = true;
 
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+        return canceledTransfer;
+    }
