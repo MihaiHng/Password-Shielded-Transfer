@@ -25,6 +25,7 @@ pragma solidity ^0.8.28;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 
 /**
  * @title PST Password Shielded Transfer
@@ -59,7 +60,7 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__NeedsMoreThanZero();
     error PST__NeedsValidAddress();
     error PST__PasswordNotProvided();
-    error PST__PasswordLengthMustBeAtLeastSevenCharactersLong();
+    error PST__MinPasswordLengthIsSeven();
     error PST__NotEnoughFunds();
     error PST__TransferFailed();
     error PST__NotEnoughGas();
@@ -73,10 +74,13 @@ contract PST is Ownable, ReentrancyGuard {
     error PST_FeeWIthdrawalFailed();
     error PST__TransferIndexDoesNotExist();
     error PST__RefundFailed();
+    error PST__InvalidTransferId();
+    error PST__TRansferNotPending();
 
     /*//////////////////////////////////////////////////////////////
                           TYPE DECLARATIONS
     //////////////////////////////////////////////////////////////*/
+    using TransferFeeLibrary for TransferFeeLibrary.TransferFeeLevels;
 
     /*//////////////////////////////////////////////////////////////
                           STATE VARIABLES
@@ -85,39 +89,68 @@ contract PST is Ownable, ReentrancyGuard {
     uint256 private s_transferFeeLvlOne;
     uint256 private s_transferFeeLvlTwo;
     uint256 private s_transferFeeLvlThree;
-
     uint256 private s_feePool;
+    uint256 private s_transferCounter;
+
+    uint256 private constant MINPASSWORDLENGTH = 7;
+
+    TransferFeeLibrary.TransferFeeLevels private feeLevels;
 
     // Mapping of receiver address to transfer index
     mapping(address receiver => uint256 transferIndex) private s_receiverTransferIndexes;
-    // @dev Mapping of receiver address to indexed transfer amount to claim
+    // Mapping of receiver address to indexed transfer amount to claim
     mapping(address receiver => mapping(uint256 transferIndex => uint256 amountToClaim)) private
         s_receiverIndexedAmountToClaim;
-    // @dev Mapping of receiver address to indexed transfer password set by sender
+    // Mapping of receiver address to indexed transfer password set by sender
     mapping(address receiver => mapping(uint256 transferIndex => bytes32 encodedPassword)) private
         s_indexedEncodedPasswords;
-
-    // Mapping of sender address to receiver address and transfer index to get the sender of a transfer
-    mapping(address sender => mapping(uint256 transferIndex => address receiver)) private s_senders;
+    // Mapping of receiever address to indexed transfer and unique salt for password encoding
+    mapping(address receiver => mapping(uint256 transferIndex => bytes32 salt)) private s_indexedSalts;
     // Mapping of receiver address to transfer index and its pending transfer status false/true
     mapping(address receiver => mapping(uint256 transferIndex => bool pendingTransfer)) private s_pendingTransfers;
+    // Mapping of sender address to receiver address and transfer index to get the sender of a transfer
+    mapping(address sender => mapping(uint256 transferIndex => address receiver)) private s_senders;
+
+    //Mapping of sender-receiver pair and the coresponding array of transfer indexes
+    mapping(address sender => mapping(address receiver => Transfer[])) private s_transfers;
+
+    // Mapping of transfer ID to Transfer struct
+    mapping(uint256 transferId => Transfer transfer) private s_transfersById;
 
     // @dev Mapping of receiver address to total amount claimed
     mapping(address receiver => uint256 totalAmount) private s_receiverTotalAmounts;
     // @dev Mapping of sender address to total amount sent
     mapping(address sender => uint256 totalAmount) private s_senderTotalAmounts;
 
+    struct Transfer {
+        address sender;
+        address receiver;
+        uint256 amount;
+        bytes32 encodedPassword;
+        bytes32 salt;
+        bool isPending;
+        bool isCanceled;
+    }
+
     /*//////////////////////////////////////////////////////////////
                               EVENTS
     //////////////////////////////////////////////////////////////*/
     // Event to log a created transfer
     event TransferInitiated(
-        address indexed sender, address indexed receiver, uint256 transferIndex, uint256 amount, uint256 transferFee
+        address indexed sender,
+        address indexed receiver,
+        uint256 indexed transferIndex,
+        uint256 amount,
+        uint256 transferFeeCost
     );
     // Event to log a canceled transfer
-    event TransferCanceled(address indexed sender, address indexed receiver, uint256 transferIndex, uint256 amount);
+    event TransferCanceled(
+        address indexed sender, address indexed receiver, uint256 indexed transferIndex, uint256 amount
+    );
     // Event to log a completed transfer
-    event TransferCompleted(address indexed sender, address indexed receiver, uint256 transferIndex, uint256 amount);
+    event TransferCompleted(
+        address indexed sender, address indexed receiver, uint256 indexed transferIndex, uint256 amount
+    );
 
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
@@ -129,9 +162,21 @@ contract PST is Ownable, ReentrancyGuard {
         _;
     }
 
-    modifier onlySender(address receiver, uint256 transferIndex) {
-        if (!(msg.sender == s_senders[receiver][transferIndex])) {
+    modifier onlySender(uint256 _transferId) {
+        address sender = s_transfersById[_transferId].sender;
+        if (!(msg.sender == sender)) {
             revert PST__OnlySenderCanCancel();
+        }
+        _;
+    }
+
+    modifier onlyPendingTransfers(uint256 _transferId) {
+        if (_transferId > s_transferCounter) {
+            revert PST__InvalidTransferId();
+        }
+
+        if (!(s_transfersById[_transferId].isPending)) {
+            revert PST__TRansferNotPending();
         }
         _;
     }
@@ -142,10 +187,11 @@ contract PST is Ownable, ReentrancyGuard {
     constructor(uint256 _transferFeeLvlOne, uint256 _transferFeeLvlTwo, uint256 _transferFeeLvlThree)
         Ownable(msg.sender)
     {
-        //i_owner = msg.sender;
-        s_transferFeeLvlOne = _transferFeeLvlOne;
-        s_transferFeeLvlTwo = _transferFeeLvlTwo;
-        s_transferFeeLvlThree = _transferFeeLvlThree;
+        feeLevels = TransferFeeLibrary.TransferFeeLevels({
+            lvlOne: _transferFeeLvlOne,
+            lvlTwo: _transferFeeLvlTwo,
+            lvlThree: _transferFeeLvlThree
+        });
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -156,15 +202,12 @@ contract PST is Ownable, ReentrancyGuard {
      *
      *
      */
-    function sendAmount(address receiver, uint256 amount, string memory password)
+    function createTransfer(address receiver, uint256 amount, string memory password)
         external
         payable
         moreThanZero(amount)
         nonReentrant
     {
-        uint256 transferIndex = s_receiverTransferIndexes[receiver];
-        (uint256 totalTransferCost,, uint256 transferFee) = calculateTotalTransferCost(amount);
-
         if (receiver == address(0)) {
             revert PST__NeedsValidAddress();
         }
@@ -173,30 +216,42 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__CantSendToOwnAddress();
         }
 
-        if (msg.sender.balance < totalTransferCost) {
-            revert PST__NotEnoughFunds();
-        }
-
         if (bytes(password).length == 0) {
             revert PST__PasswordNotProvided();
         }
 
-        if (bytes(password).length < 7) {
-            revert PST__PasswordLengthMustBeAtLeastSevenCharactersLong();
+        if (bytes(password).length < MINPASSWORDLENGTH) {
+            revert PST__MinPasswordLengthIsSeven();
         }
 
-        transferIndex++;
-        s_receiverIndexedAmountToClaim[receiver][transferIndex] = amount;
-        s_indexedEncodedPasswords[receiver][transferIndex] = encodePassword(password);
-        s_senders[receiver][transferIndex] = msg.sender;
+        uint256 transferId = s_transferCounter++;
 
-        addPendingTransfer(receiver, transferIndex);
+        TransferFeeLibrary.TransferFeeLevels memory currentFeeLevels = feeLevels;
+
+        (uint256 totalTransferCost, uint256 transferFeeCost) =
+            TransferFeeLibrary.calculateTotalTransferCost(amount, currentFeeLevels);
+
+        if (msg.sender.balance < totalTransferCost) {
+            revert PST__NotEnoughFunds();
+        }
+
+        (bytes32 encodedPassword, bytes32 salt) = encodePassword(password);
+
+        s_transfersById[transferId] = Transfer({
+            sender: msg.sender,
+            receiver: receiver,
+            amount: amount,
+            encodedPassword: encodedPassword,
+            salt: salt,
+            isPending: true,
+            isCanceled: false
+        });
 
         s_senderTotalAmounts[msg.sender] += amount;
 
-        addFee(transferFee);
+        addFee(transferFeeCost);
 
-        emit TransferInitiated(msg.sender, receiver, transferIndex, amount, transferFee);
+        emit TransferInitiated(msg.sender, receiver, transferId, amount, transferFeeCost);
 
         (bool success,) = address(this).call{value: totalTransferCost}("");
         if (!success) {
@@ -211,23 +266,24 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
-    function cancelTransfer(address receiver, uint256 transferIndex)
-        external
-        nonReentrant
-        onlySender(receiver, transferIndex)
-    {
-        uint256 amountToCancel = s_receiverIndexedAmountToClaim[receiver][transferIndex];
+    function cancelTransfer(address receiver, uint256 transferIndex) external nonReentrant onlySender(transferIndex) {
+        Transfer storage transferToCancel = s_transfers[msg.sender][receiver][transferIndex];
+        uint256 amountToCancel = transferToCancel.amount;
+
         if (amountToCancel == 0) {
             revert PST__NoAmountToWithdraw();
         }
 
-        removeTransferIndex(receiver, transferIndex);
+        //removeTransferIndex(receiver, transferIndex);
 
-        delete s_receiverIndexedAmountToClaim[receiver][transferIndex];
-        delete s_indexedEncodedPasswords[receiver][transferIndex];
-        delete s_senders[receiver][transferIndex];
+        // delete s_receiverIndexedAmountToClaim[receiver][transferIndex];
+        // delete s_indexedEncodedPasswords[receiver][transferIndex];
+        // delete s_senders[receiver][transferIndex];
 
-        s_senderTotalAmounts[msg.sender] += amountToCancel;
+        transferToCancel.isPending = false;
+        transferToCancel.amount = 0;
+
+        s_senderTotalAmounts[msg.sender] -= amountToCancel;
 
         emit TransferCanceled(msg.sender, receiver, transferIndex, amountToCancel);
 
@@ -237,7 +293,7 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
-    function claimAmount(uint256 transferIndex, string memory password) external nonReentrant {
+    function claimTransfer(uint256 transferIndex, string memory password) external nonReentrant {
         uint256 amountToClaim = s_receiverIndexedAmountToClaim[msg.sender][transferIndex];
         address sender = s_senders[msg.sender][transferIndex];
 
@@ -252,7 +308,7 @@ contract PST is Ownable, ReentrancyGuard {
         delete s_receiverIndexedAmountToClaim[msg.sender][transferIndex];
         delete s_indexedEncodedPasswords[msg.sender][transferIndex];
 
-        removeTransferIndex(msg.sender, transferIndex);
+        // removeTransferIndex(msg.sender, transferIndex);
         s_receiverTotalAmounts[msg.sender] += amountToClaim;
 
         emit TransferCompleted(sender, msg.sender, transferIndex, amountToClaim);
@@ -292,63 +348,42 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
+    function removeCanceledTransfers() external onlyOwner {}
+
     /*//////////////////////////////////////////////////////////////
                         INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     function checkPassword(uint256 index, string memory password) internal view returns (bool) {
-        return s_indexedEncodedPasswords[msg.sender][index] == encodePassword(password);
+        (bytes32 receiverPassword,) = encodePassword(password);
+
+        return s_indexedEncodedPasswords[msg.sender][index] == receiverPassword;
     }
 
     function addFee(uint256 _transferFee) internal {
         s_feePool += _transferFee;
     }
 
-    function calculateTotalTransferCost(uint256 amount)
-        internal
-        view
-        moreThanZero(amount)
-        returns (uint256 totalTransferCost, uint256 transferFeeCost, uint256 transferFee)
-    {
-        uint256 _transferFee = selectTransferFee(amount);
-        uint256 _transferFeeCost = amount * _transferFee;
-        uint256 _totalTransferCost = amount + _transferFeeCost;
+    function encodePassword(string memory _password) internal view returns (bytes32, bytes32) {
+        bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender));
+        //s_encodedPasswords[msg.sender][index] = keccak256(abi.encodePacked(_password));
+        bytes32 encodedPassword = keccak256(abi.encodePacked(_password, salt));
 
-        return (_totalTransferCost, _transferFeeCost, _transferFee);
+        return (encodedPassword, salt);
     }
 
     /*//////////////////////////////////////////////////////////////
                         PRIVATE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function encodePassword(string memory _password) private pure returns (bytes32) {
-        //bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender));
-        //s_encodedPasswords[msg.sender][index] = keccak256(abi.encodePacked(_password));
-        bytes32 encodedPassword = keccak256(abi.encodePacked(_password));
-
-        return encodedPassword;
-    }
-
-    function selectTransferFee(uint256 _amount) private view moreThanZero(_amount) returns (uint256 transferFee) {
-        if (_amount <= 10e18) {
-            transferFee = s_transferFeeLvlOne;
-        } else if (_amount <= 100e18) {
-            transferFee = s_transferFeeLvlTwo;
-        } else {
-            transferFee = s_transferFeeLvlThree;
-        }
-
-        return transferFee;
-    }
-
     function addPendingTransfer(address receiver, uint256 transferIndex) private {
         s_pendingTransfers[receiver][transferIndex] = true;
     }
 
-    function removeTransferIndex(address receiver, uint256 transferIndex) private {
-        if (s_pendingTransfers[receiver][transferIndex] = false) {
-            revert PST__TransferIndexDoesNotExist();
-        }
-        s_pendingTransfers[receiver][transferIndex] = false;
-    }
+    // function removeTransferIndex(address receiver, uint256 transferIndex) private {
+    //     if (s_pendingTransfers[receiver][transferIndex] = false) {
+    //         revert PST__TransferIndexDoesNotExist();
+    //     }
+    //     s_pendingTransfers[receiver][transferIndex] = false;
+    // }
 
     /*//////////////////////////////////////////////////////////////
                         VIEW/PURE FUNCTIONS
@@ -378,12 +413,16 @@ contract PST is Ownable, ReentrancyGuard {
     function calculateTotalTransferCostPublic(uint256 amount)
         external
         view
-        returns (uint256 totalTransferCost, uint256 transferFeeCost, uint256 transferFee)
+        returns (uint256 totalTransferCost, uint256 transferFeeCost)
     {
-        return calculateTotalTransferCost(amount);
+        return TransferFeeLibrary.calculateTotalTransferCost(amount, feeLevels);
     }
 
     function isPendingTransfer(address receiver, uint256 transferIndex) external view returns (bool) {
         return s_pendingTransfers[receiver][transferIndex];
+    }
+
+    function getTransfers(address sender, address receiver) external view returns (Transfer[] memory) {
+        return s_transfers[sender][receiver];
     }
 }
