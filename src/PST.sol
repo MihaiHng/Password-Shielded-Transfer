@@ -62,7 +62,7 @@ contract PST is Ownable, ReentrancyGuard {
                                ERRORS
     //////////////////////////////////////////////////////////////*/
     error PST__NeedsMoreThanZero();
-    error PST__NeedsValidAddress();
+    error PST__InvalidAddress();
     error PST__PasswordNotProvided();
     error PST__MinPasswordLengthIsSeven();
     error PST__TransferFailed();
@@ -86,6 +86,11 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__NotEnoughFunds(uint256 required, uint256 provided);
     error PST__TransferAlreadyExpired();
     error PST__TransferNotExpired();
+    error PST__NoExpiredTransfersToRemove();
+    error PST__NoCanceledTransfersToRemove();
+    error PST__NoClaimedTransfersToRemove();
+    error PST__NoPendingTransfers();
+    error PST__NoCanceledTransfers();
 
     /*//////////////////////////////////////////////////////////////
                           TYPE DECLARATIONS
@@ -106,17 +111,30 @@ contract PST is Ownable, ReentrancyGuard {
     uint256 private constant CLAIM_COOLDOWN_PERIOD = 30 minutes;
     uint256 private constant REFUND_COOLDOWN_PERIOD = 7 days;
 
+    uint256[] private s_pendingTransferIds;
     uint256[] private s_canceledTransferIds;
     uint256[] private s_expiredTransferIds;
+    uint256[] private s_claimedTransferIds;
 
     TransferFeeLibrary.TransferFeeLevels private feeLevels;
 
-    // Mapping to track transfer state, in this case the pending state -> transfer Id to bool state true/false
+    // Mapping to track if a transfer is pending
     mapping(uint256 transferId => bool) private s_isPending;
-    // Mapping to track transfer state, in this case the canceled state -> transfer Id to bool state true/false
+    // Mapping to track if a transfer is canceled
     mapping(uint256 transferId => bool) private s_isCanceled;
-    // Mapping to track transfer state, in this case the expired state -> transfer Id to bool state true/false
+    // Mapping to track if a transfer is expired
     mapping(uint256 transferId => bool) private s_isExpired;
+    // Mapping to track if a transfer is claimed
+    mapping(uint256 transferId => bool) private s_isClaimed;
+
+    // Mapping to track all the pending transfers for an address
+    mapping(address user => uint256[] transferIds) private s_pendingTransfersByAddress;
+    // Mapping to track all canceled transfers for an address
+    mapping(address user => uint256[] transferIds) private s_canceledTransfersByAddress;
+    // Mapping to track all expired transfers for an address
+    mapping(address user => uint256[] transferIds) private s_expiredTransfersByAddress;
+    // Mapping to track all claimed transfers for an address
+    mapping(address user => uint256[] transferIds) private s_claimedTransfersByAddress;
 
     // Mapping of transfer ID to Transfer info struct
     mapping(uint256 transferId => Transfer transfer) private s_transfersById;
@@ -197,17 +215,6 @@ contract PST is Ownable, ReentrancyGuard {
         _;
     }
 
-    modifier onlyCanceledTransfers(uint256 _transferId) {
-        if (_transferId > s_transferCounter) {
-            revert PST__InvalidTransferId();
-        }
-
-        if (!s_isCanceled[_transferId]) {
-            revert PST__TransferNotCanceled();
-        }
-        _;
-    }
-
     modifier claimCooldownElapsed(uint256 transferId) {
         uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
         if (block.timestamp < lastAttempt + CLAIM_COOLDOWN_PERIOD) {
@@ -244,7 +251,7 @@ contract PST is Ownable, ReentrancyGuard {
         nonReentrant
     {
         if (receiver == address(0)) {
-            revert PST__NeedsValidAddress();
+            revert PST__InvalidAddress();
         }
 
         if (receiver == msg.sender) {
@@ -282,6 +289,9 @@ contract PST is Ownable, ReentrancyGuard {
         });
 
         s_isPending[transferId] = true;
+        s_pendingTransferIds.push(transferId);
+        s_pendingTransfersByAddress[msg.sender].push(transferId);
+        s_pendingTransfersByAddress[receiver].push(transferId);
 
         addFee(transferFeeCost);
 
@@ -316,6 +326,15 @@ contract PST is Ownable, ReentrancyGuard {
         s_isPending[transferId] = false;
         s_isCanceled[transferId] = true;
         transferToCancel.amount = 0;
+        s_canceledTransferIds.push(transferId);
+
+        address receiver = s_transfersById[transferId].receiver;
+        s_canceledTransfersByAddress[msg.sender].push(transferId);
+        s_canceledTransfersByAddress[receiver].push(transferId);
+
+        removeFromPendingTransfers(transferId);
+        removeFromPendingTransfersByAddress(msg.sender, transferId);
+        removeFromPendingTransfersByAddress(receiver, transferId);
 
         emit TransferCanceled(msg.sender, transferToCancel.receiver, transferId, amountToCancel);
 
@@ -355,7 +374,17 @@ contract PST is Ownable, ReentrancyGuard {
         }
 
         s_isPending[transferId] = false;
+        s_isClaimed[transferId] = true;
         transferToClaim.amount = 0;
+        s_claimedTransferIds.push(transferId);
+
+        address sender = s_transfersById[transferId].sender;
+        s_claimedTransfersByAddress[sender].push(transferId);
+        s_claimedTransfersByAddress[msg.sender].push(transferId);
+
+        removeFromPendingTransfers(transferId);
+        removeFromPendingTransfersByAddress(sender, transferId);
+        removeFromPendingTransfersByAddress(msg.sender, transferId);
 
         s_senderTotalAmounts[msg.sender] += amountToClaim;
         s_receiverTotalAmounts[msg.sender] += amountToClaim;
@@ -471,9 +500,16 @@ contract PST is Ownable, ReentrancyGuard {
         if (block.timestamp >= transferToRefund.creationTime + REFUND_COOLDOWN_PERIOD) {
             s_isExpired[transferId] = true;
             s_isPending[transferId] = false;
-            //s_isCanceled[transferId] = true;
             transferToRefund.amount = 0;
             s_expiredTransferIds.push(transferId);
+
+            address sender = transferToRefund.sender;
+            address receiver = transferToRefund.receiver;
+            s_expiredTransfersByAddress[sender].push(transferId);
+            s_expiredTransfersByAddress[receiver].push(transferId);
+            removeFromPendingTransfers(transferId);
+            removeFromPendingTransfersByAddress(sender, transferId);
+            removeFromPendingTransfersByAddress(receiver, transferId);
         }
 
         emit TransferExpired(
@@ -486,23 +522,100 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
-    // Function to remove all canceled transfers => to be finished
-    function removeAllCanceledTransfers() internal view onlyOwner {}
-    // function removeCanceledTransfers(uint256 transferId) internal onlyOwner onlyCanceledTransfers(transferId) {
-    //     delete s_transfersById[transferId];
-    // }
+    // Function to remove all canceled transfers
+    function removeAllCanceledTransfers() internal onlyOwner {
+        uint256 length = s_canceledTransferIds.length;
 
-    // Function to remove all expired transfers - refactor, delete entry from mapping s_transfersById
-    function removeAllExpiredTransfers() internal view onlyOwner {
-        uint256[] memory expiredTransfers = getExpiredTransfers();
-        uint256 length = expiredTransfers.length;
-        for (uint256 i = 0; i < length; i++) {
-            delete(expiredTransfers[i]);
+        if (length == 0) {
+            revert PST__NoCanceledTransfersToRemove();
         }
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 transferId = s_canceledTransferIds[i];
+            delete s_isCanceled[transferId];
+            delete s_transfersById[transferId];
+        }
+
+        delete s_canceledTransferIds;
     }
 
     // Function to remove all expired transfers
-    function removeAllClaimedTransfers() internal view onlyOwner {}
+    function removeAllExpiredTransfers() internal onlyOwner {
+        uint256 length = s_expiredTransferIds.length;
+
+        if (length == 0) {
+            revert PST__NoExpiredTransfersToRemove();
+        }
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 transferId = s_expiredTransferIds[i];
+            delete s_isExpired[transferId];
+            delete s_transfersById[transferId];
+        }
+
+        delete s_expiredTransferIds;
+    }
+
+    // Function to remove all claimed transfers
+    function removeAllClaimedTransfers() internal onlyOwner {
+        uint256 length = s_claimedTransferIds.length;
+
+        if (length == 0) {
+            revert PST__NoClaimedTransfersToRemove();
+        }
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 transferId = s_claimedTransferIds[i];
+            delete s_isClaimed[transferId];
+            delete s_transfersById[transferId];
+        }
+
+        delete s_claimedTransferIds;
+    }
+
+    function removeFromPendingTransfersByAddress(address user, uint256 transferId) internal {
+        uint256[] storage userPendingTransfers = s_pendingTransfersByAddress[user];
+        uint256 length = userPendingTransfers.length;
+        if (length == 0) {
+            revert PST__NoPendingTransfers();
+        }
+
+        for (uint256 i = 0; i < length; i++) {
+            if (userPendingTransfers[i] == transferId) {
+                userPendingTransfers[i] = userPendingTransfers[length - 1];
+                userPendingTransfers.pop();
+                break;
+            }
+        }
+    }
+
+    function removeFromPendingTransfers(uint256 transferId) internal {
+        uint256[] storage pendingTransfers = s_pendingTransferIds;
+        uint256 length = pendingTransfers.length;
+        if (length == 0) {
+            revert PST__NoPendingTransfers();
+        }
+
+        for (uint256 i = 0; i < length; i++) {
+            if (pendingTransfers[i] == transferId) {
+                pendingTransfers[i] = pendingTransfers[length - 1];
+                pendingTransfers.pop();
+                break;
+            }
+        }
+    }
+
+    function removeAllCanceledTransfersByAddress(address user) internal {
+        if (user == address(0)) {
+            revert PST__InvalidAddress();
+        }
+
+        if (s_canceledTransfersByAddress[user].length == 0) {
+            revert PST__NoCanceledTransfers();
+        }
+
+        delete s_canceledTransfersByAddress[user];
+    }
 
     /*//////////////////////////////////////////////////////////////
                         PRIVATE FUNCTIONS
@@ -569,6 +682,9 @@ contract PST is Ownable, ReentrancyGuard {
     }
 
     // Function to get all pending transfers in the system
+    function getPendingTransfers() public view returns (uint256[] memory) {
+        return s_pendingTransferIds;
+    }
 
     // Function to get all canceled transfers in the system
     function getCanceledTransfers() public view returns (uint256[] memory) {
@@ -580,14 +696,31 @@ contract PST is Ownable, ReentrancyGuard {
         return s_expiredTransferIds;
     }
 
+    // Function to get all claimed transfers in the system
+    function getClaimedTransfers() public view returns (uint256[] memory) {
+        return s_claimedTransferIds;
+    }
+
     // Function to get all pending transfers for an address
-    function getAllPendingTransfersForAddress() public view {}
+    function getPendingTransfersForAddress(address user) public view returns (uint256[] memory) {
+        if (user == address(0)) {
+            revert PST__InvalidAddress();
+        }
+
+        if (s_pendingTransfersByAddress[user].length == 0) {
+            revert PST__NoPendingTransfers();
+        }
+
+        return s_pendingTransfersByAddress[user];
+    }
 
     // Function to get all canceled transfers for an address
 
-    // function to get all expired transfers for an address
+    // Function to get all expired transfers for an address
 
-    // function to get all claimed transfers for an address
+    // Function to get all claimed transfers for an address
+
+    // Function to get all transfers for an address
 
     // Function to get info for a specific transfer Id
 }
