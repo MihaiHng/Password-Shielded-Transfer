@@ -27,6 +27,10 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 
+// Complete events
+// Test chainlink automation
+// Give functionality to ERC20 tokens
+
 /**
  * @title PST Password Shielded Transfer
  * @author Mihai Hanga
@@ -115,7 +119,7 @@ contract PST is Ownable, ReentrancyGuard {
 
     uint256 private constant MIN_PASSWORD_LENGTH = 7;
     uint256 private constant CLAIM_COOLDOWN_PERIOD = 30 minutes;
-    uint256 private constant EXPIRING_COOLDOWN_PERIOD = 7 days;
+    uint256 private constant EXPIRING_COOLDOWN_PERIOD = 7 days; // needs to be at least 24 hours to allow enough time for a receiver to claim
 
     uint256[] private s_pendingTransferIds;
     uint256[] private s_canceledTransferIds;
@@ -472,19 +476,7 @@ contract PST is Ownable, ReentrancyGuard {
         return (encodedPassword, salt);
     }
 
-    function refundTransfer(uint256 transferId) internal {
-        if (s_isExpired[transferId]) {
-            revert PST__TransferAlreadyExpired();
-        }
-
-        if (s_isCanceled[transferId]) {
-            revert PST__TransferCanceled();
-        }
-
-        if (s_isClaimed[transferId]) {
-            revert PST__TransferClaimed();
-        }
-
+    function refundTransfer(uint256 transferId) internal onlyValidTransferIds(transferId) {
         Transfer storage transferToRefund = s_transfersById[transferId];
         uint256 amountToRefund = transferToRefund.amount;
 
@@ -492,20 +484,18 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__NoAmountToWithdraw();
         }
 
-        if (block.timestamp >= transferToRefund.creationTime + EXPIRING_COOLDOWN_PERIOD) {
-            s_isExpired[transferId] = true;
-            s_isPending[transferId] = false;
-            transferToRefund.amount = 0;
-            s_expiredTransferIds.push(transferId);
+        s_isExpired[transferId] = true;
+        s_isPending[transferId] = false;
+        transferToRefund.amount = 0;
+        s_expiredTransferIds.push(transferId);
 
-            address sender = transferToRefund.sender;
-            address receiver = transferToRefund.receiver;
-            s_expiredTransfersByAddress[sender].push(transferId);
-            s_expiredTransfersByAddress[receiver].push(transferId);
-            removeFromPendingTransfers(transferId);
-            removeFromPendingTransfersByAddress(sender, transferId);
-            removeFromPendingTransfersByAddress(receiver, transferId);
-        }
+        address sender = transferToRefund.sender;
+        address receiver = transferToRefund.receiver;
+        s_expiredTransfersByAddress[sender].push(transferId);
+        s_expiredTransfersByAddress[receiver].push(transferId);
+        removeFromPendingTransfers(transferId);
+        removeFromPendingTransfersByAddress(sender, transferId);
+        removeFromPendingTransfersByAddress(receiver, transferId);
 
         emit TransferExpired(
             transferToRefund.sender,
@@ -706,6 +696,31 @@ contract PST is Ownable, ReentrancyGuard {
     // Function to get all expired transfers in the system
     function getExpiredTransfers() public view returns (uint256[] memory) {
         return s_expiredTransferIds;
+    }
+
+    // Function to get all expired transfers in the system
+    function _getExpiredTransfers() public view returns (uint256[] memory) {
+        uint256 expiredCount;
+
+        for (uint256 i = 0; i < s_pendingTransferIds.length; i++) {
+            uint256 transferId = s_pendingTransferIds[i];
+            if (block.timestamp >= s_transfersById[transferId].expiringTime) {
+                expiredCount++;
+            }
+        }
+
+        uint256[] memory expiredTransfers = new uint256[](expiredCount);
+        uint256 index;
+
+        for (uint256 i = 0; i < s_pendingTransferIds.length; i++) {
+            uint256 transferId = s_pendingTransferIds[i];
+            if (block.timestamp >= s_transfersById[transferId].expiringTime) {
+                expiredTransfers[index] = transferId;
+                index++;
+            }
+        }
+
+        return expiredTransfers;
     }
 
     // Function to get all claimed transfers in the system
