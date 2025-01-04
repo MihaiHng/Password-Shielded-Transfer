@@ -31,6 +31,7 @@ import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 // Complete events
 // Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
 // Add functionality for ERC20 tokens
+// Setters funtions for important parameters
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 /**
@@ -72,6 +73,7 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__NeedsMoreThanZero();
     error PST__InvalidAddress();
     error PST__PasswordNotProvided();
+    error PST__PasswordTooShort(uint256 minCharactersRequired);
     error PST__MinPasswordLengthIsSeven();
     error PST__TransferFailed();
     error PST__NoAmountToRefund();
@@ -85,6 +87,10 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__TransferNotPending();
     error PST__InvalidReceiver();
     error PST__CooldownPeriodNotElapsed();
+    error PST__InvalidClaimCooldownPeriod(uint256 minRequired);
+    error PST__InvalidAvailabilityPeriod(uint256 minRequired);
+    error PST__InvalidCleanupInterval(uint256 minRequired);
+    error PST__InvalidInactivityThreshhold(uint256 minRequired);
     error PST__NotEnoughFunds(uint256 required, uint256 provided);
     error PST__NoExpiredTransfersToRemove();
     error PST__NoCanceledTransfersToRemove();
@@ -104,26 +110,43 @@ contract PST is Ownable, ReentrancyGuard {
                           STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
     address private immutable i_owner;
+
     uint256 private s_transferFeeLvlOne;
     uint256 private s_transferFeeLvlTwo;
     uint256 private s_transferFeeLvlThree;
     uint256 private s_feePool;
     uint256 private s_transferCounter;
-    uint256 private s_lastCanceledTransfersByAddressRemoval;
-    uint256 private s_lastExpiredAndRefundedTransfersByAddressRemoval;
-    uint256 private s_lastClaimedTransfersByAddressRemoval;
 
-    uint256 private constant MIN_PASSWORD_LENGTH = 7;
-    uint256 private constant CLAIM_COOLDOWN_PERIOD = 30 minutes;
-    uint256 private constant BEFORE_EXPIRING_PERIOD = 7 days; // needs to be at least 24 hours to allow enough time for a receiver to claim
-    uint256 private constant USER_TRANSFERS_HISTORY_LIFE = 12 weeks;
+    uint256 private s_MIN_PASSWORD_LENGTH = REQ_MIN_PASSWORD_LENGTH;
+    uint256 private s_CLAIM_COOLDOWN_PERIOD = 30 minutes;
+    uint256 private s_AVAILABILITY_PERIOD = 7 days;
+    uint256 private s_CLEANUP_INTERVAL = 12 weeks;
+    uint256 private s_INACTIVITY_THRESHOLD = 12 weeks;
+
+    uint256 private constant REQ_MIN_PASSWORD_LENGTH = 7;
+    uint256 private constant MIN_CLAIM_COOLDOWN_PERIOD = 15 minutes;
+    uint256 private constant MIN_AVAILABILITY_PERIOD = 1 days;
+    uint256 private constant MIN_CLEANUP_INTERVAL = 1 weeks;
+    uint256 private constant MIN_INACTIVITY_THRESHOLD = 1 weeks;
 
     uint256[] private s_pendingTransferIds;
     uint256[] private s_canceledTransferIds;
     uint256[] private s_expiredAndRefundedTransferIds;
     uint256[] private s_claimedTransferIds;
+    address[] private s_addressList;
 
     TransferFeeLibrary.TransferFeeLevels private feeLevels;
+
+    struct Transfer {
+        address sender;
+        address receiver;
+        // token
+        uint256 amount;
+        uint256 creationTime;
+        uint256 expiringTime;
+        bytes32 encodedPassword;
+        bytes32 salt;
+    }
 
     // Mapping to track if a transfer is pending
     mapping(uint256 transferId => bool) private s_isPending;
@@ -138,7 +161,7 @@ contract PST is Ownable, ReentrancyGuard {
     mapping(address user => uint256[] transferIds) private s_pendingTransfersByAddress;
     // Mapping to track all canceled transfers for an address
     mapping(address user => uint256[] transferIds) private s_canceledTransfersByAddress;
-    // Mapping to track all expired transfers for an address
+    // Mapping to track all expired and refunded transfers for an address
     mapping(address user => uint256[] transferIds) private s_expiredAndRefundedTransfersByAddress;
     // Mapping to track all claimed transfers for an address
     mapping(address user => uint256[] transferIds) private s_claimedTransfersByAddress;
@@ -151,17 +174,12 @@ contract PST is Ownable, ReentrancyGuard {
     mapping(address sender => uint256 totalAmount) private s_senderTotalAmounts;
     // Mapping of transfer Id to last failed claim attempt time
     mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime) private s_lastFailedClaimAttempt;
-
-    struct Transfer {
-        address sender;
-        address receiver;
-        // token
-        uint256 amount;
-        uint256 creationTime;
-        uint256 expiringTime;
-        bytes32 encodedPassword;
-        bytes32 salt;
-    }
+    // Mapping to track active addresses
+    mapping(address user => bool) private s_trackedAddresses;
+    // Mapping to track an address to its last cleanup time
+    mapping(address user => uint256 lastCleanupTime) private s_lastCleanupTimeByAddress;
+    // Mapping to track an address to its last active time
+    mapping(address user => uint256 lastActiveTime) private s_lastInteractionTime;
 
     /*//////////////////////////////////////////////////////////////
                               EVENTS
@@ -236,7 +254,7 @@ contract PST is Ownable, ReentrancyGuard {
 
     modifier claimCooldownElapsed(uint256 transferId) {
         uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
-        if (block.timestamp < lastAttempt + CLAIM_COOLDOWN_PERIOD) {
+        if (block.timestamp < lastAttempt + s_CLAIM_COOLDOWN_PERIOD) {
             revert PST__CooldownPeriodNotElapsed();
         }
         _;
@@ -278,8 +296,8 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__PasswordNotProvided();
         }
 
-        if (bytes(password).length < MIN_PASSWORD_LENGTH) {
-            revert PST__MinPasswordLengthIsSeven();
+        if (bytes(password).length < s_MIN_PASSWORD_LENGTH) {
+            revert PST__PasswordTooShort({minCharactersRequired: s_MIN_PASSWORD_LENGTH});
         }
 
         uint256 transferId = s_transferCounter++;
@@ -301,7 +319,7 @@ contract PST is Ownable, ReentrancyGuard {
             //token:
             amount: amount,
             creationTime: block.timestamp,
-            expiringTime: block.timestamp + BEFORE_EXPIRING_PERIOD,
+            expiringTime: block.timestamp + s_AVAILABILITY_PERIOD,
             encodedPassword: encodedPassword,
             salt: salt
         });
@@ -312,6 +330,8 @@ contract PST is Ownable, ReentrancyGuard {
         s_pendingTransfersByAddress[receiver].push(transferId);
 
         addFee(transferFeeCost);
+        addAddressToTracking(msg.sender);
+        s_lastInteractionTime[msg.sender] = block.timestamp;
 
         emit TransferInitiated(msg.sender, receiver, transferId, /* token */ amount, transferFeeCost);
 
@@ -351,6 +371,8 @@ contract PST is Ownable, ReentrancyGuard {
         removeFromPendingTransfersByAddress(msg.sender, transferId);
         removeFromPendingTransfersByAddress(receiver, transferId);
 
+        s_lastInteractionTime[msg.sender] = block.timestamp;
+
         emit TransferCanceled(msg.sender, transferToCancel.receiver, transferId, /* token */ amountToCancel);
 
         (bool success,) = msg.sender.call{value: amountToCancel}("");
@@ -364,12 +386,21 @@ contract PST is Ownable, ReentrancyGuard {
         nonReentrant
         claimCooldownElapsed(transferId)
         onlyPendingTransfers(transferId)
+        onlyValidTransferIds(transferId)
     {
         Transfer storage transferToClaim = s_transfersById[transferId];
         uint256 amountToClaim = transferToClaim.amount;
 
         if (transferToClaim.receiver != msg.sender) {
             revert PST__InvalidReceiver();
+        }
+
+        if (bytes(password).length == 0) {
+            revert PST__PasswordNotProvided();
+        }
+
+        if (bytes(password).length < s_MIN_PASSWORD_LENGTH) {
+            revert PST__PasswordTooShort({minCharactersRequired: s_MIN_PASSWORD_LENGTH});
         }
 
         if (!checkPassword(transferId, password)) {
@@ -392,6 +423,9 @@ contract PST is Ownable, ReentrancyGuard {
 
         s_senderTotalAmounts[msg.sender] += amountToClaim;
         s_receiverTotalAmounts[msg.sender] += amountToClaim;
+        addAddressToTracking(msg.sender);
+
+        s_lastInteractionTime[msg.sender] = block.timestamp;
 
         emit TransferCompleted(transferToClaim.sender, msg.sender, transferId, /* token */ amountToClaim);
 
@@ -401,6 +435,98 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
+    /**
+     * @dev This is the function that the Chainlink Automation nodes call
+     * they look for `upkeepNeeded` to return True.
+     * the following should be true for this to return true:
+     * 1. The time interval has passed between raffle runs.
+     * 2. The lottery is open.
+     * 3. The contract has ETH.
+     * 4. Implicity, your subscription is funded with LINK.
+     */
+    function checkUpkeep(bytes calldata /* checkData */ )
+        external
+        view
+        returns (bool upkeepNeeded, bytes memory performData)
+    {
+        uint256[] memory expiredTransfers = getExpiredTransfers();
+        bool refundNeeded = expiredTransfers.length > 0;
+
+        address[] memory trackedAddresses = s_addressList;
+        address[] memory addressesReadyForCleanup = new address[](trackedAddresses.length);
+        address[] memory addressesReadyToBeRemoved = new address[](trackedAddresses.length);
+        uint256 countaddressesReadyForCleanup;
+        uint256 countAddressesToBeRemoved;
+
+        for (uint256 i = 0; i < trackedAddresses.length; i++) {
+            address user = trackedAddresses[i];
+
+            if ((block.timestamp - s_lastCleanupTimeByAddress[user]) >= s_CLEANUP_INTERVAL) {
+                addressesReadyForCleanup[countaddressesReadyForCleanup] = user;
+                countaddressesReadyForCleanup++;
+            }
+
+            if ((block.timestamp - s_lastInteractionTime[user]) >= s_INACTIVITY_THRESHOLD) {
+                addressesReadyToBeRemoved[countAddressesToBeRemoved] = user;
+                countAddressesToBeRemoved++;
+            }
+        }
+
+        if (expiredTransfers.length > 0 || countaddressesReadyForCleanup > 0 || countAddressesToBeRemoved > 0) {
+            upkeepNeeded = true;
+            performData = abi.encode(
+                refundNeeded,
+                expiredTransfers,
+                addressesReadyForCleanup,
+                countaddressesReadyForCleanup,
+                addressesReadyToBeRemoved,
+                countAddressesToBeRemoved
+            );
+        } else {
+            upkeepNeeded = false;
+            performData = "";
+        }
+    }
+
+    function performUpkeep(bytes calldata performData) external {
+        (
+            bool refundNeeded,
+            uint256[] memory expiredTransfers,
+            address[] memory addressesReadyForCleanup,
+            uint256 countAddressesToBeCleaned,
+            address[] memory addressesReadyToBeRemoved,
+            uint256 countAddressesToBeRemoved
+        ) = abi.decode(performData, (bool, uint256[], address[], uint256, address[], uint256));
+
+        if (refundNeeded) {
+            for (uint256 i = 0; i < expiredTransfers.length; i++) {
+                refundExpiredTransfer(expiredTransfers[i]);
+            }
+        }
+
+        if (countAddressesToBeCleaned > 0) {
+            for (uint256 i = 0; i < countAddressesToBeCleaned; i++) {
+                address user = addressesReadyForCleanup[i];
+
+                removeAllCanceledTransfersByAddress(user);
+                removeAllExpiredAndRefundedTransfersByAddress(user);
+                removeAllClaimedTransfersByAddress(user);
+
+                s_lastCleanupTimeByAddress[user] = block.timestamp;
+            }
+        }
+
+        if (countAddressesToBeRemoved > 0) {
+            for (uint256 i = 0; i < countAddressesToBeRemoved; i++) {
+                address user = addressesReadyToBeRemoved[i];
+                removeAddressFromTracking(user);
+            }
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        EXTERNAL ONLYOWNER FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
     function setTransferFee(uint8 level, uint256 newTransferFee) external onlyOwner moreThanZero(newTransferFee) {
         if (level == 1) {
             s_transferFeeLvlOne = newTransferFee;
@@ -426,35 +552,82 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
-    /**
-     * @dev This is the function that the Chainlink Automation nodes call
-     * they look for `upkeepNeeded` to return True.
-     * the following should be true for this to return true:
-     * 1. The time interval has passed between raffle runs.
-     * 2. The lottery is open.
-     * 3. The contract has ETH.
-     * 4. Implicity, your subscription is funded with LINK.
-     */
-    function checkUpkeep(bytes calldata /* checkData */ )
+    function setNewMinPasswordLength(uint256 newMinPasswordLength)
         external
-        view
-        returns (bool upKeepNeeded, bytes memory performData)
+        onlyOwner
+        moreThanZero(newMinPasswordLength)
     {
-        uint256[] memory expiredTransfers = getExpiredTransfers();
-        upKeepNeeded = expiredTransfers.length > 0;
-        performData = abi.encode(expiredTransfers);
+        if (newMinPasswordLength < REQ_MIN_PASSWORD_LENGTH) {
+            revert PST__MinPasswordLengthIsSeven();
+        }
+        s_MIN_PASSWORD_LENGTH = newMinPasswordLength;
     }
 
-    function performUpkeep(bytes calldata performData) external {
-        uint256[] memory expiredTransfers = abi.decode(performData, (uint256[]));
-        for (uint256 i = 0; i < expiredTransfers.length; i++) {
-            refundExpiredTransfer(expiredTransfers[i]);
+    function setNewClaimCooldownPeriod(uint256 newClaimCooldownPeriod)
+        external
+        onlyOwner
+        moreThanZero(newClaimCooldownPeriod)
+    {
+        if (newClaimCooldownPeriod < MIN_CLAIM_COOLDOWN_PERIOD) {
+            revert PST__InvalidClaimCooldownPeriod({minRequired: MIN_CLAIM_COOLDOWN_PERIOD});
         }
+        s_CLAIM_COOLDOWN_PERIOD = newClaimCooldownPeriod;
+    }
+
+    function setNewAvailabilityPeriod(uint256 newAvailabilityPeriod)
+        external
+        onlyOwner
+        moreThanZero(newAvailabilityPeriod)
+    {
+        if (newAvailabilityPeriod < MIN_AVAILABILITY_PERIOD) {
+            revert PST__InvalidAvailabilityPeriod({minRequired: MIN_AVAILABILITY_PERIOD});
+        }
+        s_AVAILABILITY_PERIOD = newAvailabilityPeriod;
+    }
+
+    function setNewCleanupInterval(uint256 newCleanupInterval) external onlyOwner moreThanZero(newCleanupInterval) {
+        if (newCleanupInterval < MIN_CLEANUP_INTERVAL) {
+            revert PST__InvalidCleanupInterval({minRequired: MIN_CLEANUP_INTERVAL});
+        }
+        s_CLEANUP_INTERVAL = newCleanupInterval;
+    }
+
+    function setNewInactivityThreshhold(uint256 newInactivityThreshhold)
+        external
+        onlyOwner
+        moreThanZero(newInactivityThreshhold)
+    {
+        if (newInactivityThreshhold < MIN_INACTIVITY_THRESHOLD) {
+            revert PST__InvalidInactivityThreshhold({minRequired: MIN_INACTIVITY_THRESHOLD});
+        }
+        s_INACTIVITY_THRESHOLD = newInactivityThreshhold;
     }
 
     /*//////////////////////////////////////////////////////////////
                         INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    function removeAddressFromTracking(address user) internal {
+        for (uint256 i = 0; i < s_addressList.length; i++) {
+            if (s_addressList[i] == user) {
+                s_addressList[i] = s_addressList[s_addressList.length - 1];
+                s_addressList.pop();
+                break;
+            }
+        }
+
+        delete s_trackedAddresses[user];
+        delete s_lastInteractionTime[user];
+        delete s_lastCleanupTimeByAddress[user];
+    }
+
+    function addAddressToTracking(address user) internal {
+        if (!s_trackedAddresses[user]) {
+            s_trackedAddresses[user] = true;
+            s_addressList.push(user);
+            s_lastCleanupTimeByAddress[user] = block.timestamp;
+        }
+    }
+
     function checkPassword(uint256 transferId, string memory password) internal view returns (bool) {
         (bytes32 receiverPassword,) = encodePassword(password);
         bytes32 senderPassword = s_transfersById[transferId].encodedPassword;
@@ -526,7 +699,7 @@ contract PST is Ownable, ReentrancyGuard {
         delete s_canceledTransferIds;
     }
 
-    // Function to remove all expired transfers
+    // Function to remove all expired and refunded transfers
     function removeAllExpiredTransfers() internal onlyOwner {
         uint256 length = s_expiredAndRefundedTransferIds.length;
 
@@ -597,8 +770,6 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__NoCanceledTransfers();
         }
 
-        s_lastCanceledTransfersByAddressRemoval = block.timestamp;
-
         delete s_canceledTransfersByAddress[user];
     }
 
@@ -607,8 +778,6 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__NoExpiredTransfers();
         }
 
-        s_lastExpiredAndRefundedTransfersByAddressRemoval = block.timestamp;
-
         delete s_expiredAndRefundedTransfersByAddress[user];
     }
 
@@ -616,8 +785,6 @@ contract PST is Ownable, ReentrancyGuard {
         if (s_claimedTransfersByAddress[user].length == 0) {
             revert PST__NoClaimedTransfers();
         }
-
-        s_lastClaimedTransfersByAddressRemoval = block.timestamp;
 
         delete s_claimedTransfersByAddress[user];
     }
@@ -669,9 +836,14 @@ contract PST is Ownable, ReentrancyGuard {
         return s_isCanceled[transferId];
     }
 
-    // Function to check if a specific transfer is expired
+    // Function to check if a specific transfer is expired and refunded
     function isExpiredAndRefundedTransfer(uint256 transferId) public view returns (bool) {
         return s_isExpiredAndRefunded[transferId];
+    }
+
+    // Function to check if a specific transfer is claimed
+    function isClaimed(uint256 transferId) public view returns (bool) {
+        return s_isClaimed[transferId];
     }
 
     function getClaimCooldownStatus(uint256 transferId)
@@ -680,8 +852,8 @@ contract PST is Ownable, ReentrancyGuard {
         returns (bool isCoolDownActive, uint256 timeRemaining)
     {
         uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
-        if (block.timestamp < lastAttempt + CLAIM_COOLDOWN_PERIOD) {
-            return (true, (lastAttempt + CLAIM_COOLDOWN_PERIOD) - block.timestamp);
+        if (lastAttempt + s_CLAIM_COOLDOWN_PERIOD >= block.timestamp) {
+            return (true, (lastAttempt + s_CLAIM_COOLDOWN_PERIOD) - block.timestamp);
         }
         return (false, 0);
     }
@@ -696,9 +868,14 @@ contract PST is Ownable, ReentrancyGuard {
         return s_canceledTransferIds;
     }
 
-    // Function to get all expired transfers in the system
+    // Function to get all expired and refunded transfers in the system
     function getExpiredAndRefundedTransfers() public view returns (uint256[] memory) {
         return s_expiredAndRefundedTransferIds;
+    }
+
+    // Function to get all claimed transfers in the system
+    function getClaimedTransfers() public view returns (uint256[] memory) {
+        return s_claimedTransferIds;
     }
 
     // Function to get all expired transfers in the system
@@ -724,11 +901,6 @@ contract PST is Ownable, ReentrancyGuard {
         }
 
         return expiredTransfers;
-    }
-
-    // Function to get all claimed transfers in the system
-    function getClaimedTransfers() public view returns (uint256[] memory) {
-        return s_claimedTransferIds;
     }
 
     // Function to get all pending transfers for an address
