@@ -26,13 +26,26 @@ pragma solidity ^0.8.28;
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 // Complete events
 // Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
+// Batch processing
 // Add functionality for ERC20 tokens
 // Setters funtions for important parameters
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+/**
+ * UI Considerations:
+ * - Create a file to cache token metadata to avoid redundant calls:
+ * {
+ *     "address": "0xTokenAddress1",
+ *     "name": "USDT",
+ *     "symbol": "Tether",
+ *     "decimals": 6
+ *    }
+ */
 
 /**
  * @title PST Password Shielded Transfer
@@ -100,6 +113,8 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__NoExpiredTransfers();
     error PST__NoClaimedTransfers();
     error PST__TransferNotFound();
+    error PST__TokenAlreadyWhitelisted();
+    error PST__TokenNotInWhitelist();
 
     /*//////////////////////////////////////////////////////////////
                           TYPE DECLARATIONS
@@ -134,13 +149,14 @@ contract PST is Ownable, ReentrancyGuard {
     uint256[] private s_expiredAndRefundedTransferIds;
     uint256[] private s_claimedTransferIds;
     address[] private s_addressList;
+    address[] private tokenList;
 
     TransferFeeLibrary.TransferFeeLevels private feeLevels;
 
     struct Transfer {
         address sender;
         address receiver;
-        // token
+        address token;
         uint256 amount;
         uint256 creationTime;
         uint256 expiringTime;
@@ -181,6 +197,9 @@ contract PST is Ownable, ReentrancyGuard {
     // Mapping to track an address to its last active time
     mapping(address user => uint256 lastActiveTime) private s_lastInteractionTime;
 
+    // Mapping to track if a token address is whitelisted
+    mapping(address tokenAddress => bool isWhitelisted) private s_allowedTokens;
+
     /*//////////////////////////////////////////////////////////////
                               EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -189,6 +208,7 @@ contract PST is Ownable, ReentrancyGuard {
         address indexed sender,
         address indexed receiver,
         uint256 indexed transferIndex,
+        address token,
         uint256 amount,
         uint256 transferFeeCost
     );
@@ -212,6 +232,12 @@ contract PST is Ownable, ReentrancyGuard {
 
     // Event to log a successful fee withdrawal
     event SuccessfulFeeWithdrawal(address owner, uint256 feePool, uint256 withdrawalTime);
+
+    // Event to log a token being whitelisted
+    event TokenWhitelisted(address token);
+
+    // Event to log a token being removed from whitelist
+    event TokenRemoved(address token);
 
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
@@ -281,7 +307,7 @@ contract PST is Ownable, ReentrancyGuard {
      *
      *
      */
-    function createTransfer(address receiver, uint256 amount, string memory password)
+    function createTransfer(address receiver, address token, uint256 amount, string memory password)
         external
         payable
         nonReentrant
@@ -316,7 +342,7 @@ contract PST is Ownable, ReentrancyGuard {
         s_transfersById[transferId] = Transfer({
             sender: msg.sender,
             receiver: receiver,
-            //token:
+            token: token,
             amount: amount,
             creationTime: block.timestamp,
             expiringTime: block.timestamp + s_AVAILABILITY_PERIOD,
@@ -333,7 +359,7 @@ contract PST is Ownable, ReentrancyGuard {
         addAddressToTracking(msg.sender);
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
-        emit TransferInitiated(msg.sender, receiver, transferId, /* token */ amount, transferFeeCost);
+        emit TransferInitiated(msg.sender, receiver, transferId, token, amount, transferFeeCost);
 
         (bool success,) = address(this).call{value: totalTransferCost}("");
         if (!success) {
@@ -527,6 +553,32 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL ONLYOWNER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    function whitelistToken(address token) external onlyOwner {
+        if (s_allowedTokens[token]) {
+            revert PST__TokenAlreadyWhitelisted();
+        }
+        s_allowedTokens[token] = true;
+        tokenList.push(token);
+        emit TokenWhitelisted(token);
+    }
+
+    function removeWhitelistedToken(address token) external onlyOwner {
+        if (!s_allowedTokens[token]) {
+            revert PST__TokenNotInWhitelist();
+        }
+
+        s_allowedTokens[token] = false;
+        for (uint256 i = 0; i < tokenList.length; i++) {
+            if (token == tokenList[i]) {
+                tokenList[i] = tokenList[tokenList.length - 1];
+                tokenList.pop();
+                break;
+            }
+        }
+
+        emit TokenRemoved(token);
+    }
+
     function setTransferFee(uint8 level, uint256 newTransferFee) external onlyOwner moreThanZero(newTransferFee) {
         if (level == 1) {
             s_transferFeeLvlOne = newTransferFee;
@@ -796,6 +848,11 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         VIEW/PURE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    // Function to get the list of all allowed tokens
+    function getAllowedTokens() public view returns (address[] memory) {
+        return tokenList;
+    }
+
     // Function that checks the balance of the contract
     function getBalance() public view returns (uint256) {
         return address(this).balance;
@@ -985,7 +1042,7 @@ contract PST is Ownable, ReentrancyGuard {
         returns (
             address sender,
             address receiver,
-            /* token */
+            address token,
             uint256 amount,
             uint256 creationTime,
             uint256 expiringTime,
@@ -1013,7 +1070,7 @@ contract PST is Ownable, ReentrancyGuard {
         return (
             transfer.sender,
             transfer.receiver,
-            /* token */
+            transfer.token,
             transfer.amount,
             transfer.creationTime,
             transfer.expiringTime,
