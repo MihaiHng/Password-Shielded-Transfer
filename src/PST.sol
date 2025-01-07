@@ -29,6 +29,7 @@ import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// Update Fees management for different ERC20 tokens
 // Complete events
 // Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
 // Batch processing
@@ -114,7 +115,8 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__NoClaimedTransfers();
     error PST__TransferNotFound();
     error PST__TokenAlreadyWhitelisted();
-    error PST__TokenNotInWhitelist();
+    error PST__TokenNotAllowed();
+    error PST__InsufficientFeeBalance();
 
     /*//////////////////////////////////////////////////////////////
                           TYPE DECLARATIONS
@@ -129,7 +131,7 @@ contract PST is Ownable, ReentrancyGuard {
     uint256 private s_transferFeeLvlOne;
     uint256 private s_transferFeeLvlTwo;
     uint256 private s_transferFeeLvlThree;
-    uint256 private s_feePool;
+    // uint256 private s_feePool;
     uint256 private s_transferCounter;
 
     uint256 private s_MIN_PASSWORD_LENGTH = REQ_MIN_PASSWORD_LENGTH;
@@ -149,7 +151,7 @@ contract PST is Ownable, ReentrancyGuard {
     uint256[] private s_expiredAndRefundedTransferIds;
     uint256[] private s_claimedTransferIds;
     address[] private s_addressList;
-    address[] private tokenList;
+    address[] private s_tokenList;
 
     TransferFeeLibrary.TransferFeeLevels private feeLevels;
 
@@ -184,10 +186,6 @@ contract PST is Ownable, ReentrancyGuard {
 
     // Mapping of transfer ID to Transfer info struct
     mapping(uint256 transferId => Transfer transfer) private s_transfersById;
-    // Mapping of receiver address to total amount claimed
-    mapping(address receiver => uint256 totalAmount) private s_receiverTotalAmounts;
-    // Mapping of sender address to total amount sent
-    mapping(address sender => uint256 totalAmount) private s_senderTotalAmounts;
     // Mapping of transfer Id to last failed claim attempt time
     mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime) private s_lastFailedClaimAttempt;
     // Mapping to track active addresses
@@ -199,6 +197,8 @@ contract PST is Ownable, ReentrancyGuard {
 
     // Mapping to track if a token address is whitelisted
     mapping(address tokenAddress => bool isWhitelisted) private s_allowedTokens;
+    // Mappping to track the accumulated fees for each token allowed in whitelist
+    mapping(address token => uint256 feeBalance) private s_feeBalances;
 
     /*//////////////////////////////////////////////////////////////
                               EVENTS
@@ -214,30 +214,31 @@ contract PST is Ownable, ReentrancyGuard {
     );
     // Event to log a canceled transfer
     event TransferCanceled(
-        address indexed sender, address indexed receiver, uint256 indexed transferIndex, uint256 amount
+        address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
     );
     // Event to log a completed transfer
     event TransferCompleted(
-        address indexed sender, address indexed receiver, uint256 indexed transferIndex, uint256 amount
+        address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
     );
 
     // Event to log an expired transfer
-    event TransferExpired(
+    event TransferExpiredAndRefunded(
         address indexed sender,
         address indexed receiver,
         uint256 indexed transferIndex,
+        address token,
         uint256 amount,
         uint256 expiringTime
     );
 
     // Event to log a successful fee withdrawal
-    event SuccessfulFeeWithdrawal(address owner, uint256 feePool, uint256 withdrawalTime);
+    event SuccessfulFeeWithdrawal(address indexed token, uint256 indexed amount);
 
     // Event to log a token being whitelisted
-    event TokenWhitelisted(address token);
+    event TokenAddedToAllowList(address token);
 
     // Event to log a token being removed from whitelist
-    event TokenRemoved(address token);
+    event TokenRemovedFromAllowList(address token);
 
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
@@ -286,6 +287,13 @@ contract PST is Ownable, ReentrancyGuard {
         _;
     }
 
+    modifier onlyValidToken(address token) {
+        if (!s_allowedTokens[token]) {
+            revert PST__TokenNotAllowed();
+        }
+        _;
+    }
+
     /*//////////////////////////////////////////////////////////////
                             FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -297,6 +305,12 @@ contract PST is Ownable, ReentrancyGuard {
             lvlTwo: _transferFeeLvlTwo,
             lvlThree: _transferFeeLvlThree
         });
+
+        s_allowedTokens[address(0)] = true;
+
+        /**
+         * Initialize an ERC20 list of preapproved tokens
+         */
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -355,21 +369,36 @@ contract PST is Ownable, ReentrancyGuard {
         s_pendingTransfersByAddress[msg.sender].push(transferId);
         s_pendingTransfersByAddress[receiver].push(transferId);
 
-        addFee(transferFeeCost);
+        addFee(token, transferFeeCost);
         addAddressToTracking(msg.sender);
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
         emit TransferInitiated(msg.sender, receiver, transferId, token, amount, transferFeeCost);
 
-        (bool success,) = address(this).call{value: totalTransferCost}("");
-        if (!success) {
-            revert PST__TransferFailed();
-        }
+        if (token == address(0)) {
+            (bool success,) = address(this).call{value: totalTransferCost}("");
+            if (!success) {
+                revert PST__TransferFailed();
+            }
 
-        if (msg.value > totalTransferCost) {
-            (bool refundSuccess,) = msg.sender.call{value: msg.value - totalTransferCost}("");
-            if (!refundSuccess) {
-                revert PST__RefundFailed();
+            if (msg.value > totalTransferCost) {
+                (bool refundSuccess,) = msg.sender.call{value: msg.value - totalTransferCost}("");
+                if (!refundSuccess) {
+                    revert PST__RefundFailed();
+                }
+            }
+        } else {
+            IERC20 erc20 = IERC20(token);
+            bool success = erc20.transferFrom(msg.sender, address(this), totalTransferCost);
+            if (!success) {
+                revert PST__TransferFailed();
+            }
+
+            if (msg.value > totalTransferCost) {
+                (bool refundSuccess,) = msg.sender.call{value: msg.value - totalTransferCost}("");
+                if (!refundSuccess) {
+                    revert PST__RefundFailed();
+                }
             }
         }
     }
@@ -382,6 +411,8 @@ contract PST is Ownable, ReentrancyGuard {
         onlyValidTransferIds(transferId)
     {
         Transfer storage transferToCancel = s_transfersById[transferId];
+        address receiver = transferToCancel.receiver;
+        address tokenToCancel = transferToCancel.token;
         uint256 amountToCancel = transferToCancel.amount;
 
         s_isPending[transferId] = false;
@@ -389,7 +420,6 @@ contract PST is Ownable, ReentrancyGuard {
         transferToCancel.amount = 0;
         s_canceledTransferIds.push(transferId);
 
-        address receiver = s_transfersById[transferId].receiver;
         s_canceledTransfersByAddress[msg.sender].push(transferId);
         s_canceledTransfersByAddress[receiver].push(transferId);
 
@@ -399,11 +429,19 @@ contract PST is Ownable, ReentrancyGuard {
 
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
-        emit TransferCanceled(msg.sender, transferToCancel.receiver, transferId, /* token */ amountToCancel);
+        emit TransferCanceled(msg.sender, receiver, transferId, tokenToCancel, amountToCancel);
 
-        (bool success,) = msg.sender.call{value: amountToCancel}("");
-        if (!success) {
-            revert PST__TransferFailed();
+        if (tokenToCancel == address(0)) {
+            (bool success,) = msg.sender.call{value: amountToCancel}("");
+            if (!success) {
+                revert PST__TransferFailed();
+            }
+        } else {
+            IERC20 erc20 = IERC20(tokenToCancel);
+            bool success = erc20.transferFrom(address(this), msg.sender, amountToCancel);
+            if (!success) {
+                revert PST__TransferFailed();
+            }
         }
     }
 
@@ -415,6 +453,8 @@ contract PST is Ownable, ReentrancyGuard {
         onlyValidTransferIds(transferId)
     {
         Transfer storage transferToClaim = s_transfersById[transferId];
+        address sender = transferToClaim.sender;
+        address tokenToClaim = transferToClaim.token;
         uint256 amountToClaim = transferToClaim.amount;
 
         if (transferToClaim.receiver != msg.sender) {
@@ -439,7 +479,6 @@ contract PST is Ownable, ReentrancyGuard {
         transferToClaim.amount = 0;
         s_claimedTransferIds.push(transferId);
 
-        address sender = s_transfersById[transferId].sender;
         s_claimedTransfersByAddress[sender].push(transferId);
         s_claimedTransfersByAddress[msg.sender].push(transferId);
 
@@ -447,17 +486,23 @@ contract PST is Ownable, ReentrancyGuard {
         removeFromPendingTransfersByAddress(sender, transferId);
         removeFromPendingTransfersByAddress(msg.sender, transferId);
 
-        s_senderTotalAmounts[msg.sender] += amountToClaim;
-        s_receiverTotalAmounts[msg.sender] += amountToClaim;
         addAddressToTracking(msg.sender);
 
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
-        emit TransferCompleted(transferToClaim.sender, msg.sender, transferId, /* token */ amountToClaim);
+        emit TransferCompleted(sender, msg.sender, transferId, tokenToClaim, amountToClaim);
 
-        (bool success,) = msg.sender.call{value: amountToClaim}("");
-        if (!success) {
-            revert PST__TransferFailed();
+        if (tokenToClaim == address(0)) {
+            (bool success,) = msg.sender.call{value: amountToClaim}("");
+            if (!success) {
+                revert PST__TransferFailed();
+            }
+        } else {
+            IERC20 erc20 = IERC20(tokenToClaim);
+            bool success = erc20.transferFrom(address(this), msg.sender, amountToClaim);
+            if (!success) {
+                revert PST__TransferFailed();
+            }
         }
     }
 
@@ -558,25 +603,24 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__TokenAlreadyWhitelisted();
         }
         s_allowedTokens[token] = true;
-        tokenList.push(token);
-        emit TokenWhitelisted(token);
+        s_tokenList.push(token);
+        s_feeBalances[token] = 0;
+
+        emit TokenAddedToAllowList(token);
     }
 
-    function removeWhitelistedToken(address token) external onlyOwner {
-        if (!s_allowedTokens[token]) {
-            revert PST__TokenNotInWhitelist();
-        }
-
+    function removeWhitelistedToken(address token) external onlyOwner onlyValidToken(token) {
+        s_feeBalances[token] = 0;
         s_allowedTokens[token] = false;
-        for (uint256 i = 0; i < tokenList.length; i++) {
-            if (token == tokenList[i]) {
-                tokenList[i] = tokenList[tokenList.length - 1];
-                tokenList.pop();
+        for (uint256 i = 0; i < s_tokenList.length; i++) {
+            if (token == s_tokenList[i]) {
+                s_tokenList[i] = s_tokenList[s_tokenList.length - 1];
+                s_tokenList.pop();
                 break;
             }
         }
 
-        emit TokenRemoved(token);
+        emit TokenRemovedFromAllowList(token);
     }
 
     function setTransferFee(uint8 level, uint256 newTransferFee) external onlyOwner moreThanZero(newTransferFee) {
@@ -591,16 +635,32 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
-    function withdrawFees() external onlyOwner nonReentrant moreThanZero(s_feePool) {
-        uint256 amount = s_feePool;
+    function withdrawFeesForToken(address token, uint256 amount)
+        external
+        onlyOwner
+        onlyValidToken(token)
+        nonReentrant
+        moreThanZero(amount)
+    {
+        if (amount < s_feeBalances[token]) {
+            revert PST__InsufficientFeeBalance();
+        }
 
-        s_feePool = 0;
+        s_feeBalances[token] -= amount;
 
-        emit SuccessfulFeeWithdrawal(msg.sender, amount, block.timestamp);
+        emit SuccessfulFeeWithdrawal(token, amount);
 
-        (bool success,) = msg.sender.call{value: amount}("");
-        if (!success) {
-            revert PST__FeeWIthdrawalFailed();
+        if (token == address(0)) {
+            (bool success,) = msg.sender.call{value: amount}("");
+            if (!success) {
+                revert PST__FeeWIthdrawalFailed();
+            }
+        } else {
+            IERC20 erc20 = IERC20(token);
+            bool success = erc20.transfer(msg.sender, amount);
+            if (!success) {
+                revert PST__FeeWIthdrawalFailed();
+            }
         }
     }
 
@@ -687,8 +747,8 @@ contract PST is Ownable, ReentrancyGuard {
         return senderPassword == receiverPassword;
     }
 
-    function addFee(uint256 _transferFeeCost) internal {
-        s_feePool += _transferFeeCost;
+    function addFee(address token, uint256 _transferFeeCost) internal onlyValidToken(token) {
+        s_feeBalances[token] += _transferFeeCost;
     }
 
     function encodePassword(string memory _password) internal view returns (bytes32, bytes32) {
@@ -700,6 +760,9 @@ contract PST is Ownable, ReentrancyGuard {
 
     function refundExpiredTransfer(uint256 transferId) internal onlyValidTransferIds(transferId) {
         Transfer storage transferToRefund = s_transfersById[transferId];
+        address sender = transferToRefund.sender;
+        address receiver = transferToRefund.receiver;
+        address tokenToRefund = transferToRefund.token;
         uint256 amountToRefund = transferToRefund.amount;
 
         if (amountToRefund == 0) {
@@ -711,26 +774,27 @@ contract PST is Ownable, ReentrancyGuard {
         transferToRefund.amount = 0;
         s_expiredAndRefundedTransferIds.push(transferId);
 
-        address sender = transferToRefund.sender;
-        address receiver = transferToRefund.receiver;
         s_expiredAndRefundedTransfersByAddress[sender].push(transferId);
         s_expiredAndRefundedTransfersByAddress[receiver].push(transferId);
         removeFromPendingTransfers(transferId);
         removeFromPendingTransfersByAddress(sender, transferId);
         removeFromPendingTransfersByAddress(receiver, transferId);
 
-        emit TransferExpired(
-            transferToRefund.sender,
-            transferToRefund.receiver,
-            transferId,
-            /* token */
-            amountToRefund,
-            transferToRefund.expiringTime
+        emit TransferExpiredAndRefunded(
+            sender, receiver, transferId, tokenToRefund, amountToRefund, transferToRefund.expiringTime
         );
 
-        (bool success,) = transferToRefund.sender.call{value: amountToRefund}("");
-        if (!success) {
-            revert PST__RefundFailed();
+        if (tokenToRefund == address(0)) {
+            (bool success,) = sender.call{value: amountToRefund}("");
+            if (!success) {
+                revert PST__RefundFailed();
+            }
+        } else {
+            IERC20 erc20 = IERC20(tokenToRefund);
+            bool success = erc20.transferFrom(address(this), sender, amountToRefund);
+            if (!success) {
+                revert PST__TransferFailed();
+            }
         }
     }
 
@@ -848,19 +912,24 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         VIEW/PURE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    // Function to get the list of all allowed tokens
-    function getAllowedTokens() public view returns (address[] memory) {
-        return tokenList;
-    }
-
-    // Function that checks the balance of the contract
+    // Function that checks the ETH balance of the contract
     function getBalance() public view returns (uint256) {
         return address(this).balance;
     }
 
-    // Function that checks the total fee aquiered by the contract
-    function getTotalFee() public view returns (uint256) {
-        return s_feePool;
+    // Check if a token is allowed
+    function isTokenAllowed(address token) external view returns (bool) {
+        return s_allowedTokens[token];
+    }
+
+    // Function to get the list of all allowed tokens
+    function getAllowedTokens() public view returns (address[] memory) {
+        return s_tokenList;
+    }
+
+    // Function to get all accumulated fees for a token
+    function getAccumulatedFees(address token) external view onlyValidToken(token) returns (uint256) {
+        return s_feeBalances[token];
     }
 
     function getTransferFee(uint8 level) external view returns (uint256) {
