@@ -26,14 +26,13 @@ pragma solidity ^0.8.28;
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
+import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// Update Fees management for different ERC20 tokens
 // Complete events
 // Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
 // Batch processing
-// Add functionality for ERC20 tokens
 // Setters funtions for important parameters
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -309,8 +308,16 @@ contract PST is Ownable, ReentrancyGuard {
         s_allowedTokens[address(0)] = true;
 
         /**
-         * Initialize an ERC20 list of preapproved tokens
+         * @dev Initializing an ERC20 list of preapproved tokens
          */
+        address[] memory tokens = PreApprovedTokensLibrary.getPreApprovedTokens();
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address token = tokens[i];
+            s_allowedTokens[token] = true;
+            s_feeBalances[token] = 0;
+            s_tokenList.push(token);
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -598,15 +605,8 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL ONLYOWNER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function whitelistToken(address token) external onlyOwner {
-        if (s_allowedTokens[token]) {
-            revert PST__TokenAlreadyWhitelisted();
-        }
-        s_allowedTokens[token] = true;
-        s_tokenList.push(token);
-        s_feeBalances[token] = 0;
-
-        emit TokenAddedToAllowList(token);
+    function addWhitelistToken(address token) external onlyOwner {
+        _addWhitelistToken(token);
     }
 
     function removeWhitelistedToken(address token) external onlyOwner onlyValidToken(token) {
@@ -718,6 +718,17 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    function _addWhitelistToken(address token) internal {
+        if (s_allowedTokens[token]) {
+            revert PST__TokenAlreadyWhitelisted();
+        }
+        s_allowedTokens[token] = true;
+        s_tokenList.push(token);
+        s_feeBalances[token] = 0;
+
+        emit TokenAddedToAllowList(token);
+    }
+
     function removeAddressFromTracking(address user) internal {
         for (uint256 i = 0; i < s_addressList.length; i++) {
             if (s_addressList[i] == user) {
