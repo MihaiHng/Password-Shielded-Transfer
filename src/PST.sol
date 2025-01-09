@@ -130,7 +130,6 @@ contract PST is Ownable, ReentrancyGuard {
     uint256 private s_transferFeeLvlOne;
     uint256 private s_transferFeeLvlTwo;
     uint256 private s_transferFeeLvlThree;
-    // uint256 private s_feePool;
     uint256 private s_transferCounter;
 
     uint256 private s_MIN_PASSWORD_LENGTH = REQ_MIN_PASSWORD_LENGTH;
@@ -195,7 +194,7 @@ contract PST is Ownable, ReentrancyGuard {
     mapping(address user => uint256 lastActiveTime) private s_lastInteractionTime;
 
     // Mapping to track if a token address is whitelisted
-    mapping(address tokenAddress => bool isWhitelisted) private s_allowedTokens;
+    mapping(address token => bool isAllowed) private s_allowedTokens;
     // Mappping to track the accumulated fees for each token allowed in whitelist
     mapping(address token => uint256 feeBalance) private s_feeBalances;
 
@@ -305,8 +304,6 @@ contract PST is Ownable, ReentrancyGuard {
             lvlThree: _transferFeeLvlThree
         });
 
-        s_allowedTokens[address(0)] = true;
-
         /**
          * @dev Initializing an ERC20 list of preapproved tokens
          */
@@ -334,6 +331,7 @@ contract PST is Ownable, ReentrancyGuard {
         nonReentrant
         onlyValidAddress(receiver)
         moreThanZero(amount)
+        onlyValidToken(token)
     {
         if (receiver == msg.sender) {
             revert PST__CantSendToOwnAddress();
@@ -347,16 +345,12 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__PasswordTooShort({minCharactersRequired: s_MIN_PASSWORD_LENGTH});
         }
 
-        uint256 transferId = s_transferCounter++;
+        uint256 transferId = s_transferCounter++; // transferId will start at 1 because at first call of the function s_transferCounter = 0
 
         TransferFeeLibrary.TransferFeeLevels memory currentFeeLevels = feeLevels;
 
         (uint256 totalTransferCost, uint256 transferFeeCost) =
             TransferFeeLibrary.calculateTotalTransferCost(amount, currentFeeLevels);
-
-        if (msg.value < totalTransferCost) {
-            revert PST__NotEnoughFunds({required: totalTransferCost, provided: msg.value});
-        }
 
         (bytes32 encodedPassword, bytes32 salt) = encodePassword(password);
 
@@ -383,6 +377,10 @@ contract PST is Ownable, ReentrancyGuard {
         emit TransferInitiated(msg.sender, receiver, transferId, token, amount, transferFeeCost);
 
         if (token == address(0)) {
+            if (msg.value < totalTransferCost) {
+                revert PST__NotEnoughFunds({required: totalTransferCost, provided: msg.value});
+            }
+
             (bool success,) = address(this).call{value: totalTransferCost}("");
             if (!success) {
                 revert PST__TransferFailed();
@@ -399,13 +397,6 @@ contract PST is Ownable, ReentrancyGuard {
             bool success = erc20.transferFrom(msg.sender, address(this), totalTransferCost);
             if (!success) {
                 revert PST__TransferFailed();
-            }
-
-            if (msg.value > totalTransferCost) {
-                (bool refundSuccess,) = msg.sender.call{value: msg.value - totalTransferCost}("");
-                if (!refundSuccess) {
-                    revert PST__RefundFailed();
-                }
             }
         }
     }
@@ -605,11 +596,11 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL ONLYOWNER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function addWhitelistToken(address token) external onlyOwner {
-        _addWhitelistToken(token);
+    function addTokenToAllowList(address token) external onlyOwner {
+        _addTokenToAllowList(token);
     }
 
-    function removeWhitelistedToken(address token) external onlyOwner onlyValidToken(token) {
+    function removeTokenFromAllowList(address token) external onlyOwner onlyValidToken(token) {
         s_feeBalances[token] = 0;
         s_allowedTokens[token] = false;
         for (uint256 i = 0; i < s_tokenList.length; i++) {
@@ -718,7 +709,7 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function _addWhitelistToken(address token) internal {
+    function _addTokenToAllowList(address token) internal {
         if (s_allowedTokens[token]) {
             revert PST__TokenAlreadyWhitelisted();
         }
