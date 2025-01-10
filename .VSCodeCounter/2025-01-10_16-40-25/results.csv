@@ -1,0 +1,6 @@
+"filename", "language", "TOML", "Solidity", "comment", "blank", "total"
+"/home/mihai/Projects/Password-Shielded-Transfer/foundry.toml", "TOML", 9, 0, 0, 3, 12
+"/home/mihai/Projects/Password-Shielded-Transfer/src/PST.sol", "Solidity", 0, 929, 88, 184, 1201
+"/home/mihai/Projects/Password-Shielded-Transfer/src/libraries/PreApprovedTokensLib.sol", "Solidity", 0, 32, 1, 6, 39
+"/home/mihai/Projects/Password-Shielded-Transfer/src/libraries/TransferFeeLib.sol", "Solidity", 0, 39, 1, 8, 48
+"Total", "-", 9, 1000, 90, 201, 1300

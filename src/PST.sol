@@ -34,6 +34,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 // Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
 // Batch processing
 // Setters funtions for important parameters
+// Change ownership onlyOwner
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 /**
@@ -238,6 +239,24 @@ contract PST is Ownable, ReentrancyGuard {
     // Event to log a token being removed from whitelist
     event TokenRemovedFromAllowList(address token);
 
+    // Event to track fee changes by level
+    event TransferFeeChanged(uint8 level, uint256 newTransferFee);
+
+    // Event to track when the minimum password length is changed
+    event MinPasswordLengthChanged(uint256 newMinPasswordLength);
+
+    // Event to log when the claim cooldown period changes
+    event ClaimCooldownPeriodChanged(uint256 newClaimCooldownPeriod);
+
+    // Event to log when the transfer availability period changes
+    event AvailabilityPeriodChanged(uint256 newAvailabilityPeriod);
+
+    // Event to log when the cleanup interval for an address changed
+    event CleanupIntervalChanged(uint256 newCleanupInterval);
+
+    // Event to log when the inactivity threshhold for an address changed
+    event InactivityThreshholdChanged(uint256 newInactivityThreshhold);
+
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
     //////////////////////////////////////////////////////////////*/
@@ -277,17 +296,17 @@ contract PST is Ownable, ReentrancyGuard {
         _;
     }
 
-    modifier claimCooldownElapsed(uint256 transferId) {
-        uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
-        if (block.timestamp < lastAttempt + s_CLAIM_COOLDOWN_PERIOD) {
-            revert PST__CooldownPeriodNotElapsed();
+    modifier onlyValidToken(address token) {
+        if (!s_allowedTokens[token]) {
+            revert PST__TokenNotAllowed();
         }
         _;
     }
 
-    modifier onlyValidToken(address token) {
-        if (!s_allowedTokens[token]) {
-            revert PST__TokenNotAllowed();
+    modifier claimCooldownElapsed(uint256 transferId) {
+        uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
+        if (block.timestamp < lastAttempt + s_CLAIM_COOLDOWN_PERIOD) {
+            revert PST__CooldownPeriodNotElapsed();
         }
         _;
     }
@@ -322,7 +341,7 @@ contract PST is Ownable, ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     *
+     * @dev
      *
      */
     function createTransfer(address receiver, address token, uint256 amount, string memory password)
@@ -401,6 +420,9 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
+    /**
+     * @dev
+     */
     function cancelTransfer(uint256 transferId)
         external
         nonReentrant
@@ -436,13 +458,16 @@ contract PST is Ownable, ReentrancyGuard {
             }
         } else {
             IERC20 erc20 = IERC20(tokenToCancel);
-            bool success = erc20.transferFrom(address(this), msg.sender, amountToCancel);
+            bool success = erc20.transfer(msg.sender, amountToCancel);
             if (!success) {
                 revert PST__TransferFailed();
             }
         }
     }
 
+    /**
+     * @dev
+     */
     function claimTransfer(uint256 transferId, string memory password)
         external
         nonReentrant
@@ -497,7 +522,7 @@ contract PST is Ownable, ReentrancyGuard {
             }
         } else {
             IERC20 erc20 = IERC20(tokenToClaim);
-            bool success = erc20.transferFrom(address(this), msg.sender, amountToClaim);
+            bool success = erc20.transfer(msg.sender, amountToClaim);
             if (!success) {
                 revert PST__TransferFailed();
             }
@@ -524,15 +549,15 @@ contract PST is Ownable, ReentrancyGuard {
         address[] memory trackedAddresses = s_addressList;
         address[] memory addressesReadyForCleanup = new address[](trackedAddresses.length);
         address[] memory addressesReadyToBeRemoved = new address[](trackedAddresses.length);
-        uint256 countaddressesReadyForCleanup;
+        uint256 countAddressesReadyForCleanup;
         uint256 countAddressesToBeRemoved;
 
         for (uint256 i = 0; i < trackedAddresses.length; i++) {
             address user = trackedAddresses[i];
 
             if ((block.timestamp - s_lastCleanupTimeByAddress[user]) >= s_CLEANUP_INTERVAL) {
-                addressesReadyForCleanup[countaddressesReadyForCleanup] = user;
-                countaddressesReadyForCleanup++;
+                addressesReadyForCleanup[countAddressesReadyForCleanup] = user;
+                countAddressesReadyForCleanup++;
             }
 
             if ((block.timestamp - s_lastInteractionTime[user]) >= s_INACTIVITY_THRESHOLD) {
@@ -541,13 +566,13 @@ contract PST is Ownable, ReentrancyGuard {
             }
         }
 
-        if (expiredTransfers.length > 0 || countaddressesReadyForCleanup > 0 || countAddressesToBeRemoved > 0) {
+        if (expiredTransfers.length > 0 || countAddressesReadyForCleanup > 0 || countAddressesToBeRemoved > 0) {
             upkeepNeeded = true;
             performData = abi.encode(
                 refundNeeded,
                 expiredTransfers,
                 addressesReadyForCleanup,
-                countaddressesReadyForCleanup,
+                countAddressesReadyForCleanup,
                 addressesReadyToBeRemoved,
                 countAddressesToBeRemoved
             );
@@ -596,22 +621,14 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL ONLYOWNER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    function changeOwnership() external onlyOwner {}
+
     function addTokenToAllowList(address token) external onlyOwner {
         _addTokenToAllowList(token);
     }
 
-    function removeTokenFromAllowList(address token) external onlyOwner onlyValidToken(token) {
-        s_feeBalances[token] = 0;
-        s_allowedTokens[token] = false;
-        for (uint256 i = 0; i < s_tokenList.length; i++) {
-            if (token == s_tokenList[i]) {
-                s_tokenList[i] = s_tokenList[s_tokenList.length - 1];
-                s_tokenList.pop();
-                break;
-            }
-        }
-
-        emit TokenRemovedFromAllowList(token);
+    function removeTokenFromAllowList(address token) external onlyOwner {
+        _removeTokenFromAllowList(token);
     }
 
     function setTransferFee(uint8 level, uint256 newTransferFee) external onlyOwner moreThanZero(newTransferFee) {
@@ -624,6 +641,8 @@ contract PST is Ownable, ReentrancyGuard {
         } else {
             revert PST__InvalidFeeLevel();
         }
+
+        emit TransferFeeChanged(level, newTransferFee);
     }
 
     function withdrawFeesForToken(address token, uint256 amount)
@@ -663,7 +682,10 @@ contract PST is Ownable, ReentrancyGuard {
         if (newMinPasswordLength < REQ_MIN_PASSWORD_LENGTH) {
             revert PST__MinPasswordLengthIsSeven();
         }
+
         s_MIN_PASSWORD_LENGTH = newMinPasswordLength;
+
+        emit MinPasswordLengthChanged(newMinPasswordLength);
     }
 
     function setNewClaimCooldownPeriod(uint256 newClaimCooldownPeriod)
@@ -674,7 +696,10 @@ contract PST is Ownable, ReentrancyGuard {
         if (newClaimCooldownPeriod < MIN_CLAIM_COOLDOWN_PERIOD) {
             revert PST__InvalidClaimCooldownPeriod({minRequired: MIN_CLAIM_COOLDOWN_PERIOD});
         }
+
         s_CLAIM_COOLDOWN_PERIOD = newClaimCooldownPeriod;
+
+        emit ClaimCooldownPeriodChanged(newClaimCooldownPeriod);
     }
 
     function setNewAvailabilityPeriod(uint256 newAvailabilityPeriod)
@@ -685,14 +710,20 @@ contract PST is Ownable, ReentrancyGuard {
         if (newAvailabilityPeriod < MIN_AVAILABILITY_PERIOD) {
             revert PST__InvalidAvailabilityPeriod({minRequired: MIN_AVAILABILITY_PERIOD});
         }
+
         s_AVAILABILITY_PERIOD = newAvailabilityPeriod;
+
+        emit AvailabilityPeriodChanged(newAvailabilityPeriod);
     }
 
     function setNewCleanupInterval(uint256 newCleanupInterval) external onlyOwner moreThanZero(newCleanupInterval) {
         if (newCleanupInterval < MIN_CLEANUP_INTERVAL) {
             revert PST__InvalidCleanupInterval({minRequired: MIN_CLEANUP_INTERVAL});
         }
+
         s_CLEANUP_INTERVAL = newCleanupInterval;
+
+        emit CleanupIntervalChanged(newCleanupInterval);
     }
 
     function setNewInactivityThreshhold(uint256 newInactivityThreshhold)
@@ -703,64 +734,19 @@ contract PST is Ownable, ReentrancyGuard {
         if (newInactivityThreshhold < MIN_INACTIVITY_THRESHOLD) {
             revert PST__InvalidInactivityThreshhold({minRequired: MIN_INACTIVITY_THRESHOLD});
         }
+
         s_INACTIVITY_THRESHOLD = newInactivityThreshhold;
+
+        emit InactivityThreshholdChanged(newInactivityThreshhold);
     }
 
     /*//////////////////////////////////////////////////////////////
-                        INTERNAL FUNCTIONS
+                        PUBLIC FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function _addTokenToAllowList(address token) internal {
-        if (s_allowedTokens[token]) {
-            revert PST__TokenAlreadyWhitelisted();
-        }
-        s_allowedTokens[token] = true;
-        s_tokenList.push(token);
-        s_feeBalances[token] = 0;
-
-        emit TokenAddedToAllowList(token);
-    }
-
-    function removeAddressFromTracking(address user) internal {
-        for (uint256 i = 0; i < s_addressList.length; i++) {
-            if (s_addressList[i] == user) {
-                s_addressList[i] = s_addressList[s_addressList.length - 1];
-                s_addressList.pop();
-                break;
-            }
-        }
-
-        delete s_trackedAddresses[user];
-        delete s_lastInteractionTime[user];
-        delete s_lastCleanupTimeByAddress[user];
-    }
-
-    function addAddressToTracking(address user) internal {
-        if (!s_trackedAddresses[user]) {
-            s_trackedAddresses[user] = true;
-            s_addressList.push(user);
-            s_lastCleanupTimeByAddress[user] = block.timestamp;
-        }
-    }
-
-    function checkPassword(uint256 transferId, string memory password) internal view returns (bool) {
-        (bytes32 receiverPassword,) = encodePassword(password);
-        bytes32 senderPassword = s_transfersById[transferId].encodedPassword;
-
-        return senderPassword == receiverPassword;
-    }
-
-    function addFee(address token, uint256 _transferFeeCost) internal onlyValidToken(token) {
-        s_feeBalances[token] += _transferFeeCost;
-    }
-
-    function encodePassword(string memory _password) internal view returns (bytes32, bytes32) {
-        bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender));
-        bytes32 encodedPassword = keccak256(abi.encodePacked(_password, salt));
-
-        return (encodedPassword, salt);
-    }
-
-    function refundExpiredTransfer(uint256 transferId) internal onlyValidTransferIds(transferId) {
+    /**
+     *  @dev
+     */
+    function refundExpiredTransfer(uint256 transferId) public onlyValidTransferIds(transferId) {
         Transfer storage transferToRefund = s_transfersById[transferId];
         address sender = transferToRefund.sender;
         address receiver = transferToRefund.receiver;
@@ -793,12 +779,58 @@ contract PST is Ownable, ReentrancyGuard {
             }
         } else {
             IERC20 erc20 = IERC20(tokenToRefund);
-            bool success = erc20.transferFrom(address(this), sender, amountToRefund);
+            bool success = erc20.transfer(sender, amountToRefund);
             if (!success) {
                 revert PST__TransferFailed();
             }
         }
     }
+
+    function addAddressToTracking(address user) public {
+        if (!s_trackedAddresses[user]) {
+            s_trackedAddresses[user] = true;
+            s_addressList.push(user);
+            s_lastCleanupTimeByAddress[user] = block.timestamp;
+        }
+    }
+
+    function removeAddressFromTracking(address user) public {
+        for (uint256 i = 0; i < s_addressList.length; i++) {
+            if (s_addressList[i] == user) {
+                s_addressList[i] = s_addressList[s_addressList.length - 1];
+                s_addressList.pop();
+                break;
+            }
+        }
+
+        delete s_trackedAddresses[user];
+        delete s_lastInteractionTime[user];
+        delete s_lastCleanupTimeByAddress[user];
+    }
+
+    function addFee(address token, uint256 _transferFeeCost) public onlyValidToken(token) {
+        s_feeBalances[token] += _transferFeeCost;
+    }
+
+    function encodePassword(string memory _password) public view returns (bytes32, bytes32) {
+        bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender));
+        bytes32 encodedPassword = keccak256(abi.encodePacked(_password, salt));
+
+        return (encodedPassword, salt);
+    }
+
+    function checkPassword(uint256 transferId, string memory password) public view returns (bool) {
+        (bytes32 receiverPassword,) = encodePassword(password);
+        bytes32 senderPassword = s_transfersById[transferId].encodedPassword;
+
+        return senderPassword == receiverPassword;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    // To be moved to public functions
 
     // Function to remove all canceled transfers
     function removeAllCanceledTransfers() internal onlyOwner {
@@ -818,7 +850,7 @@ contract PST is Ownable, ReentrancyGuard {
     }
 
     // Function to remove all expired and refunded transfers
-    function removeAllExpiredTransfers() internal onlyOwner {
+    function removeAllExpiredAndRefundedTransfers() internal onlyOwner {
         uint256 length = s_expiredAndRefundedTransferIds.length;
 
         if (length == 0) {
@@ -911,9 +943,36 @@ contract PST is Ownable, ReentrancyGuard {
                         PRIVATE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    function _addTokenToAllowList(address token) internal {
+        if (s_allowedTokens[token]) {
+            revert PST__TokenAlreadyWhitelisted();
+        }
+        s_allowedTokens[token] = true;
+        s_tokenList.push(token);
+        s_feeBalances[token] = 0;
+
+        emit TokenAddedToAllowList(token);
+    }
+
+    function _removeTokenFromAllowList(address token) internal {
+        s_feeBalances[token] = 0;
+        s_allowedTokens[token] = false;
+        for (uint256 i = 0; i < s_tokenList.length; i++) {
+            if (token == s_tokenList[i]) {
+                s_tokenList[i] = s_tokenList[s_tokenList.length - 1];
+                s_tokenList.pop();
+                break;
+            }
+        }
+
+        emit TokenRemovedFromAllowList(token);
+    }
+
     /*//////////////////////////////////////////////////////////////
                         VIEW/PURE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+    // Classify functions in getter, checker etc
+
     // Function that checks the ETH balance of the contract
     function getBalance() public view returns (uint256) {
         return address(this).balance;
