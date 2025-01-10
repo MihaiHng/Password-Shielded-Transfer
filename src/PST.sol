@@ -826,14 +826,16 @@ contract PST is Ownable, ReentrancyGuard {
         return senderPassword == receiverPassword;
     }
 
-    /*//////////////////////////////////////////////////////////////
-                        INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    // To be moved to public functions
+    function calculateTotalTransferCostPublic(uint256 amount)
+        public
+        view
+        returns (uint256 totalTransferCost, uint256 transferFeeCost)
+    {
+        return TransferFeeLibrary.calculateTotalTransferCost(amount, feeLevels);
+    }
 
     // Function to remove all canceled transfers
-    function removeAllCanceledTransfers() internal onlyOwner {
+    function removeAllCanceledTransfers() public onlyOwner {
         uint256 length = s_canceledTransferIds.length;
 
         if (length == 0) {
@@ -850,7 +852,7 @@ contract PST is Ownable, ReentrancyGuard {
     }
 
     // Function to remove all expired and refunded transfers
-    function removeAllExpiredAndRefundedTransfers() internal onlyOwner {
+    function removeAllExpiredAndRefundedTransfers() public onlyOwner {
         uint256 length = s_expiredAndRefundedTransferIds.length;
 
         if (length == 0) {
@@ -867,7 +869,7 @@ contract PST is Ownable, ReentrancyGuard {
     }
 
     // Function to remove all claimed transfers
-    function removeAllClaimedTransfers() internal onlyOwner {
+    function removeAllClaimedTransfers() public onlyOwner {
         uint256 length = s_claimedTransferIds.length;
 
         if (length == 0) {
@@ -883,23 +885,7 @@ contract PST is Ownable, ReentrancyGuard {
         delete s_claimedTransferIds;
     }
 
-    function removeFromPendingTransfersByAddress(address user, uint256 transferId) internal {
-        uint256[] storage userPendingTransfers = s_pendingTransfersByAddress[user];
-        uint256 length = userPendingTransfers.length;
-        if (length == 0) {
-            revert PST__NoPendingTransfers();
-        }
-
-        for (uint256 i = 0; i < length; i++) {
-            if (userPendingTransfers[i] == transferId) {
-                userPendingTransfers[i] = userPendingTransfers[length - 1];
-                userPendingTransfers.pop();
-                break;
-            }
-        }
-    }
-
-    function removeFromPendingTransfers(uint256 transferId) internal {
+    function removeFromPendingTransfers(uint256 transferId) public {
         uint256[] storage pendingTransfers = s_pendingTransferIds;
         uint256 length = pendingTransfers.length;
         if (length == 0) {
@@ -915,7 +901,23 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
-    function removeAllCanceledTransfersByAddress(address user) internal onlyValidAddress(user) {
+    function removeFromPendingTransfersByAddress(address user, uint256 transferId) public {
+        uint256[] storage userPendingTransfers = s_pendingTransfersByAddress[user];
+        uint256 length = userPendingTransfers.length;
+        if (length == 0) {
+            revert PST__NoPendingTransfers();
+        }
+
+        for (uint256 i = 0; i < length; i++) {
+            if (userPendingTransfers[i] == transferId) {
+                userPendingTransfers[i] = userPendingTransfers[length - 1];
+                userPendingTransfers.pop();
+                break;
+            }
+        }
+    }
+
+    function removeAllCanceledTransfersByAddress(address user) public onlyValidAddress(user) {
         if (s_canceledTransfersByAddress[user].length == 0) {
             revert PST__NoCanceledTransfers();
         }
@@ -923,7 +925,7 @@ contract PST is Ownable, ReentrancyGuard {
         delete s_canceledTransfersByAddress[user];
     }
 
-    function removeAllExpiredAndRefundedTransfersByAddress(address user) internal onlyValidAddress(user) {
+    function removeAllExpiredAndRefundedTransfersByAddress(address user) public onlyValidAddress(user) {
         if (s_expiredAndRefundedTransfersByAddress[user].length == 0) {
             revert PST__NoExpiredTransfers();
         }
@@ -931,13 +933,17 @@ contract PST is Ownable, ReentrancyGuard {
         delete s_expiredAndRefundedTransfersByAddress[user];
     }
 
-    function removeAllClaimedTransfersByAddress(address user) internal onlyValidAddress(user) {
+    function removeAllClaimedTransfersByAddress(address user) public onlyValidAddress(user) {
         if (s_claimedTransfersByAddress[user].length == 0) {
             revert PST__NoClaimedTransfers();
         }
 
         delete s_claimedTransfersByAddress[user];
     }
+
+    /*//////////////////////////////////////////////////////////////
+                        INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     /*//////////////////////////////////////////////////////////////
                         PRIVATE FUNCTIONS
@@ -971,46 +977,12 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         VIEW/PURE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    // Classify functions in getter, checker etc
 
-    // Function that checks the ETH balance of the contract
-    function getBalance() public view returns (uint256) {
-        return address(this).balance;
-    }
+    // CHECKER FUNCTIONS //
 
     // Check if a token is allowed
-    function isTokenAllowed(address token) external view returns (bool) {
+    function isTokenAllowed(address token) public view returns (bool) {
         return s_allowedTokens[token];
-    }
-
-    // Function to get the list of all allowed tokens
-    function getAllowedTokens() public view returns (address[] memory) {
-        return s_tokenList;
-    }
-
-    // Function to get all accumulated fees for a token
-    function getAccumulatedFees(address token) external view onlyValidToken(token) returns (uint256) {
-        return s_feeBalances[token];
-    }
-
-    function getTransferFee(uint8 level) external view returns (uint256) {
-        if (level == 1) {
-            return s_transferFeeLvlOne;
-        } else if (level == 2) {
-            return s_transferFeeLvlTwo;
-        } else if (level == 3) {
-            return s_transferFeeLvlThree;
-        } else {
-            revert PST__InvalidFeeLevel();
-        }
-    }
-
-    function calculateTotalTransferCostPublic(uint256 amount)
-        public
-        view
-        returns (uint256 totalTransferCost, uint256 transferFeeCost)
-    {
-        return TransferFeeLibrary.calculateTotalTransferCost(amount, feeLevels);
     }
 
     // Function to check if a specific transfer is pending
@@ -1033,6 +1005,35 @@ contract PST is Ownable, ReentrancyGuard {
         return s_isClaimed[transferId];
     }
 
+    // GETTER FUNCTIONS //
+
+    // Function that checks the ETH balance of the contract
+    function getBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    // Function to get the list of all allowed tokens
+    function getAllowedTokens() external view returns (address[] memory) {
+        return s_tokenList;
+    }
+
+    // Function to get all accumulated fees for a token
+    function getAccumulatedFees(address token) external view onlyValidToken(token) returns (uint256) {
+        return s_feeBalances[token];
+    }
+
+    function getTransferFee(uint8 level) external view returns (uint256) {
+        if (level == 1) {
+            return s_transferFeeLvlOne;
+        } else if (level == 2) {
+            return s_transferFeeLvlTwo;
+        } else if (level == 3) {
+            return s_transferFeeLvlThree;
+        } else {
+            revert PST__InvalidFeeLevel();
+        }
+    }
+
     function getClaimCooldownStatus(uint256 transferId)
         external
         view
@@ -1046,22 +1047,22 @@ contract PST is Ownable, ReentrancyGuard {
     }
 
     // Function to get all pending transfers in the system
-    function getPendingTransfers() public view returns (uint256[] memory) {
+    function getPendingTransfers() external view returns (uint256[] memory) {
         return s_pendingTransferIds;
     }
 
     // Function to get all canceled transfers in the system
-    function getCanceledTransfers() public view returns (uint256[] memory) {
+    function getCanceledTransfers() external view returns (uint256[] memory) {
         return s_canceledTransferIds;
     }
 
     // Function to get all expired and refunded transfers in the system
-    function getExpiredAndRefundedTransfers() public view returns (uint256[] memory) {
+    function getExpiredAndRefundedTransfers() external view returns (uint256[] memory) {
         return s_expiredAndRefundedTransferIds;
     }
 
     // Function to get all claimed transfers in the system
-    function getClaimedTransfers() public view returns (uint256[] memory) {
+    function getClaimedTransfers() external view returns (uint256[] memory) {
         return s_claimedTransferIds;
     }
 
@@ -1092,7 +1093,7 @@ contract PST is Ownable, ReentrancyGuard {
 
     // Function to get all pending transfers for an address
     function getPendingTransfersForAddress(address user)
-        public
+        external
         view
         onlyValidAddress(user)
         returns (uint256[] memory)
@@ -1106,7 +1107,7 @@ contract PST is Ownable, ReentrancyGuard {
 
     // Function to get all canceled transfers for an address
     function getCanceledTransfersForAddress(address user)
-        public
+        external
         view
         onlyValidAddress(user)
         returns (uint256[] memory)
@@ -1120,7 +1121,7 @@ contract PST is Ownable, ReentrancyGuard {
 
     // Function to get all expired transfers for an address
     function getExpiredTransfersForAddress(address user)
-        public
+        external
         view
         onlyValidAddress(user)
         returns (uint256[] memory)
@@ -1134,7 +1135,7 @@ contract PST is Ownable, ReentrancyGuard {
 
     // Function to get all claimed transfers for an address
     function getClaimedTransfersForAddress(address user)
-        public
+        external
         view
         onlyValidAddress(user)
         returns (uint256[] memory)
