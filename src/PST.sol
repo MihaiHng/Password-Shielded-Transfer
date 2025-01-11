@@ -117,6 +117,7 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__TokenAlreadyWhitelisted();
     error PST__TokenNotAllowed();
     error PST__InsufficientFeeBalance();
+    error PST__InvalidNewOwnerAddress();
 
     /*//////////////////////////////////////////////////////////////
                           TYPE DECLARATIONS
@@ -256,6 +257,24 @@ contract PST is Ownable, ReentrancyGuard {
 
     // Event to log when the inactivity threshhold for an address changed
     event InactivityThreshholdChanged(uint256 newInactivityThreshhold);
+
+    // Event to log the time when Canceled Transfers were removed from tracking
+    event CanceledTransfersHistoryCleared(uint256 time);
+
+    // Event to log the time when Expired and Refunded Transfers were removed from tracking
+    event ExpiredAndRefundedTransfersHistoryCleared(uint256 time);
+
+    // Event to log the time when Claimed Transfers were removed from tracking
+    event ClaimedTransfersHistoryCleared(uint256 time);
+
+    // Event to log the time when Canceled Transfers for an Address were removed from tracking
+    event CanceledTransfersForAddressHistoryCleared(uint256 time);
+
+    // Event to log the time when Expired and Refunded Transfers for an Address were removed from tracking
+    event ExpiredAndRefundedTransfersForAddressHistoryCleared(uint256 time);
+
+    // Event to log the time when Claimed Transfers for an Address were removed from tracking
+    event ClaimedTransfersForAddressHistoryCleared(uint256 time);
 
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
@@ -621,7 +640,12 @@ contract PST is Ownable, ReentrancyGuard {
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL ONLYOWNER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    function changeOwnership() external onlyOwner {}
+    function transferOwnership(address newOwner) public override onlyOwner {
+        if (newOwner == address(0)) {
+            revert PST__InvalidNewOwnerAddress();
+        }
+        super.transferOwnership(newOwner);
+    }
 
     function addTokenToAllowList(address token) external onlyOwner {
         _addTokenToAllowList(token);
@@ -834,57 +858,6 @@ contract PST is Ownable, ReentrancyGuard {
         return TransferFeeLibrary.calculateTotalTransferCost(amount, feeLevels);
     }
 
-    // Function to remove all canceled transfers
-    function removeAllCanceledTransfers() public onlyOwner {
-        uint256 length = s_canceledTransferIds.length;
-
-        if (length == 0) {
-            revert PST__NoCanceledTransfersToRemove();
-        }
-
-        for (uint256 i = 0; i < length; i++) {
-            uint256 transferId = s_canceledTransferIds[i];
-            delete s_isCanceled[transferId];
-            delete s_transfersById[transferId];
-        }
-
-        delete s_canceledTransferIds;
-    }
-
-    // Function to remove all expired and refunded transfers
-    function removeAllExpiredAndRefundedTransfers() public onlyOwner {
-        uint256 length = s_expiredAndRefundedTransferIds.length;
-
-        if (length == 0) {
-            revert PST__NoExpiredTransfersToRemove();
-        }
-
-        for (uint256 i = 0; i < length; i++) {
-            uint256 transferId = s_expiredAndRefundedTransferIds[i];
-            delete s_isExpiredAndRefunded[transferId];
-            delete s_transfersById[transferId];
-        }
-
-        delete s_expiredAndRefundedTransferIds;
-    }
-
-    // Function to remove all claimed transfers
-    function removeAllClaimedTransfers() public onlyOwner {
-        uint256 length = s_claimedTransferIds.length;
-
-        if (length == 0) {
-            revert PST__NoClaimedTransfersToRemove();
-        }
-
-        for (uint256 i = 0; i < length; i++) {
-            uint256 transferId = s_claimedTransferIds[i];
-            delete s_isClaimed[transferId];
-            delete s_transfersById[transferId];
-        }
-
-        delete s_claimedTransferIds;
-    }
-
     function removeFromPendingTransfers(uint256 transferId) public {
         uint256[] storage pendingTransfers = s_pendingTransferIds;
         uint256 length = pendingTransfers.length;
@@ -917,12 +890,71 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
+    // Function to remove all canceled transfers
+    function removeAllCanceledTransfers() public onlyOwner {
+        uint256 length = s_canceledTransferIds.length;
+
+        if (length == 0) {
+            revert PST__NoCanceledTransfersToRemove();
+        }
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 transferId = s_canceledTransferIds[i];
+            delete s_isCanceled[transferId];
+            delete s_transfersById[transferId];
+        }
+
+        delete s_canceledTransferIds;
+
+        emit CanceledTransfersHistoryCleared(block.timestamp);
+    }
+
+    // Function to remove all expired and refunded transfers
+    function removeAllExpiredAndRefundedTransfers() public onlyOwner {
+        uint256 length = s_expiredAndRefundedTransferIds.length;
+
+        if (length == 0) {
+            revert PST__NoExpiredTransfersToRemove();
+        }
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 transferId = s_expiredAndRefundedTransferIds[i];
+            delete s_isExpiredAndRefunded[transferId];
+            delete s_transfersById[transferId];
+        }
+
+        delete s_expiredAndRefundedTransferIds;
+
+        emit ExpiredAndRefundedTransfersHistoryCleared(block.timestamp);
+    }
+
+    // Function to remove all claimed transfers
+    function removeAllClaimedTransfers() public onlyOwner {
+        uint256 length = s_claimedTransferIds.length;
+
+        if (length == 0) {
+            revert PST__NoClaimedTransfersToRemove();
+        }
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 transferId = s_claimedTransferIds[i];
+            delete s_isClaimed[transferId];
+            delete s_transfersById[transferId];
+        }
+
+        delete s_claimedTransferIds;
+
+        emit ClaimedTransfersHistoryCleared(block.timestamp);
+    }
+
     function removeAllCanceledTransfersByAddress(address user) public onlyValidAddress(user) {
         if (s_canceledTransfersByAddress[user].length == 0) {
             revert PST__NoCanceledTransfers();
         }
 
         delete s_canceledTransfersByAddress[user];
+
+        emit CanceledTransfersForAddressHistoryCleared(block.timestamp);
     }
 
     function removeAllExpiredAndRefundedTransfersByAddress(address user) public onlyValidAddress(user) {
@@ -931,6 +963,8 @@ contract PST is Ownable, ReentrancyGuard {
         }
 
         delete s_expiredAndRefundedTransfersByAddress[user];
+
+        emit ExpiredAndRefundedTransfersForAddressHistoryCleared(block.timestamp);
     }
 
     function removeAllClaimedTransfersByAddress(address user) public onlyValidAddress(user) {
@@ -939,6 +973,8 @@ contract PST is Ownable, ReentrancyGuard {
         }
 
         delete s_claimedTransfersByAddress[user];
+
+        emit ClaimedTransfersForAddressHistoryCleared(block.timestamp);
     }
 
     /*//////////////////////////////////////////////////////////////
