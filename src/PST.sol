@@ -34,7 +34,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 // Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
 // Batch processing
 // Setters funtions for important parameters
-// Change ownership onlyOwner
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 /**
@@ -105,6 +104,7 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__InvalidAvailabilityPeriod(uint256 minRequired);
     error PST__InvalidCleanupInterval(uint256 minRequired);
     error PST__InvalidInactivityThreshhold(uint256 minRequired);
+    error PST__InvalidBatchLimit(uint256 minRequired);
     error PST__NotEnoughFunds(uint256 required, uint256 provided);
     error PST__NoExpiredTransfersToRemove();
     error PST__NoCanceledTransfersToRemove();
@@ -129,22 +129,24 @@ contract PST is Ownable, ReentrancyGuard {
     //////////////////////////////////////////////////////////////*/
     address private immutable i_owner;
 
-    uint256 private s_transferFeeLvlOne;
-    uint256 private s_transferFeeLvlTwo;
-    uint256 private s_transferFeeLvlThree;
-    uint256 private s_transferCounter;
-
-    uint256 private s_MIN_PASSWORD_LENGTH = REQ_MIN_PASSWORD_LENGTH;
-    uint256 private s_CLAIM_COOLDOWN_PERIOD = 30 minutes;
-    uint256 private s_AVAILABILITY_PERIOD = 7 days;
-    uint256 private s_CLEANUP_INTERVAL = 12 weeks;
-    uint256 private s_INACTIVITY_THRESHOLD = 12 weeks;
-
     uint256 private constant REQ_MIN_PASSWORD_LENGTH = 7;
     uint256 private constant MIN_CLAIM_COOLDOWN_PERIOD = 15 minutes;
     uint256 private constant MIN_AVAILABILITY_PERIOD = 1 days;
     uint256 private constant MIN_CLEANUP_INTERVAL = 1 weeks;
     uint256 private constant MIN_INACTIVITY_THRESHOLD = 1 weeks;
+    uint256 private constant MIN_BATCH_LIMIT = 20;
+
+    uint256 private s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
+    uint256 private s_claimCooldownPeriod = 30 minutes;
+    uint256 private s_availabilityPeriod = 7 days;
+    uint256 private s_cleanupInterval = 12 weeks;
+    uint256 private s_inactivityThreshhold = 12 weeks;
+    uint256 private s_batchLimit = 50;
+
+    uint256 private s_transferFeeLvlOne;
+    uint256 private s_transferFeeLvlTwo;
+    uint256 private s_transferFeeLvlThree;
+    uint256 private s_transferCounter;
 
     uint256[] private s_pendingTransferIds;
     uint256[] private s_canceledTransferIds;
@@ -252,11 +254,14 @@ contract PST is Ownable, ReentrancyGuard {
     // Event to log when the transfer availability period changes
     event AvailabilityPeriodChanged(uint256 newAvailabilityPeriod);
 
-    // Event to log when the cleanup interval for an address changed
+    // Event to log when the cleanup interval for addresses changed
     event CleanupIntervalChanged(uint256 newCleanupInterval);
 
-    // Event to log when the inactivity threshhold for an address changed
+    // Event to log when the inactivity threshhold for addresses changed
     event InactivityThreshholdChanged(uint256 newInactivityThreshhold);
+
+    // Event to log when the batch limit changed
+    event BatchLimitChanged(uint256 newBatchLimit);
 
     // Event to log the time when Canceled Transfers were removed from tracking
     event CanceledTransfersHistoryCleared(uint256 time);
@@ -324,7 +329,7 @@ contract PST is Ownable, ReentrancyGuard {
 
     modifier claimCooldownElapsed(uint256 transferId) {
         uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
-        if (block.timestamp < lastAttempt + s_CLAIM_COOLDOWN_PERIOD) {
+        if (block.timestamp < lastAttempt + s_claimCooldownPeriod) {
             revert PST__CooldownPeriodNotElapsed();
         }
         _;
@@ -379,8 +384,8 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__PasswordNotProvided();
         }
 
-        if (bytes(password).length < s_MIN_PASSWORD_LENGTH) {
-            revert PST__PasswordTooShort({minCharactersRequired: s_MIN_PASSWORD_LENGTH});
+        if (bytes(password).length < s_minPasswordLength) {
+            revert PST__PasswordTooShort({minCharactersRequired: s_minPasswordLength});
         }
 
         uint256 transferId = s_transferCounter++; // transferId will start at 1 because at first call of the function s_transferCounter = 0
@@ -398,7 +403,7 @@ contract PST is Ownable, ReentrancyGuard {
             token: token,
             amount: amount,
             creationTime: block.timestamp,
-            expiringTime: block.timestamp + s_AVAILABILITY_PERIOD,
+            expiringTime: block.timestamp + s_availabilityPeriod,
             encodedPassword: encodedPassword,
             salt: salt
         });
@@ -507,8 +512,8 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__PasswordNotProvided();
         }
 
-        if (bytes(password).length < s_MIN_PASSWORD_LENGTH) {
-            revert PST__PasswordTooShort({minCharactersRequired: s_MIN_PASSWORD_LENGTH});
+        if (bytes(password).length < s_minPasswordLength) {
+            revert PST__PasswordTooShort({minCharactersRequired: s_minPasswordLength});
         }
 
         if (!checkPassword(transferId, password)) {
@@ -562,34 +567,47 @@ contract PST is Ownable, ReentrancyGuard {
         view
         returns (bool upkeepNeeded, bytes memory performData)
     {
+        uint256 batchLimit = s_batchLimit;
         uint256[] memory expiredTransfers = getExpiredTransfers();
-        bool refundNeeded = expiredTransfers.length > 0;
+        uint256 expiredCount = expiredTransfers.length;
 
         address[] memory trackedAddresses = s_addressList;
-        address[] memory addressesReadyForCleanup = new address[](trackedAddresses.length);
-        address[] memory addressesReadyToBeRemoved = new address[](trackedAddresses.length);
+        address[] memory addressesReadyForCleanup = new address[](batchLimit);
+        address[] memory addressesReadyToBeRemoved = new address[](batchLimit);
         uint256 countAddressesReadyForCleanup;
         uint256 countAddressesToBeRemoved;
 
-        for (uint256 i = 0; i < trackedAddresses.length; i++) {
+        for (
+            uint256 i = 0;
+            i < trackedAddresses.length && (countAddressesReadyForCleanup + countAddressesToBeRemoved) < batchLimit;
+            i++
+        ) {
             address user = trackedAddresses[i];
 
-            if ((block.timestamp - s_lastCleanupTimeByAddress[user]) >= s_CLEANUP_INTERVAL) {
+            if ((block.timestamp - s_lastCleanupTimeByAddress[user]) >= s_cleanupInterval) {
                 addressesReadyForCleanup[countAddressesReadyForCleanup] = user;
                 countAddressesReadyForCleanup++;
             }
 
-            if ((block.timestamp - s_lastInteractionTime[user]) >= s_INACTIVITY_THRESHOLD) {
+            if ((block.timestamp - s_lastInteractionTime[user]) >= s_inactivityThreshhold) {
                 addressesReadyToBeRemoved[countAddressesToBeRemoved] = user;
                 countAddressesToBeRemoved++;
             }
         }
 
-        if (expiredTransfers.length > 0 || countAddressesReadyForCleanup > 0 || countAddressesToBeRemoved > 0) {
+        if (expiredCount > 0 || countAddressesReadyForCleanup > 0 || countAddressesToBeRemoved > 0) {
             upkeepNeeded = true;
+
+            uint256[] memory batchExpiredTransfers = new uint256[](batchLimit);
+            uint256 batchExpiredCount = expiredCount > batchLimit ? batchLimit : expiredCount;
+
+            for (uint256 i = 0; i < batchExpiredCount; i++) {
+                batchExpiredTransfers[i] = expiredTransfers[i];
+            }
+
             performData = abi.encode(
-                refundNeeded,
-                expiredTransfers,
+                batchExpiredTransfers,
+                batchExpiredCount,
                 addressesReadyForCleanup,
                 countAddressesReadyForCleanup,
                 addressesReadyToBeRemoved,
@@ -603,43 +621,37 @@ contract PST is Ownable, ReentrancyGuard {
 
     function performUpkeep(bytes calldata performData) external {
         (
-            bool refundNeeded,
-            uint256[] memory expiredTransfers,
+            uint256[] memory batchExpiredTransfers,
+            uint256 batchExpiredCount,
             address[] memory addressesReadyForCleanup,
             uint256 countAddressesToBeCleaned,
             address[] memory addressesReadyToBeRemoved,
             uint256 countAddressesToBeRemoved
-        ) = abi.decode(performData, (bool, uint256[], address[], uint256, address[], uint256));
+        ) = abi.decode(performData, (uint256[], uint256, address[], uint256, address[], uint256));
 
-        if (refundNeeded) {
-            for (uint256 i = 0; i < expiredTransfers.length; i++) {
-                refundExpiredTransfer(expiredTransfers[i]);
-            }
+        for (uint256 i = 0; i < batchExpiredCount; i++) {
+            refundExpiredTransfer(batchExpiredTransfers[i]);
         }
 
-        if (countAddressesToBeCleaned > 0) {
-            for (uint256 i = 0; i < countAddressesToBeCleaned; i++) {
-                address user = addressesReadyForCleanup[i];
+        for (uint256 i = 0; i < countAddressesToBeCleaned; i++) {
+            address user = addressesReadyForCleanup[i];
 
-                removeAllCanceledTransfersByAddress(user);
-                removeAllExpiredAndRefundedTransfersByAddress(user);
-                removeAllClaimedTransfersByAddress(user);
+            removeAllCanceledTransfersByAddress(user);
+            removeAllExpiredAndRefundedTransfersByAddress(user);
+            removeAllClaimedTransfersByAddress(user);
 
-                s_lastCleanupTimeByAddress[user] = block.timestamp;
-            }
+            s_lastCleanupTimeByAddress[user] = block.timestamp;
         }
 
-        if (countAddressesToBeRemoved > 0) {
-            for (uint256 i = 0; i < countAddressesToBeRemoved; i++) {
-                address user = addressesReadyToBeRemoved[i];
-                removeAddressFromTracking(user);
-            }
+        for (uint256 i = 0; i < countAddressesToBeRemoved; i++) {
+            address user = addressesReadyToBeRemoved[i];
+            removeAddressFromTracking(user);
         }
     }
-
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL ONLYOWNER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+
     function transferOwnership(address newOwner) public override onlyOwner {
         if (newOwner == address(0)) {
             revert PST__InvalidNewOwnerAddress();
@@ -707,7 +719,7 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__MinPasswordLengthIsSeven();
         }
 
-        s_MIN_PASSWORD_LENGTH = newMinPasswordLength;
+        s_minPasswordLength = newMinPasswordLength;
 
         emit MinPasswordLengthChanged(newMinPasswordLength);
     }
@@ -721,7 +733,7 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__InvalidClaimCooldownPeriod({minRequired: MIN_CLAIM_COOLDOWN_PERIOD});
         }
 
-        s_CLAIM_COOLDOWN_PERIOD = newClaimCooldownPeriod;
+        s_claimCooldownPeriod = newClaimCooldownPeriod;
 
         emit ClaimCooldownPeriodChanged(newClaimCooldownPeriod);
     }
@@ -735,7 +747,7 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__InvalidAvailabilityPeriod({minRequired: MIN_AVAILABILITY_PERIOD});
         }
 
-        s_AVAILABILITY_PERIOD = newAvailabilityPeriod;
+        s_availabilityPeriod = newAvailabilityPeriod;
 
         emit AvailabilityPeriodChanged(newAvailabilityPeriod);
     }
@@ -745,7 +757,7 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__InvalidCleanupInterval({minRequired: MIN_CLEANUP_INTERVAL});
         }
 
-        s_CLEANUP_INTERVAL = newCleanupInterval;
+        s_cleanupInterval = newCleanupInterval;
 
         emit CleanupIntervalChanged(newCleanupInterval);
     }
@@ -759,9 +771,19 @@ contract PST is Ownable, ReentrancyGuard {
             revert PST__InvalidInactivityThreshhold({minRequired: MIN_INACTIVITY_THRESHOLD});
         }
 
-        s_INACTIVITY_THRESHOLD = newInactivityThreshhold;
+        s_inactivityThreshhold = newInactivityThreshhold;
 
         emit InactivityThreshholdChanged(newInactivityThreshhold);
+    }
+
+    function setNewBatchLimit(uint256 newBatchLimit) external onlyOwner {
+        if (newBatchLimit < MIN_BATCH_LIMIT) {
+            revert PST__InvalidBatchLimit({minRequired: MIN_BATCH_LIMIT});
+        }
+
+        s_batchLimit = newBatchLimit;
+
+        emit BatchLimitChanged(newBatchLimit);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1076,8 +1098,8 @@ contract PST is Ownable, ReentrancyGuard {
         returns (bool isCoolDownActive, uint256 timeRemaining)
     {
         uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
-        if (lastAttempt + s_CLAIM_COOLDOWN_PERIOD >= block.timestamp) {
-            return (true, (lastAttempt + s_CLAIM_COOLDOWN_PERIOD) - block.timestamp);
+        if (lastAttempt + s_claimCooldownPeriod >= block.timestamp) {
+            return (true, (lastAttempt + s_claimCooldownPeriod) - block.timestamp);
         }
         return (false, 0);
     }
