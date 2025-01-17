@@ -23,17 +23,18 @@
 
 pragma solidity ^0.8.28;
 
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {AutomationCompatibleInterface} from "@chainlink/contracts/v0.8/automation/AutomationCompatible.sol";
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// Complete events
+// Complete events - check
 // Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
-// Batch processing
-// Setters funtions for important parameters
+// Batch processing - check
+// Setters funtions for important parameters - check
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 /**
@@ -74,12 +75,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * at any point before the receiver [Person B] claims the [amount]
  * @notice The platform will charge a fee per transfer. The fee is calculated as a percentage.
  * @notice The fee is determined based on the amount transfered. There will be 3 fee levels, for example:
- *   -> 0.1% for transfers <= 10 ETH
- *   -> 0.01% for 10 ETH < transfers <= 100 ETH
- *   -> 0.001% for transfers > 100 ETH
+ *   -> 0.1% (1000/10e6) for transfers <= 10 ETH
+ *   -> 0.01% (100/10e6) for 10 ETH < transfers <= 100 ETH
+ *   -> 0.001% (10/10e6) for transfers > 100 ETH
  *
  */
-contract PST is Ownable, ReentrancyGuard {
+contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     /*//////////////////////////////////////////////////////////////
                                ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -118,11 +119,12 @@ contract PST is Ownable, ReentrancyGuard {
     error PST__TokenNotAllowed();
     error PST__InsufficientFeeBalance();
     error PST__InvalidNewOwnerAddress();
+    error PST__LimitLevelTwoMustBeGreaterThanLimitLevelOne();
 
     /*//////////////////////////////////////////////////////////////
                           TYPE DECLARATIONS
     //////////////////////////////////////////////////////////////*/
-    using TransferFeeLibrary for TransferFeeLibrary.TransferFeeLevels;
+    using TransferFeeLibrary for TransferFeeLibrary.TransferFee;
 
     /*//////////////////////////////////////////////////////////////
                           STATE VARIABLES
@@ -143,10 +145,13 @@ contract PST is Ownable, ReentrancyGuard {
     uint256 private s_inactivityThreshhold = 12 weeks;
     uint256 private s_batchLimit = 50;
 
+    uint256 private s_transferCounter;
     uint256 private s_transferFeeLvlOne;
     uint256 private s_transferFeeLvlTwo;
     uint256 private s_transferFeeLvlThree;
-    uint256 private s_transferCounter;
+    uint256 private s_limitLevelOne = 10e18;
+    uint256 private s_limitLevelTwo = 100e18;
+    uint256 private s_feeScalingFactor = 10e6;
 
     uint256[] private s_pendingTransferIds;
     uint256[] private s_canceledTransferIds;
@@ -155,7 +160,7 @@ contract PST is Ownable, ReentrancyGuard {
     address[] private s_addressList;
     address[] private s_tokenList;
 
-    TransferFeeLibrary.TransferFeeLevels private feeLevels;
+    TransferFeeLibrary.TransferFee private fee;
 
     struct Transfer {
         address sender;
@@ -263,6 +268,15 @@ contract PST is Ownable, ReentrancyGuard {
     // Event to log when the batch limit changed
     event BatchLimitChanged(uint256 newBatchLimit);
 
+    // Event to log the update of limit level one
+    event LimitLevelOneChanged(uint256 newLimitLevelOne);
+
+    // Event to log the update of limit level two
+    event LimitLevelTwoChanged(uint256 newLimitLevelTwo);
+
+    // Event to log the update of fee scaling factor
+    event FeeScalingFactorChanged(uint256 newFeeScalingFactor);
+
     // Event to log the time when Canceled Transfers were removed from tracking
     event CanceledTransfersHistoryCleared(uint256 time);
 
@@ -341,7 +355,7 @@ contract PST is Ownable, ReentrancyGuard {
     constructor(uint256 _transferFeeLvlOne, uint256 _transferFeeLvlTwo, uint256 _transferFeeLvlThree)
         Ownable(msg.sender)
     {
-        feeLevels = TransferFeeLibrary.TransferFeeLevels({
+        fee = TransferFeeLibrary.TransferFee({
             lvlOne: _transferFeeLvlOne,
             lvlTwo: _transferFeeLvlTwo,
             lvlThree: _transferFeeLvlThree
@@ -359,6 +373,8 @@ contract PST is Ownable, ReentrancyGuard {
             s_tokenList.push(token);
         }
     }
+
+    receive() external payable {}
 
     /*//////////////////////////////////////////////////////////////
                         EXTERNAL FUNCTIONS
@@ -390,10 +406,11 @@ contract PST is Ownable, ReentrancyGuard {
 
         uint256 transferId = s_transferCounter++; // transferId will start at 1 because at first call of the function s_transferCounter = 0
 
-        TransferFeeLibrary.TransferFeeLevels memory currentFeeLevels = feeLevels;
+        TransferFeeLibrary.TransferFee memory currentFee = fee;
 
-        (uint256 totalTransferCost, uint256 transferFeeCost) =
-            TransferFeeLibrary.calculateTotalTransferCost(amount, currentFeeLevels);
+        (uint256 totalTransferCost, uint256 transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
+            amount, s_limitLevelOne, s_limitLevelTwo, s_feeScalingFactor, currentFee
+        );
 
         (bytes32 encodedPassword, bytes32 salt) = encodePassword(password);
 
@@ -553,99 +570,61 @@ contract PST is Ownable, ReentrancyGuard {
         }
     }
 
+    function performMaintenance() external {
+        _clearHistory();
+        _removeInactiveAddresses();
+    }
+
     /**
      * @dev This is the function that the Chainlink Automation nodes call
      * they look for `upkeepNeeded` to return True.
      * the following should be true for this to return true:
-     * 1. The time interval has passed between raffle runs.
-     * 2. The lottery is open.
-     * 3. The contract has ETH.
+     * 1.
+     * 2.
+     * 3.
      * 4. Implicity, your subscription is funded with LINK.
      */
     function checkUpkeep(bytes calldata /* checkData */ )
         external
         view
+        override
         returns (bool upkeepNeeded, bytes memory performData)
     {
         uint256 batchLimit = s_batchLimit;
         uint256[] memory expiredTransfers = getExpiredTransfers();
         uint256 expiredCount = expiredTransfers.length;
 
-        address[] memory trackedAddresses = s_addressList;
-        address[] memory addressesReadyForCleanup = new address[](batchLimit);
-        address[] memory addressesReadyToBeRemoved = new address[](batchLimit);
-        uint256 countAddressesReadyForCleanup;
-        uint256 countAddressesToBeRemoved;
-
-        for (
-            uint256 i = 0;
-            i < trackedAddresses.length && (countAddressesReadyForCleanup + countAddressesToBeRemoved) < batchLimit;
-            i++
-        ) {
-            address user = trackedAddresses[i];
-
-            if ((block.timestamp - s_lastCleanupTimeByAddress[user]) >= s_cleanupInterval) {
-                addressesReadyForCleanup[countAddressesReadyForCleanup] = user;
-                countAddressesReadyForCleanup++;
-            }
-
-            if ((block.timestamp - s_lastInteractionTime[user]) >= s_inactivityThreshhold) {
-                addressesReadyToBeRemoved[countAddressesToBeRemoved] = user;
-                countAddressesToBeRemoved++;
-            }
+        if (expiredCount == 0) {
+            upkeepNeeded = false;
+            performData = "";
+            return (upkeepNeeded, performData);
         }
 
-        if (expiredCount > 0 || countAddressesReadyForCleanup > 0 || countAddressesToBeRemoved > 0) {
+        if (expiredCount > 0) {
             upkeepNeeded = true;
 
             uint256[] memory batchExpiredTransfers = new uint256[](batchLimit);
             uint256 batchExpiredCount = expiredCount > batchLimit ? batchLimit : expiredCount;
 
-            for (uint256 i = 0; i < batchExpiredCount; i++) {
-                batchExpiredTransfers[i] = expiredTransfers[i];
-            }
+            if (expiredCount > 0) {
+                for (uint256 i = 0; i < batchExpiredCount; i++) {
+                    batchExpiredTransfers[i] = expiredTransfers[i];
+                }
 
-            performData = abi.encode(
-                batchExpiredTransfers,
-                batchExpiredCount,
-                addressesReadyForCleanup,
-                countAddressesReadyForCleanup,
-                addressesReadyToBeRemoved,
-                countAddressesToBeRemoved
-            );
+                performData = abi.encode(batchExpiredTransfers, batchExpiredCount);
+            }
         } else {
             upkeepNeeded = false;
             performData = "";
         }
     }
 
-    function performUpkeep(bytes calldata performData) external {
-        (
-            uint256[] memory batchExpiredTransfers,
-            uint256 batchExpiredCount,
-            address[] memory addressesReadyForCleanup,
-            uint256 countAddressesToBeCleaned,
-            address[] memory addressesReadyToBeRemoved,
-            uint256 countAddressesToBeRemoved
-        ) = abi.decode(performData, (uint256[], uint256, address[], uint256, address[], uint256));
+    function performUpkeep(bytes calldata performData) external override {
+        (uint256[] memory batchExpiredTransfers, uint256 batchExpiredCount) =
+            abi.decode(performData, (uint256[], uint256));
 
         for (uint256 i = 0; i < batchExpiredCount; i++) {
             refundExpiredTransfer(batchExpiredTransfers[i]);
-        }
-
-        for (uint256 i = 0; i < countAddressesToBeCleaned; i++) {
-            address user = addressesReadyForCleanup[i];
-
-            removeAllCanceledTransfersByAddress(user);
-            removeAllExpiredAndRefundedTransfersByAddress(user);
-            removeAllClaimedTransfersByAddress(user);
-
-            s_lastCleanupTimeByAddress[user] = block.timestamp;
-        }
-
-        for (uint256 i = 0; i < countAddressesToBeRemoved; i++) {
-            address user = addressesReadyToBeRemoved[i];
-            removeAddressFromTracking(user);
         }
     }
     /*//////////////////////////////////////////////////////////////
@@ -679,6 +658,28 @@ contract PST is Ownable, ReentrancyGuard {
         }
 
         emit TransferFeeChanged(level, newTransferFee);
+    }
+
+    function setNewLimitLevelOne(uint256 newLimitLevelOne) external onlyOwner moreThanZero(newLimitLevelOne) {
+        s_limitLevelOne = newLimitLevelOne;
+
+        emit LimitLevelOneChanged(newLimitLevelOne);
+    }
+
+    function setNewLimitLevelTwo(uint256 newLimitLevelTwo) external onlyOwner moreThanZero(newLimitLevelTwo) {
+        if (newLimitLevelTwo <= s_limitLevelOne) {
+            revert PST__LimitLevelTwoMustBeGreaterThanLimitLevelOne();
+        }
+
+        s_limitLevelTwo = newLimitLevelTwo;
+
+        emit LimitLevelTwoChanged(newLimitLevelTwo);
+    }
+
+    function setNewFeeScalingFactor(uint256 newFeeScalingFactor) external onlyOwner moreThanZero(newFeeScalingFactor) {
+        s_feeScalingFactor = newFeeScalingFactor;
+
+        emit FeeScalingFactorChanged(newFeeScalingFactor);
     }
 
     function withdrawFeesForToken(address token, uint256 amount)
@@ -877,7 +878,9 @@ contract PST is Ownable, ReentrancyGuard {
         view
         returns (uint256 totalTransferCost, uint256 transferFeeCost)
     {
-        return TransferFeeLibrary.calculateTotalTransferCost(amount, feeLevels);
+        return TransferFeeLibrary.calculateTotalTransferCost(
+            amount, s_limitLevelOne, s_limitLevelTwo, s_feeScalingFactor, fee
+        );
     }
 
     function removeFromPendingTransfers(uint256 transferId) public {
@@ -970,9 +973,9 @@ contract PST is Ownable, ReentrancyGuard {
     }
 
     function removeAllCanceledTransfersByAddress(address user) public onlyValidAddress(user) {
-        if (s_canceledTransfersByAddress[user].length == 0) {
-            revert PST__NoCanceledTransfers();
-        }
+        // if (s_canceledTransfersByAddress[user].length == 0) {
+        //     revert PST__NoCanceledTransfers();
+        // }
 
         delete s_canceledTransfersByAddress[user];
 
@@ -980,9 +983,9 @@ contract PST is Ownable, ReentrancyGuard {
     }
 
     function removeAllExpiredAndRefundedTransfersByAddress(address user) public onlyValidAddress(user) {
-        if (s_expiredAndRefundedTransfersByAddress[user].length == 0) {
-            revert PST__NoExpiredTransfers();
-        }
+        // if (s_expiredAndRefundedTransfersByAddress[user].length == 0) {
+        //     revert PST__NoExpiredTransfers();
+        // }
 
         delete s_expiredAndRefundedTransfersByAddress[user];
 
@@ -990,9 +993,9 @@ contract PST is Ownable, ReentrancyGuard {
     }
 
     function removeAllClaimedTransfersByAddress(address user) public onlyValidAddress(user) {
-        if (s_claimedTransfersByAddress[user].length == 0) {
-            revert PST__NoClaimedTransfers();
-        }
+        // if (s_claimedTransfersByAddress[user].length == 0) {
+        //     revert PST__NoClaimedTransfers();
+        // }
 
         delete s_claimedTransfersByAddress[user];
 
@@ -1032,15 +1035,58 @@ contract PST is Ownable, ReentrancyGuard {
         emit TokenRemovedFromAllowList(token);
     }
 
+    function _clearHistory() private {
+        uint256 batchLimit = s_batchLimit;
+        uint256 countCleanedAddresses;
+
+        for (uint256 i = 0; i < s_addressList.length && countCleanedAddresses < batchLimit / 2; i++) {
+            address user = s_addressList[i];
+
+            if ((block.timestamp - s_lastCleanupTimeByAddress[user]) >= s_cleanupInterval) {
+                removeAllCanceledTransfersByAddress(user);
+                removeAllExpiredAndRefundedTransfersByAddress(user);
+                removeAllClaimedTransfersByAddress(user);
+
+                countCleanedAddresses++;
+                s_lastCleanupTimeByAddress[user] = block.timestamp;
+            }
+        }
+
+        if (countCleanedAddresses < batchLimit / 2) {
+            s_batchLimit = batchLimit - countCleanedAddresses;
+        } else {
+            s_batchLimit = batchLimit / 2;
+        }
+    }
+
+    function _removeInactiveAddresses() private {
+        uint256 batchLimit = s_batchLimit;
+        uint256 countRemovedAddresses;
+
+        for (uint256 i = 0; i < s_addressList.length && countRemovedAddresses < batchLimit; i++) {
+            address user = s_addressList[i];
+
+            if ((block.timestamp - s_lastInteractionTime[user]) >= s_inactivityThreshhold) {
+                removeAddressFromTracking(user);
+                countRemovedAddresses++;
+            }
+        }
+    }
+
     /*//////////////////////////////////////////////////////////////
                         VIEW/PURE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     // CHECKER FUNCTIONS //
 
-    // Check if a token is allowed
+    // Function to check if a token is allowed
     function isTokenAllowed(address token) public view returns (bool) {
         return s_allowedTokens[token];
+    }
+
+    // Function to check if an address is in tracking
+    function isAddressInTracking(address user) public view returns (bool) {
+        return s_trackedAddresses[user];
     }
 
     // Function to check if a specific transfer is pending

@@ -29,6 +29,8 @@ library PreApprovedTokensLibrary {
     address constant SEPOLIA_USDC = 0x5fd84259d66Cd46123540766Be93DFE6D43130D7;
 
     function getPreApprovedTokens() external pure returns (address[] memory tokens) {
+        tokens = new address[](3); // Change the size of the array when changing the number of preapproved tokens
+
         tokens[0] = SEPOLIA_ETH;
         tokens[1] = SEPOLIA_LINK;
         tokens[2] = SEPOLIA_USDC;
