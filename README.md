@@ -40,7 +40,7 @@ Additional properties:
 - [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
   - After installing run `git --version` and the result should be `git version x.x.x`
 - [foundry](https://getfoundry.sh/)
-  - After installing run `forge --version` and the result should be `forge 0.2.0 (816e00b 2023-03-16T00:05:26.396218Z)`
+  - After installing run `forge --version` and the result should be `forge x.x.x`
 
 ## Install Dependencies
 
