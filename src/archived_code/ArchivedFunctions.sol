@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+
 /**
  * @dev This is the function that the Chainlink Automation nodes call
  * they look for `upkeepNeeded` to return True.
