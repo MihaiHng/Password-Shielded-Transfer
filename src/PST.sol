@@ -54,26 +54,8 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
  *
  * @dev This smart contract is the core of the Password Shielded Transfer(PST)
  * The main functionality of this system is the use of passwords to increase the security of transfers between two parties
- * This solution aims to help with the security of high value transfers, trying to allow the sender a second  chance if they
- * made a "0" mistake or if simply, they changed their mind in the process
  *
- * A Password Shielded Transfer will require the following steps:
- *  - [Person A] creates a transfer with the following transfer details:
- *      - address of [Person B]
- *      - [amount] transfered
- *      - [password]
- *  - [Person A] sends the [secure password] to Person B, preferably via a secure communication method
- *  - At this point there is a transfer created in the system, waiting to be unlocked and claimed with the [password] provided by [Person A]
- *  - [Person A] has the possibility to [cancel] the transfer if they change their mind, as long as [Berson B] didn't claim it
- *  - [Person B] accesses the pending transfer and enters the [secure password] received from [Person A]
- *  - If the password entered by [Person B] matches the password which was set up by [Person A] the transfer will be unlocked for [Person B]
- *  - At this point [Person B] can claim [amount] sent by [Person A]
- *
- * Additional properties of the system:
- *
- * @notice The added layer of security provided by the [secure password] allows [Person A] to cancel the tranfer and claim back the [amount]
- * at any point before the receiver [Person B] claims the [amount]
- * @notice The platform will charge a fee per transfer. The fee is calculated as a percentage.
+ * @notice The system will charge a fee per transfer. The fee is calculated as a percentage.
  * @notice The fee is determined based on the amount transfered. There will be 3 fee levels, for example:
  *   -> 0.1% (1000/10e6) for transfers <= 10 ETH
  *   -> 0.01% (100/10e6) for 10 ETH < transfers <= 100 ETH
@@ -120,6 +102,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     error PST__InsufficientFeeBalance();
     error PST__InvalidNewOwnerAddress();
     error PST__LimitLevelTwoMustBeGreaterThanLimitLevelOne();
+    error PST__TransferIdNotFound();
 
     /*//////////////////////////////////////////////////////////////
                           TYPE DECLARATIONS
@@ -278,22 +261,22 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     event FeeScalingFactorChanged(uint256 newFeeScalingFactor);
 
     // Event to log the time when Canceled Transfers were removed from tracking
-    event CanceledTransfersHistoryCleared(uint256 time);
+    event CanceledTransfersHistoryCleared();
 
     // Event to log the time when Expired and Refunded Transfers were removed from tracking
-    event ExpiredAndRefundedTransfersHistoryCleared(uint256 time);
+    event ExpiredAndRefundedTransfersHistoryCleared();
 
     // Event to log the time when Claimed Transfers were removed from tracking
-    event ClaimedTransfersHistoryCleared(uint256 time);
+    event ClaimedTransfersHistoryCleared();
 
     // Event to log the time when Canceled Transfers for an Address were removed from tracking
-    event CanceledTransfersForAddressHistoryCleared(uint256 time);
+    event CanceledTransfersForAddressHistoryCleared(address user);
 
     // Event to log the time when Expired and Refunded Transfers for an Address were removed from tracking
-    event ExpiredAndRefundedTransfersForAddressHistoryCleared(uint256 time);
+    event ExpiredAndRefundedTransfersForAddressHistoryCleared(address user);
 
     // Event to log the time when Claimed Transfers for an Address were removed from tracking
-    event ClaimedTransfersForAddressHistoryCleared(uint256 time);
+    event ClaimedTransfersForAddressHistoryCleared(address user);
 
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
@@ -842,17 +825,22 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     function removeAddressFromTracking(address user) public {
+        bool userFound;
+
         for (uint256 i = 0; i < s_addressList.length; i++) {
             if (s_addressList[i] == user) {
                 s_addressList[i] = s_addressList[s_addressList.length - 1];
                 s_addressList.pop();
+                userFound = true;
                 break;
             }
         }
 
-        delete s_trackedAddresses[user];
-        delete s_lastInteractionTime[user];
-        delete s_lastCleanupTimeByAddress[user];
+        if (userFound) {
+            delete s_trackedAddresses[user];
+            delete s_lastInteractionTime[user];
+            delete s_lastCleanupTimeByAddress[user];
+        }
     }
 
     function addFee(address token, uint256 _transferFeeCost) public onlyValidToken(token) {
@@ -884,32 +872,37 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     function removeFromPendingTransfers(uint256 transferId) public {
-        uint256[] storage pendingTransfers = s_pendingTransferIds;
-        uint256 length = pendingTransfers.length;
+        uint256 length = s_pendingTransferIds.length;
+        bool idFound;
+
         if (length == 0) {
             revert PST__NoPendingTransfers();
         }
 
         for (uint256 i = 0; i < length; i++) {
-            if (pendingTransfers[i] == transferId) {
-                pendingTransfers[i] = pendingTransfers[length - 1];
-                pendingTransfers.pop();
+            if (s_pendingTransferIds[i] == transferId) {
+                s_pendingTransferIds[i] = s_pendingTransferIds[length - 1];
+                s_pendingTransferIds.pop();
+                idFound = true;
                 break;
             }
+        }
+
+        if (!idFound) {
+            revert PST__TransferIdNotFound();
         }
     }
 
     function removeFromPendingTransfersByAddress(address user, uint256 transferId) public {
-        uint256[] storage userPendingTransfers = s_pendingTransfersByAddress[user];
-        uint256 length = userPendingTransfers.length;
+        uint256 length = s_pendingTransfersByAddress[user].length;
         if (length == 0) {
             revert PST__NoPendingTransfers();
         }
 
         for (uint256 i = 0; i < length; i++) {
-            if (userPendingTransfers[i] == transferId) {
-                userPendingTransfers[i] = userPendingTransfers[length - 1];
-                userPendingTransfers.pop();
+            if (s_pendingTransfersByAddress[user][i] == transferId) {
+                s_pendingTransfersByAddress[user][i] = s_pendingTransfersByAddress[user][length - 1];
+                s_pendingTransfersByAddress[user].pop();
                 break;
             }
         }
@@ -931,7 +924,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
         delete s_canceledTransferIds;
 
-        emit CanceledTransfersHistoryCleared(block.timestamp);
+        emit CanceledTransfersHistoryCleared();
     }
 
     // Function to remove all expired and refunded transfers
@@ -950,7 +943,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
         delete s_expiredAndRefundedTransferIds;
 
-        emit ExpiredAndRefundedTransfersHistoryCleared(block.timestamp);
+        emit ExpiredAndRefundedTransfersHistoryCleared();
     }
 
     // Function to remove all claimed transfers
@@ -969,37 +962,25 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
         delete s_claimedTransferIds;
 
-        emit ClaimedTransfersHistoryCleared(block.timestamp);
+        emit ClaimedTransfersHistoryCleared();
     }
 
     function removeAllCanceledTransfersByAddress(address user) public onlyValidAddress(user) {
-        // if (s_canceledTransfersByAddress[user].length == 0) {
-        //     revert PST__NoCanceledTransfers();
-        // }
-
         delete s_canceledTransfersByAddress[user];
 
-        emit CanceledTransfersForAddressHistoryCleared(block.timestamp);
+        emit CanceledTransfersForAddressHistoryCleared(user);
     }
 
     function removeAllExpiredAndRefundedTransfersByAddress(address user) public onlyValidAddress(user) {
-        // if (s_expiredAndRefundedTransfersByAddress[user].length == 0) {
-        //     revert PST__NoExpiredTransfers();
-        // }
-
         delete s_expiredAndRefundedTransfersByAddress[user];
 
-        emit ExpiredAndRefundedTransfersForAddressHistoryCleared(block.timestamp);
+        emit ExpiredAndRefundedTransfersForAddressHistoryCleared(user);
     }
 
     function removeAllClaimedTransfersByAddress(address user) public onlyValidAddress(user) {
-        // if (s_claimedTransfersByAddress[user].length == 0) {
-        //     revert PST__NoClaimedTransfers();
-        // }
-
         delete s_claimedTransfersByAddress[user];
 
-        emit ClaimedTransfersForAddressHistoryCleared(block.timestamp);
+        emit ClaimedTransfersForAddressHistoryCleared(user);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1022,11 +1003,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     function _removeTokenFromAllowList(address token) internal {
-        s_feeBalances[token] = 0;
+        uint256 length = s_tokenList.length;
         s_allowedTokens[token] = false;
-        for (uint256 i = 0; i < s_tokenList.length; i++) {
+        for (uint256 i = 0; i < length; i++) {
             if (token == s_tokenList[i]) {
-                s_tokenList[i] = s_tokenList[s_tokenList.length - 1];
+                s_tokenList[i] = s_tokenList[length - 1];
                 s_tokenList.pop();
                 break;
             }
@@ -1037,10 +1018,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     function _clearHistory() private {
         uint256 batchLimit = s_batchLimit;
+        address[] memory addressList = s_addressList;
         uint256 countCleanedAddresses;
 
-        for (uint256 i = 0; i < s_addressList.length && countCleanedAddresses < batchLimit / 2; i++) {
-            address user = s_addressList[i];
+        for (uint256 i = 0; i < addressList.length && countCleanedAddresses < batchLimit / 2; i++) {
+            address user = addressList[i];
 
             if ((block.timestamp - s_lastCleanupTimeByAddress[user]) >= s_cleanupInterval) {
                 removeAllCanceledTransfersByAddress(user);
@@ -1061,10 +1043,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     function _removeInactiveAddresses() private {
         uint256 batchLimit = s_batchLimit;
+        address[] memory addressList = s_addressList;
         uint256 countRemovedAddresses;
 
-        for (uint256 i = 0; i < s_addressList.length && countRemovedAddresses < batchLimit; i++) {
-            address user = s_addressList[i];
+        for (uint256 i = 0; i < addressList.length && countRemovedAddresses < batchLimit; i++) {
+            address user = addressList[i];
 
             if ((block.timestamp - s_lastInteractionTime[user]) >= s_inactivityThreshhold) {
                 removeAddressFromTracking(user);
@@ -1172,10 +1155,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Function to get all expired transfers in the system
     function getExpiredTransfers() public view returns (uint256[] memory) {
+        uint256[] memory pendingTransfers = s_pendingTransferIds;
         uint256 expiredCount;
 
-        for (uint256 i = 0; i < s_pendingTransferIds.length; i++) {
-            uint256 transferId = s_pendingTransferIds[i];
+        for (uint256 i = 0; i < pendingTransfers.length; i++) {
+            uint256 transferId = pendingTransfers[i];
             if (block.timestamp >= s_transfersById[transferId].expiringTime) {
                 expiredCount++;
             }
@@ -1184,8 +1168,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         uint256[] memory expiredTransfers = new uint256[](expiredCount);
         uint256 index;
 
-        for (uint256 i = 0; i < s_pendingTransferIds.length; i++) {
-            uint256 transferId = s_pendingTransferIds[i];
+        for (uint256 i = 0; i < pendingTransfers.length; i++) {
+            uint256 transferId = pendingTransfers[i];
             if (block.timestamp >= s_transfersById[transferId].expiringTime) {
                 expiredTransfers[index] = transferId;
                 index++;
@@ -1194,6 +1178,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
         return expiredTransfers;
     }
+
+    /*To refactor*/
 
     // Function to get all pending transfers for an address
     function getPendingTransfersForAddress(address user)
@@ -1224,7 +1210,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Function to get all expired transfers for an address
-    function getExpiredTransfersForAddress(address user)
+    function getExpiredAndRefundedTransfersForAddress(address user)
         external
         view
         onlyValidAddress(user)
