@@ -129,9 +129,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     uint256 private s_batchLimit = 50;
 
     uint256 private s_transferCounter;
-    uint256 private s_transferFeeLvlOne;
-    uint256 private s_transferFeeLvlTwo;
-    uint256 private s_transferFeeLvlThree;
+    // uint256 private s_transferFeeLvlOne;
+    // uint256 private s_transferFeeLvlTwo;
+    // uint256 private s_transferFeeLvlThree;
     uint256 private s_limitLevelOne = 10e18;
     uint256 private s_limitLevelTwo = 100e18;
     uint256 private s_feeScalingFactor = 10e6;
@@ -143,7 +143,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     address[] private s_addressList;
     address[] private s_tokenList;
 
-    TransferFeeLibrary.TransferFee private fee;
+    TransferFeeLibrary.TransferFee public fee;
 
     struct Transfer {
         address sender;
@@ -631,11 +631,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     function setTransferFee(uint8 level, uint256 newTransferFee) external onlyOwner moreThanZero(newTransferFee) {
         if (level == 1) {
-            s_transferFeeLvlOne = newTransferFee;
+            fee.lvlOne = newTransferFee;
         } else if (level == 2) {
-            s_transferFeeLvlTwo = newTransferFee;
+            fee.lvlTwo = newTransferFee;
         } else if (level == 3) {
-            s_transferFeeLvlThree = newTransferFee;
+            fee.lvlThree = newTransferFee;
         } else {
             revert PST__InvalidFeeLevel();
         }
@@ -1111,11 +1111,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     function getTransferFee(uint8 level) external view returns (uint256) {
         if (level == 1) {
-            return s_transferFeeLvlOne;
+            return fee.lvlOne;
         } else if (level == 2) {
-            return s_transferFeeLvlTwo;
+            return fee.lvlTwo;
         } else if (level == 3) {
-            return s_transferFeeLvlThree;
+            return fee.lvlThree;
         } else {
             revert PST__InvalidFeeLevel();
         }

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+pragma solidity ^0.8.28;
+
 /**
  * @dev This is the function that the Chainlink Automation nodes call
  * they look for `upkeepNeeded` to return True.
