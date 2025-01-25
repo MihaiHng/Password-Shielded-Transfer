@@ -129,12 +129,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     uint256 private s_batchLimit = 50;
 
     uint256 private s_transferCounter;
-    // uint256 private s_transferFeeLvlOne;
-    // uint256 private s_transferFeeLvlTwo;
-    // uint256 private s_transferFeeLvlThree;
-    uint256 private s_limitLevelOne = 10e18;
-    uint256 private s_limitLevelTwo = 100e18;
-    uint256 private s_feeScalingFactor = 10e6;
+    uint256 public s_limitLevelOne = 10e18;
+    uint256 public s_limitLevelTwo = 100e18;
+    uint256 public s_feeScalingFactor = 10e6;
 
     uint256[] private s_pendingTransferIds;
     uint256[] private s_canceledTransferIds;
