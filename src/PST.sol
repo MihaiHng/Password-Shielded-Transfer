@@ -433,6 +433,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                 }
             }
         } else {
+            if (msg.value < totalTransferCost) {
+                revert PST__NotEnoughFunds({required: totalTransferCost, provided: msg.value});
+            }
             IERC20 erc20 = IERC20(token);
             bool success = erc20.transferFrom(msg.sender, address(this), totalTransferCost);
             if (!success) {
