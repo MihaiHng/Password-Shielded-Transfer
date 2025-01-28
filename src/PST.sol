@@ -669,8 +669,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         external
         onlyOwner
         onlyValidToken(token)
-        nonReentrant
         moreThanZero(amount)
+        nonReentrant
     {
         if (amount < s_feeBalances[token]) {
             revert PST__InsufficientFeeBalance();
@@ -1105,7 +1105,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Function to get all accumulated fees for a token
-    function getAccumulatedFees(address token) external view onlyValidToken(token) returns (uint256) {
+    function getAccumulatedFeesForToken(address token) external view onlyValidToken(token) returns (uint256) {
         return s_feeBalances[token];
     }
 
