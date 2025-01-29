@@ -128,7 +128,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     uint256 private s_inactivityThreshhold = 12 weeks;
     uint256 private s_batchLimit = 50;
 
-    uint256 private s_transferCounter;
+    uint256 public s_transferCounter;
     uint256 public s_limitLevelOne = 10e18;
     uint256 public s_limitLevelTwo = 100e18;
     uint256 public s_feeScalingFactor = 10e6;
@@ -1107,6 +1107,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     // Function to get all accumulated fees for a token
     function getAccumulatedFeesForToken(address token) external view onlyValidToken(token) returns (uint256) {
         return s_feeBalances[token];
+    }
+
+    function getFee() external view returns (TransferFeeLibrary.TransferFee memory) {
+        return fee;
     }
 
     function getTransferFee(uint8 level) external view returns (uint256) {

@@ -7,10 +7,14 @@ import {DeployPST} from "../../script/DeployPST.s.sol";
 import {PST} from "src/PST.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
 import {MockERC20} from "../mocks/ERC20Mock.sol";
+import {FailingReceiverMock} from "../mocks/FailingReceiverMock.sol";
 
 contract TestPST is Test {
     PST public pst;
     MockERC20 public mockERC20Token;
+
+    uint256 public totalTransferCost;
+    uint256 public transferFeeCost;
 
     // Constants for fee levels
     uint8 private constant LVL1 = 1;
@@ -26,8 +30,8 @@ contract TestPST is Test {
     uint256 private constant LIMIT_LEVEL_TWO = 100e18;
     uint256 private constant FEE_SCALING_FACTOR = 10e6;
     uint256 private constant AMOUNT_TO_SEND = 1 ether;
-    uint256 private constant TOTAL_TRANSFER_COST = 1.0001 ether;
-    string PASSWORD = "Strongpass";
+
+    string private constant PASSWORD = "Strongpass";
 
     address public SENDER = makeAddr("sender");
     address public RECEIVER = makeAddr("receiver");
@@ -44,28 +48,18 @@ contract TestPST is Test {
 
         vm.deal(SENDER, SENDER_BALANCE);
         mockERC20Token.transfer(SENDER, 100 ether);
+
+        (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
+            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getFee()
+        );
+
+        vm.prank(SENDER);
+        mockERC20Token.approve(address(pst), totalTransferCost);
     }
 
     /*//////////////////////////////////////////////////////////////
                               MODIFIERS
     //////////////////////////////////////////////////////////////*/
-    modifier calculatedAndApprovedTotalTransferCost() {
-        // vm.prank(SENDER);
-        // mockERC20Token.approve(address(pst), TOTAL_TRANSFER_COST);
-
-        (uint256 lvlOne, uint256 lvlTwo, uint256 lvlThree) = pst.fee();
-
-        TransferFeeLibrary.TransferFee memory transferFees =
-            TransferFeeLibrary.TransferFee({lvlOne: lvlOne, lvlTwo: lvlTwo, lvlThree: lvlThree});
-
-        // Act
-        (uint256 totalTransferCost, uint256 transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, transferFees
-        );
-        vm.prank(SENDER);
-        mockERC20Token.approve(address(pst), totalTransferCost);
-        _;
-    }
 
     /*//////////////////////////////////////////////////////////////
                                FEE TESTS
@@ -233,13 +227,13 @@ contract TestPST is Test {
                         CREATE TRANSFER TESTS
     //////////////////////////////////////////////////////////////*/
 
-    function testCreateTransferRevertsWhenAmountIsNotMoreThanZero() public approvedTotalTransferCost {
+    function testCreateTransferRevertsWhenAmountIsNotMoreThanZero() public {
         // Arrange / Act / Assert
         vm.expectRevert(PST.PST__NeedsMoreThanZero.selector);
         pst.createTransfer(RECEIVER, address(mockERC20Token), 0, PASSWORD);
     }
 
-    function testCreateTransferRevertsWhenReceiverIsNotValid() public approvedTotalTransferCost {
+    function testCreateTransferRevertsWhenReceiverIsNotValid() public {
         // Arrange
         address INVALID_RECEIVER = address(0);
 
@@ -248,7 +242,7 @@ contract TestPST is Test {
         pst.createTransfer(INVALID_RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
     }
 
-    function testCreateTransferRevertsWhenTokenNotAllowed() public approvedTotalTransferCost {
+    function testCreateTransferRevertsWhenTokenNotAllowed() public {
         // Arrange
         MockERC20 na_mockERC20Token = new MockERC20("NotAllowedERC20MockToken", "NAERC20MOCK", 1e6 ether);
         na_mockERC20Token.transfer(SENDER, 100 ether);
@@ -258,20 +252,20 @@ contract TestPST is Test {
         pst.createTransfer(RECEIVER, address(na_mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
     }
 
-    function testCreateTransferRevertsWhenSendingToOWnAddress() public approvedTotalTransferCost {
+    function testCreateTransferRevertsWhenSendingToOWnAddress() public {
         // Arrange / Act / Assert
         vm.expectRevert(PST.PST__CantSendToOwnAddress.selector);
         vm.prank(SENDER);
         pst.createTransfer(SENDER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
     }
 
-    function testCreateTransferRevertsWhenPasswordNotProvided() public approvedTotalTransferCost {
+    function testCreateTransferRevertsWhenPasswordNotProvided() public {
         // Arrange / Act / Assert
         vm.expectRevert(PST.PST__PasswordNotProvided.selector);
         pst.createTransfer(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, "");
     }
 
-    function testCreateTransferRevertsWhenPasswordIsToShort() public approvedTotalTransferCost {
+    function testCreateTransferRevertsWhenPasswordIsToShort() public {
         // Arrange
         uint256 MIN_PASSWORD_LENGTH = 7;
         string memory SHORT_PASSWORD = "NoGood";
@@ -281,7 +275,7 @@ contract TestPST is Test {
         pst.createTransfer(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, SHORT_PASSWORD);
     }
 
-    function testCreateTransferRevertsWhenInsufficientFunds() public approvedTotalTransferCost {
+    function testCreateTransferRevertsWhenInsufficientFunds() public {
         // Arange
         address TEST_SENDER = makeAddr("test sender");
         uint256 SENDER_INSUFFICIENT_AMOUNT = 0.5 ether;
@@ -289,10 +283,91 @@ contract TestPST is Test {
 
         // Act / Assert
         vm.expectRevert(
-            abi.encodeWithSelector(PST.PST__NotEnoughFunds.selector, TOTAL_TRANSFER_COST, SENDER_INSUFFICIENT_AMOUNT)
+            abi.encodeWithSelector(PST.PST__NotEnoughFunds.selector, totalTransferCost, SENDER_INSUFFICIENT_AMOUNT)
         );
+        vm.prank(TEST_SENDER);
         pst.createTransfer{value: SENDER_INSUFFICIENT_AMOUNT}(
             RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD
+        );
+    }
+
+    function testCreateTransferRevertsWhenEthTransferFails() public {
+        // Arange
+        FailingReceiverMock failingReceiverMock = new FailingReceiverMock();
+
+        // Act / Assert
+        console.log("Sender ETH balance before transfer:", SENDER.balance);
+        vm.expectRevert(PST.PST__TransferFailed.selector);
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(address(failingReceiverMock), address(0), AMOUNT_TO_SEND, PASSWORD);
+
+        console.log("Sender ETH balance after transfer:", SENDER.balance);
+    }
+
+    function testTransferCounterIncrementsCorrectly() public {
+        // Arrange
+        uint256 transferCounter = pst.s_transferCounter();
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferCounter = pst.s_transferCounter();
+
+        // Assert
+        assertEq(transferCounter, 1);
+    }
+
+    function testTotalTransferCostIsCorrect() public view {
+        // Arrange
+        uint256 expectedTotalTransferCost = totalTransferCost;
+
+        // Act
+        TransferFeeLibrary.TransferFee memory transferFees = pst.getFee();
+        uint256 transferFee =
+            TransferFeeLibrary.selectTransferFee(AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, transferFees);
+        uint256 _transferFeeCost = (AMOUNT_TO_SEND * transferFee) / FEE_SCALING_FACTOR;
+        uint256 _totalTransferCost = AMOUNT_TO_SEND + _transferFeeCost;
+
+        // Assert
+        assertEq(_totalTransferCost, expectedTotalTransferCost, "Total transfer cost is not calculated correctly");
+    }
+
+    function testTransferFeeCostIsCorrect() public view {
+        // Arrange
+        uint256 expectedTransferFeeCost = transferFeeCost;
+
+        // Act
+        TransferFeeLibrary.TransferFee memory transferFees = pst.getFee();
+        uint256 transferFee =
+            TransferFeeLibrary.selectTransferFee(AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, transferFees);
+        uint256 _transferFeeCost = (AMOUNT_TO_SEND * transferFee) / FEE_SCALING_FACTOR;
+
+        // Assert
+        assertEq(_transferFeeCost, expectedTransferFeeCost, "Transfer fee cost is not calculated correctly");
+    }
+
+    function testPasswordEncodingWithSalt() public view {
+        // Arrange
+        (bytes32 expectedEncodedPaswsword, bytes32 salt) = pst.encodePassword(PASSWORD);
+
+        // Act
+        bytes32 encodedPassword = keccak256(abi.encodePacked(PASSWORD, salt));
+
+        // Assert
+        assertEq(encodedPassword, expectedEncodedPaswsword, "Password encoding not correct");
+    }
+
+    function testPasswordEncodingForDiffSalts() public {
+        // Arrange / Act
+        (bytes32 encodedPassword1, bytes32 salt1) = pst.encodePassword(PASSWORD);
+        vm.warp(block.timestamp + 1);
+        vm.roll(block.number + 1);
+        (bytes32 encodedPassword2, bytes32 salt2) = pst.encodePassword(PASSWORD);
+
+        // Assert
+        assertFalse(salt1 == salt2, "Salts should be different for different calls");
+        assertFalse(
+            encodedPassword1 == encodedPassword2, "Encoded passwords should be different due to different salts"
         );
     }
 
