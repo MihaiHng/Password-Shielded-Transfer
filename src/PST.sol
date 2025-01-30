@@ -171,7 +171,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     // Mapping to track all claimed transfers for an address
     mapping(address user => uint256[] transferIds) private s_claimedTransfersByAddress;
 
-    // Mapping of transfer ID to Transfer info struct
+    // Mapping of transfer Id to Transfer info struct
     mapping(uint256 transferId => Transfer transfer) private s_transfersById;
     // Mapping of transfer Id to last failed claim attempt time
     mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime) private s_lastFailedClaimAttempt;
@@ -433,10 +433,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                 }
             }
         } else {
-            if (msg.value < totalTransferCost) {
-                revert PST__NotEnoughFunds({required: totalTransferCost, provided: msg.value});
-            }
             IERC20 erc20 = IERC20(token);
+            if (erc20.balanceOf(msg.sender) < totalTransferCost) {
+                revert PST__NotEnoughFunds({required: totalTransferCost, provided: erc20.balanceOf(msg.sender)});
+            }
+
             bool success = erc20.transferFrom(msg.sender, address(this), totalTransferCost);
             if (!success) {
                 revert PST__TransferFailed();

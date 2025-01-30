@@ -6,12 +6,12 @@ import {Test, console} from "forge-std/Test.sol";
 import {DeployPST} from "../../script/DeployPST.s.sol";
 import {PST} from "src/PST.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
-import {MockERC20} from "../mocks/ERC20Mock.sol";
-import {FailingReceiverMock} from "../mocks/FailingReceiverMock.sol";
+import {ERC20Mock} from "../mocks/ERC20Mock.sol";
+import {FailingERC20Mock} from "../mocks/FailingERC20Mock.sol";
 
 contract TestPST is Test {
     PST public pst;
-    MockERC20 public mockERC20Token;
+    ERC20Mock public mockERC20Token;
 
     uint256 public totalTransferCost;
     uint256 public transferFeeCost;
@@ -41,7 +41,7 @@ contract TestPST is Test {
     function setUp() external {
         DeployPST deployer = new DeployPST();
         pst = deployer.run();
-        mockERC20Token = new MockERC20("ERC20MockToken", "ERC20MOCK", 1e6 ether);
+        mockERC20Token = new ERC20Mock("ERC20MockToken", "ERC20MOCK", 1e6 ether);
 
         vm.prank(pst.owner());
         pst.addTokenToAllowList(address(mockERC20Token));
@@ -244,7 +244,7 @@ contract TestPST is Test {
 
     function testCreateTransferRevertsWhenTokenNotAllowed() public {
         // Arrange
-        MockERC20 na_mockERC20Token = new MockERC20("NotAllowedERC20MockToken", "NAERC20MOCK", 1e6 ether);
+        ERC20Mock na_mockERC20Token = new ERC20Mock("NotAllowedERC20MockToken", "NAERC20MOCK", 1e6 ether);
         na_mockERC20Token.transfer(SENDER, 100 ether);
 
         // Act // Assert
@@ -275,11 +275,72 @@ contract TestPST is Test {
         pst.createTransfer(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, SHORT_PASSWORD);
     }
 
-    function testCreateTransferRevertsWhenInsufficientFunds() public {
+    function testCreateTransferRevertsForEthIfInsufficientFunds() public {
         // Arange
         address TEST_SENDER = makeAddr("test sender");
         uint256 SENDER_INSUFFICIENT_AMOUNT = 0.5 ether;
         vm.deal(TEST_SENDER, SENDER_INSUFFICIENT_AMOUNT);
+
+        // Act / Assert
+        vm.expectRevert(
+            abi.encodeWithSelector(PST.PST__NotEnoughFunds.selector, totalTransferCost, SENDER_INSUFFICIENT_AMOUNT)
+        );
+        vm.prank(TEST_SENDER);
+        pst.createTransfer{value: SENDER_INSUFFICIENT_AMOUNT}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+    }
+
+    /**
+     * @dev Need to comment "receive() external payable {}" in PST.sol contract for this to pass
+     */
+    // function testCreateTransferRevertsIfEthTransferFails() public {
+    //     // Arange / Act / Assert
+    //     vm.expectRevert(PST.PST__TransferFailed.selector);
+    //     vm.prank(SENDER);
+    //     pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+    // }
+
+    function testCreateTransferRefundsSenderForEthIfMsgValueExceedsTransferCost() public {
+        // Arange
+        address TEST_SENDER = makeAddr("test sender");
+        uint256 SENDER_EXCEEDING_AMOUNT = 1.5 ether;
+        vm.deal(TEST_SENDER, SENDER_EXCEEDING_AMOUNT);
+        uint256 balanceSenderBefore = TEST_SENDER.balance;
+        uint256 expectedBalanceSenderAfter = balanceSenderBefore - totalTransferCost;
+
+        // Act
+        vm.prank(TEST_SENDER);
+        pst.createTransfer{value: SENDER_EXCEEDING_AMOUNT}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        uint256 balanceSenderAfter = TEST_SENDER.balance;
+
+        // Assert
+        assertEq(balanceSenderAfter, expectedBalanceSenderAfter, "Refund not working");
+    }
+
+    function testCreateTransferSendsEthToPSTContract() public {
+        // Arange
+        uint256 beforeBalance = pst.getBalance();
+        uint256 expectedAfterBalance = beforeBalance + totalTransferCost;
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        uint256 afterBalance = pst.getBalance();
+
+        // Assert
+        assertEq(
+            afterBalance,
+            expectedAfterBalance,
+            "PST contract didn't receive the correct amount of ETH when createTransfer was called"
+        );
+    }
+
+    function testCreateTransferRevertsForErc20IfInsufficientFunds() public {
+        // Arange
+        address TEST_SENDER = makeAddr("test sender");
+        uint256 SENDER_INSUFFICIENT_AMOUNT = 0.5 ether;
+        vm.deal(TEST_SENDER, 100 ether);
+        mockERC20Token.transfer(TEST_SENDER, SENDER_INSUFFICIENT_AMOUNT);
+        vm.deal(TEST_SENDER, 100 ether);
 
         // Act / Assert
         vm.expectRevert(
@@ -291,17 +352,41 @@ contract TestPST is Test {
         );
     }
 
-    function testCreateTransferRevertsWhenEthTransferFails() public {
+    function testCreateTransferRevertsIfErc20TransferFails() public {
         // Arange
-        FailingReceiverMock failingReceiverMock = new FailingReceiverMock();
+        FailingERC20Mock failingERC20Mock = new FailingERC20Mock("FailingERC20MockToken", "FAILERC20MOCK", 1e6 ether);
+        failingERC20Mock.transfer(SENDER, 100 ether);
+        vm.prank(pst.owner());
+        pst.addTokenToAllowList(address(failingERC20Mock));
 
         // Act / Assert
-        console.log("Sender ETH balance before transfer:", SENDER.balance);
         vm.expectRevert(PST.PST__TransferFailed.selector);
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(address(failingReceiverMock), address(0), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(failingERC20Mock), AMOUNT_TO_SEND, PASSWORD);
+    }
 
-        console.log("Sender ETH balance after transfer:", SENDER.balance);
+    function testCreateTransferSendsERC20TokenToPSTContract() public {
+        // Arange
+        uint256 beforeBalance = mockERC20Token.balanceOf(address(pst));
+        uint256 expectedAfterBalance = beforeBalance + totalTransferCost;
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        uint256 afterBalance = mockERC20Token.balanceOf(address(pst));
+
+        // Assert
+        assertEq(
+            afterBalance,
+            expectedAfterBalance,
+            "PST contract didn't receive the correct amount of ERC20Token when createTransfer was called"
+        );
+    }
+
+    function testCreateTransferStoresTransferDetails() public {
+        // Arrange
+        // Act
+        // Assert
     }
 
     function testTransferCounterIncrementsCorrectly() public {
