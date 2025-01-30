@@ -385,7 +385,28 @@ contract TestPST is Test {
 
     function testCreateTransferStoresTransferDetails() public {
         // Arrange
+        bytes32 passwordHash;
+        bytes32 salt;
+
         // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        uint256 transferId = pst.s_transferCounter();
+
+        (
+            address sender,
+            address receiver,
+            address token,
+            uint256 amount,
+            uint256 creationTime,
+            ,
+            bytes32 encodedPassword,
+            bytes32 storedSalt
+        ) = pst.s_transfersById(transferId);
+
+        (passwordHash, salt) = pst.encodePassword(PASSWORD);
+
         // Assert
     }
 

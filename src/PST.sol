@@ -172,7 +172,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     mapping(address user => uint256[] transferIds) private s_claimedTransfersByAddress;
 
     // Mapping of transfer Id to Transfer info struct
-    mapping(uint256 transferId => Transfer transfer) private s_transfersById;
+    mapping(uint256 transferId => Transfer transfer) public s_transfersById;
     // Mapping of transfer Id to last failed claim attempt time
     mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime) private s_lastFailedClaimAttempt;
     // Mapping to track active addresses
