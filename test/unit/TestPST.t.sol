@@ -15,6 +15,7 @@ contract TestPST is Test {
 
     uint256 public totalTransferCost;
     uint256 public transferFeeCost;
+    uint256 public transferId;
 
     // Constants for fee levels
     uint8 private constant LVL1 = 1;
@@ -38,6 +39,8 @@ contract TestPST is Test {
     uint256 public constant SENDER_BALANCE = 100 ether;
     uint256 public constant RECEIVER_BALANCE = 100 ether;
 
+    event LastInteractionTimeUpdated(address indexed user, uint256 indexed lastInteractionTime);
+
     function setUp() external {
         DeployPST deployer = new DeployPST();
         pst = deployer.run();
@@ -54,7 +57,9 @@ contract TestPST is Test {
         );
 
         vm.prank(SENDER);
-        mockERC20Token.approve(address(pst), totalTransferCost);
+        mockERC20Token.approve(address(pst), 100 ether);
+
+        transferId = pst.s_transferCounter();
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -275,6 +280,234 @@ contract TestPST is Test {
         pst.createTransfer(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, SHORT_PASSWORD);
     }
 
+    function testCreateTransferStoresTransferDetails() public {
+        // Arrange / Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        transferId = pst.s_transferCounter() - 1;
+
+        (
+            address sender,
+            address receiver,
+            address token,
+            uint256 amount,
+            uint256 creationTime,
+            uint256 expiringTime,
+            bytes32 encodedPassword,
+            bytes32 storedSalt
+        ) = pst.s_transfersById(transferId);
+
+        bytes32 salt = storedSalt;
+        bytes32 passwordHash = keccak256(abi.encodePacked(PASSWORD, salt));
+
+        // Assert
+        assertEq(sender, SENDER, "Sender address should match");
+        assertEq(receiver, RECEIVER, "Receiver address should match");
+        assertEq(token, address(mockERC20Token), "Token address should match");
+        assertEq(amount, AMOUNT_TO_SEND, "Transfer amount should match");
+        assertGt(creationTime, 0, "Creation time should be set");
+        assertGt(expiringTime, 0, "Expiring time should be set");
+        assertEq(encodedPassword, passwordHash, "Stored password hash should match");
+        assertEq(storedSalt, salt, "Stored salt should match");
+    }
+
+    function testCreateTransferGeneratesSequentialIds() public {
+        // Arrange
+        uint256 firstTransferId = pst.s_transferCounter();
+
+        // Act
+        vm.startPrank(SENDER);
+
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        uint256 secondTransferId = pst.s_transferCounter();
+
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        uint256 thirdTransferId = pst.s_transferCounter();
+
+        vm.stopPrank();
+
+        // Assert
+        assertEq(firstTransferId + 1, secondTransferId, "Second transfer ID should be first transfer ID + 1");
+        assertEq(secondTransferId + 1, thirdTransferId, "Third transfer ID should be second transfer ID + 1");
+    }
+
+    function testCreateTransferUpdatesPendingStateToTrue() public {
+        // Arrange / Act
+        vm.prank(SENDER);
+
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+        bool pendingStatus = pst.s_isPending(transferId);
+
+        // Assert
+        assertTrue(pendingStatus, "Transfer state did not update to true");
+    }
+
+    function testCreateTransferUpdatesPendingTransferIdsArray() public {
+        // Arrange
+        uint256[] memory pendingTransfers = pst.getPendingTransfers();
+        uint256 initialLength = pendingTransfers.length;
+        uint256 expectedTransferId = pst.s_transferCounter();
+
+        // Act
+        vm.prank(SENDER);
+
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        uint256[] memory updatedPendingTransfers = pst.getPendingTransfers();
+        uint256 newLength = updatedPendingTransfers.length;
+
+        // Assert
+        assertEq(newLength, initialLength + 1, "Pending transfer array length should increse by one");
+        assertEq(
+            updatedPendingTransfers[newLength - 1],
+            expectedTransferId,
+            "Last element should be the newly created transfer Id"
+        );
+    }
+
+    function testCreateTransferUpdatesPendingTransfersByAddressForSenderAndReceiver() public {
+        // Arrange
+        uint256[] memory pendingTransfersByAddressSender = pst.getPendingTransfersForAddress(SENDER);
+        uint256 initialLengthSender = pendingTransfersByAddressSender.length;
+        uint256[] memory pendingTransfersByAddressReceiver = pst.getPendingTransfersForAddress(RECEIVER);
+        uint256 initialLengthReceiver = pendingTransfersByAddressReceiver.length;
+        uint256 expectedTransferId = pst.s_transferCounter();
+
+        // Act
+        vm.prank(SENDER);
+
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        uint256[] memory updatedPendingTransfersByAddressSender = pst.getPendingTransfersForAddress(SENDER);
+        uint256 newLengthSender = updatedPendingTransfersByAddressSender.length;
+        uint256[] memory updatedPendingTransfersByAddressReceiver = pst.getPendingTransfersForAddress(RECEIVER);
+        uint256 newLengthReceiver = updatedPendingTransfersByAddressReceiver.length;
+
+        // Assert
+        assertEq(
+            newLengthSender, initialLengthSender + 1, "Pending transfer for address array length should increse by one"
+        );
+        assertEq(
+            updatedPendingTransfersByAddressSender[newLengthSender - 1],
+            expectedTransferId,
+            "Last element should be the newly created transfer Id"
+        );
+
+        assertEq(
+            newLengthReceiver,
+            initialLengthReceiver + 1,
+            "Pending transfer for address array length should increse by one"
+        );
+        assertEq(
+            updatedPendingTransfersByAddressSender[newLengthReceiver - 1],
+            expectedTransferId,
+            "Last element should be the newly created transfer Id"
+        );
+    }
+
+    function testCreateTransferAddsAddressToTracking() public {
+        // Arrange
+        bool tracking = pst.isAddressInTracking(SENDER);
+        console.log("Is SENDER in tracking? ", tracking);
+
+        // Act
+        vm.prank(SENDER);
+
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        tracking = pst.isAddressInTracking(SENDER);
+
+        // Assert
+        assertTrue(tracking, "Adress is not in tracking");
+    }
+
+    function testCreateTransferUpdatesLastInteractionTime() public {
+        // Arrange
+        vm.expectEmit(true, true, false, false);
+        emit LastInteractionTimeUpdated(SENDER, block.timestamp);
+
+        // Act
+        vm.prank(SENDER);
+
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        uint256 lastInteractionTime = pst.s_lastInteractionTime(SENDER);
+
+        // Assert
+        assertEq(lastInteractionTime, block.timestamp, "Last interaction time should be the same as block.timestamp");
+    }
+
+    function testTransferCounterIncrementsCorrectly() public {
+        // Arrange
+        uint256 transferCounter = pst.s_transferCounter();
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferCounter = pst.s_transferCounter();
+
+        // Assert
+        assertEq(transferCounter, 1);
+    }
+
+    function testTotalTransferCostIsCorrect() public view {
+        // Arrange
+        uint256 expectedTotalTransferCost = totalTransferCost;
+
+        // Act
+        TransferFeeLibrary.TransferFee memory transferFees = pst.getFee();
+        uint256 transferFee =
+            TransferFeeLibrary.selectTransferFee(AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, transferFees);
+        uint256 _transferFeeCost = (AMOUNT_TO_SEND * transferFee) / FEE_SCALING_FACTOR;
+        uint256 _totalTransferCost = AMOUNT_TO_SEND + _transferFeeCost;
+
+        // Assert
+        assertEq(_totalTransferCost, expectedTotalTransferCost, "Total transfer cost is not calculated correctly");
+    }
+
+    function testTransferFeeCostIsCorrect() public view {
+        // Arrange
+        uint256 expectedTransferFeeCost = transferFeeCost;
+
+        // Act
+        TransferFeeLibrary.TransferFee memory transferFees = pst.getFee();
+        uint256 transferFee =
+            TransferFeeLibrary.selectTransferFee(AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, transferFees);
+        uint256 _transferFeeCost = (AMOUNT_TO_SEND * transferFee) / FEE_SCALING_FACTOR;
+
+        // Assert
+        assertEq(_transferFeeCost, expectedTransferFeeCost, "Transfer fee cost is not calculated correctly");
+    }
+
+    function testPasswordEncodingWithSalt() public view {
+        // Arrange
+        (bytes32 expectedEncodedPaswsword, bytes32 salt) = pst.encodePassword(PASSWORD);
+
+        // Act
+        bytes32 encodedPassword = keccak256(abi.encodePacked(PASSWORD, salt));
+
+        // Assert
+        assertEq(encodedPassword, expectedEncodedPaswsword, "Password encoding not correct");
+    }
+
+    function testPasswordEncodingForDiffSalts() public {
+        // Arrange / Act
+        (bytes32 encodedPassword1, bytes32 salt1) = pst.encodePassword(PASSWORD);
+        vm.warp(block.timestamp + 1);
+        vm.roll(block.number + 1);
+        (bytes32 encodedPassword2, bytes32 salt2) = pst.encodePassword(PASSWORD);
+
+        // Assert
+        assertFalse(salt1 == salt2, "Salts should be different for different calls");
+        assertFalse(
+            encodedPassword1 == encodedPassword2, "Encoded passwords should be different due to different salts"
+        );
+    }
+
     function testCreateTransferRevertsForEthIfInsufficientFunds() public {
         // Arange
         address TEST_SENDER = makeAddr("test sender");
@@ -383,103 +616,35 @@ contract TestPST is Test {
         );
     }
 
-    function testCreateTransferStoresTransferDetails() public {
-        // Arrange
-        bytes32 passwordHash;
-        bytes32 salt;
-
-        // Act
-        vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
-
-        uint256 transferId = pst.s_transferCounter();
-
-        (
-            address sender,
-            address receiver,
-            address token,
-            uint256 amount,
-            uint256 creationTime,
-            ,
-            bytes32 encodedPassword,
-            bytes32 storedSalt
-        ) = pst.s_transfersById(transferId);
-
-        (passwordHash, salt) = pst.encodePassword(PASSWORD);
-
-        // Assert
-    }
-
-    function testTransferCounterIncrementsCorrectly() public {
-        // Arrange
-        uint256 transferCounter = pst.s_transferCounter();
-
-        // Act
-        vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
-        transferCounter = pst.s_transferCounter();
-
-        // Assert
-        assertEq(transferCounter, 1);
-    }
-
-    function testTotalTransferCostIsCorrect() public view {
-        // Arrange
-        uint256 expectedTotalTransferCost = totalTransferCost;
-
-        // Act
-        TransferFeeLibrary.TransferFee memory transferFees = pst.getFee();
-        uint256 transferFee =
-            TransferFeeLibrary.selectTransferFee(AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, transferFees);
-        uint256 _transferFeeCost = (AMOUNT_TO_SEND * transferFee) / FEE_SCALING_FACTOR;
-        uint256 _totalTransferCost = AMOUNT_TO_SEND + _transferFeeCost;
-
-        // Assert
-        assertEq(_totalTransferCost, expectedTotalTransferCost, "Total transfer cost is not calculated correctly");
-    }
-
-    function testTransferFeeCostIsCorrect() public view {
-        // Arrange
-        uint256 expectedTransferFeeCost = transferFeeCost;
-
-        // Act
-        TransferFeeLibrary.TransferFee memory transferFees = pst.getFee();
-        uint256 transferFee =
-            TransferFeeLibrary.selectTransferFee(AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, transferFees);
-        uint256 _transferFeeCost = (AMOUNT_TO_SEND * transferFee) / FEE_SCALING_FACTOR;
-
-        // Assert
-        assertEq(_transferFeeCost, expectedTransferFeeCost, "Transfer fee cost is not calculated correctly");
-    }
-
-    function testPasswordEncodingWithSalt() public view {
-        // Arrange
-        (bytes32 expectedEncodedPaswsword, bytes32 salt) = pst.encodePassword(PASSWORD);
-
-        // Act
-        bytes32 encodedPassword = keccak256(abi.encodePacked(PASSWORD, salt));
-
-        // Assert
-        assertEq(encodedPassword, expectedEncodedPaswsword, "Password encoding not correct");
-    }
-
-    function testPasswordEncodingForDiffSalts() public {
-        // Arrange / Act
-        (bytes32 encodedPassword1, bytes32 salt1) = pst.encodePassword(PASSWORD);
-        vm.warp(block.timestamp + 1);
-        vm.roll(block.number + 1);
-        (bytes32 encodedPassword2, bytes32 salt2) = pst.encodePassword(PASSWORD);
-
-        // Assert
-        assertFalse(salt1 == salt2, "Salts should be different for different calls");
-        assertFalse(
-            encodedPassword1 == encodedPassword2, "Encoded passwords should be different due to different salts"
-        );
-    }
-
     /*//////////////////////////////////////////////////////////////
                         CANCEL TRANSFER TESTS
     //////////////////////////////////////////////////////////////*/
+    function testCancelTransferRevertsIfCallerIsNotSender() public {
+        // Arrange
+        address NOT_SENDER = makeAddr("not sender");
+        vm.deal(NOT_SENDER, SENDER_BALANCE);
+
+        // Act / Assert
+        vm.expectRevert(PST.PST__OnlySenderCanCancel.selector);
+        vm.prank(NOT_SENDER);
+        pst.cancelTransfer(transferId);
+    }
+
+    function testCancelTransferRevertsIfTransferIsNotPending() public {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.prank(SENDER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        // Act / Assert
+        vm.prank(SENDER);
+        vm.expectRevert(PST.PST__TransferNotPending.selector);
+        pst.cancelTransfer(transferId);
+    }
 
     /*//////////////////////////////////////////////////////////////
                         CLAIM TRANSFER TESTS

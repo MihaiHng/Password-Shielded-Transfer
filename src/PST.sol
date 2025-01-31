@@ -133,12 +133,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     uint256 public s_limitLevelTwo = 100e18;
     uint256 public s_feeScalingFactor = 10e6;
 
-    uint256[] private s_pendingTransferIds;
-    uint256[] private s_canceledTransferIds;
-    uint256[] private s_expiredAndRefundedTransferIds;
-    uint256[] private s_claimedTransferIds;
-    address[] private s_addressList;
-    address[] private s_tokenList;
+    uint256[] public s_pendingTransferIds;
+    uint256[] public s_canceledTransferIds;
+    uint256[] public s_expiredAndRefundedTransferIds;
+    uint256[] public s_claimedTransferIds;
+    address[] public s_addressList;
+    address[] public s_tokenList;
 
     TransferFeeLibrary.TransferFee public fee;
 
@@ -154,13 +154,13 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Mapping to track if a transfer is pending
-    mapping(uint256 transferId => bool) private s_isPending;
+    mapping(uint256 transferId => bool) public s_isPending;
     // Mapping to track if a transfer is canceled
-    mapping(uint256 transferId => bool) private s_isCanceled;
+    mapping(uint256 transferId => bool) public s_isCanceled;
     // Mapping to track if a transfer is expired
-    mapping(uint256 transferId => bool) private s_isExpiredAndRefunded;
+    mapping(uint256 transferId => bool) public s_isExpiredAndRefunded;
     // Mapping to track if a transfer is claimed
-    mapping(uint256 transferId => bool) private s_isClaimed;
+    mapping(uint256 transferId => bool) public s_isClaimed;
 
     // Mapping to track all the pending transfers for an address
     mapping(address user => uint256[] transferIds) private s_pendingTransfersByAddress;
@@ -180,7 +180,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     // Mapping to track an address to its last cleanup time
     mapping(address user => uint256 lastCleanupTime) private s_lastCleanupTimeByAddress;
     // Mapping to track an address to its last active time
-    mapping(address user => uint256 lastActiveTime) private s_lastInteractionTime;
+    mapping(address user => uint256 lastActiveTime) public s_lastInteractionTime;
 
     // Mapping to track if a token address is whitelisted
     mapping(address token => bool isAllowed) private s_allowedTokens;
@@ -199,6 +199,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         uint256 amount,
         uint256 transferFeeCost
     );
+    // Event to log when the last interaction time changes for an address
+    event LastInteractionTimeUpdated(address indexed user, uint256 indexed lastInteractionTime);
     // Event to log a canceled transfer
     event TransferCanceled(
         address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
@@ -384,7 +386,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
             revert PST__PasswordTooShort({minCharactersRequired: s_minPasswordLength});
         }
 
-        uint256 transferId = s_transferCounter++; // transferId will start at 1 because at first call of the function s_transferCounter = 0
+        uint256 transferId = s_transferCounter++;
 
         TransferFeeLibrary.TransferFee memory currentFee = fee;
 
@@ -415,6 +417,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
         emit TransferInitiated(msg.sender, receiver, transferId, token, amount, transferFeeCost);
+        emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
 
         if (token == address(0)) {
             if (msg.value < totalTransferCost) {
@@ -1184,8 +1187,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return expiredTransfers;
     }
 
-    /*To refactor*/
-
     // Function to get all pending transfers for an address
     function getPendingTransfersForAddress(address user)
         external
@@ -1193,9 +1194,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         onlyValidAddress(user)
         returns (uint256[] memory)
     {
-        if (s_pendingTransfersByAddress[user].length == 0) {
-            revert PST__NoPendingTransfers();
-        }
+        // if (s_pendingTransfersByAddress[user].length == 0) {
+        //     revert PST__NoPendingTransfers();
+        // }
 
         return s_pendingTransfersByAddress[user];
     }
