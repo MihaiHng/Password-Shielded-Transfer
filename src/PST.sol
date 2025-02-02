@@ -122,7 +122,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     uint256 private constant MIN_BATCH_LIMIT = 20;
 
     uint256 private s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
-    uint256 private s_claimCooldownPeriod = 30 minutes;
+    uint256 public s_claimCooldownPeriod = 30 minutes;
     uint256 private s_availabilityPeriod = 7 days;
     uint256 private s_cleanupInterval = 12 weeks;
     uint256 private s_inactivityThreshhold = 12 weeks;
@@ -150,8 +150,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         uint256 creationTime;
         uint256 expiringTime;
         bytes32 encodedPassword;
-        bytes32 salt;
     }
+    //bytes32 salt;
 
     // Mapping to track if a transfer is pending
     mapping(uint256 transferId => bool) public s_isPending;
@@ -394,7 +394,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
             amount, s_limitLevelOne, s_limitLevelTwo, s_feeScalingFactor, currentFee
         );
 
-        (bytes32 encodedPassword, bytes32 salt) = encodePassword(password);
+        s_transfersById[transferId].sender = msg.sender;
+        s_transfersById[transferId].receiver = receiver;
+
+        bytes32 encodedPassword = encodePassword(transferId, password);
 
         s_transfersById[transferId] = Transfer({
             sender: msg.sender,
@@ -403,8 +406,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
             amount: amount,
             creationTime: block.timestamp,
             expiringTime: block.timestamp + s_availabilityPeriod,
-            encodedPassword: encodedPassword,
-            salt: salt
+            encodedPassword: encodedPassword
         });
 
         s_isPending[transferId] = true;
@@ -851,15 +853,17 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         s_feeBalances[token] += _transferFeeCost;
     }
 
-    function encodePassword(string memory _password) public view returns (bytes32, bytes32) {
-        bytes32 salt = keccak256(abi.encodePacked(block.timestamp, msg.sender));
+    function encodePassword(uint256 transferId, string memory _password) public view returns (bytes32) {
+        address sender = s_transfersById[transferId].sender;
+        address receiver = s_transfersById[transferId].receiver;
+        bytes32 salt = keccak256(abi.encodePacked(transferId, sender, receiver));
         bytes32 encodedPassword = keccak256(abi.encodePacked(_password, salt));
 
-        return (encodedPassword, salt);
+        return (encodedPassword);
     }
 
     function checkPassword(uint256 transferId, string memory password) public view returns (bool) {
-        (bytes32 receiverPassword,) = encodePassword(password);
+        bytes32 receiverPassword = encodePassword(transferId, password);
         bytes32 senderPassword = s_transfersById[transferId].encodedPassword;
 
         return senderPassword == receiverPassword;

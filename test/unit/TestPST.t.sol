@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.28;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console, console2} from "forge-std/Test.sol";
 import {DeployPST} from "../../script/DeployPST.s.sol";
 import {PST} from "src/PST.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
@@ -294,11 +294,10 @@ contract TestPST is Test {
             uint256 amount,
             uint256 creationTime,
             uint256 expiringTime,
-            bytes32 encodedPassword,
-            bytes32 storedSalt
+            bytes32 encodedPassword
         ) = pst.s_transfersById(transferId);
 
-        bytes32 salt = storedSalt;
+        bytes32 salt = keccak256(abi.encodePacked(transferId, sender, receiver));
         bytes32 passwordHash = keccak256(abi.encodePacked(PASSWORD, salt));
 
         // Assert
@@ -309,7 +308,6 @@ contract TestPST is Test {
         assertGt(creationTime, 0, "Creation time should be set");
         assertGt(expiringTime, 0, "Expiring time should be set");
         assertEq(encodedPassword, passwordHash, "Stored password hash should match");
-        assertEq(storedSalt, salt, "Stored salt should match");
     }
 
     function testCreateTransferGeneratesSequentialIds() public {
@@ -483,31 +481,6 @@ contract TestPST is Test {
         assertEq(_transferFeeCost, expectedTransferFeeCost, "Transfer fee cost is not calculated correctly");
     }
 
-    function testPasswordEncodingWithSalt() public view {
-        // Arrange
-        (bytes32 expectedEncodedPaswsword, bytes32 salt) = pst.encodePassword(PASSWORD);
-
-        // Act
-        bytes32 encodedPassword = keccak256(abi.encodePacked(PASSWORD, salt));
-
-        // Assert
-        assertEq(encodedPassword, expectedEncodedPaswsword, "Password encoding not correct");
-    }
-
-    function testPasswordEncodingForDiffSalts() public {
-        // Arrange / Act
-        (bytes32 encodedPassword1, bytes32 salt1) = pst.encodePassword(PASSWORD);
-        vm.warp(block.timestamp + 1);
-        vm.roll(block.number + 1);
-        (bytes32 encodedPassword2, bytes32 salt2) = pst.encodePassword(PASSWORD);
-
-        // Assert
-        assertFalse(salt1 == salt2, "Salts should be different for different calls");
-        assertFalse(
-            encodedPassword1 == encodedPassword2, "Encoded passwords should be different due to different salts"
-        );
-    }
-
     function testCreateTransferRevertsForEthIfInsufficientFunds() public {
         // Arange
         address TEST_SENDER = makeAddr("test sender");
@@ -634,10 +607,12 @@ contract TestPST is Test {
         // Arrange
         vm.prank(SENDER);
         pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
-
         transferId = pst.s_transferCounter() - 1;
 
-        vm.prank(SENDER);
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(RECEIVER);
         pst.claimTransfer(transferId, PASSWORD);
 
         // Act / Assert
@@ -659,5 +634,59 @@ contract TestPST is Test {
         // Act
 
         // Assert
+    }
+    /*//////////////////////////////////////////////////////////////
+                        PASSWORD TESTS
+    //////////////////////////////////////////////////////////////*/
+
+    function testEncodePassword() public {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        (,,,,,, bytes32 encodedPassword) = pst.s_transfersById(transferId);
+
+        // Act
+        bytes32 hashedPassword = pst.encodePassword(transferId, PASSWORD);
+
+        // Assert
+        assertEq(encodedPassword, hashedPassword, "Password hashes should match");
+    }
+
+    function testPasswordEncodingWithSalt() public {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+        (address sender, address receiver,,,,, bytes32 encodedPassword) = pst.s_transfersById(transferId);
+        bytes32 salt = keccak256(abi.encodePacked(transferId, sender, receiver));
+
+        // Act
+        bytes32 expectedEncodedPassword = keccak256(abi.encodePacked(PASSWORD, salt));
+
+        // Assert
+        assertEq(encodedPassword, expectedEncodedPassword, "Password encoding not correct");
+    }
+
+    function testPasswordEncodingForDiffSalts() public {
+        // Arrange / Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        (address sender1, address receiver1,,,,, bytes32 encodedPassword1) = pst.s_transfersById(transferId);
+        bytes32 salt1 = keccak256(abi.encodePacked(transferId, sender1, receiver1));
+
+        transferId = pst.s_transferCounter();
+        vm.warp(block.timestamp + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        (address sender2, address receiver2,,,,, bytes32 encodedPassword2) = pst.s_transfersById(transferId);
+        bytes32 salt2 = keccak256(abi.encodePacked(transferId, sender2, receiver2));
+
+        // Assert
+        assertFalse(salt1 == salt2, "Salts should be different for different transfer Ids");
+        assertFalse(
+            encodedPassword1 == encodedPassword2, "Encoded passwords should be different due to different salts"
+        );
     }
 }
