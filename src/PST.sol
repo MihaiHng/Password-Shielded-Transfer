@@ -151,7 +151,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         uint256 expiringTime;
         bytes32 encodedPassword;
     }
-    //bytes32 salt;
 
     // Mapping to track if a transfer is pending
     mapping(uint256 transferId => bool) public s_isPending;
@@ -303,7 +302,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     modifier onlyValidTransferIds(uint256 transferId) {
-        if (transferId > s_transferCounter) {
+        if (transferId >= s_transferCounter) {
             revert PST__InvalidTransferId();
         }
         _;

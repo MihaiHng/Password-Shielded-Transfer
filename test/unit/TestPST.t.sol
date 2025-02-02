@@ -621,6 +621,21 @@ contract TestPST is Test {
         pst.cancelTransfer(transferId);
     }
 
+    // function testCancelTransferRevertsIfTransferIdIsInvalid() public {
+    //     // Arrange
+    //     transferId = 9999;
+    //     vm.prank(SENDER);
+    //     pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+    //     console.log(transferId);
+    //     transferId = pst.s_transferCounter() - 1;
+    //     console.log(transferId);
+
+    //     // Act / Assert
+    //     vm.prank(SENDER);
+    //     vm.expectRevert(PST.PST__InvalidTransferId.selector);
+    //     pst.cancelTransfer(transferId);
+    // }
+
     /*//////////////////////////////////////////////////////////////
                         CLAIM TRANSFER TESTS
     //////////////////////////////////////////////////////////////*/
