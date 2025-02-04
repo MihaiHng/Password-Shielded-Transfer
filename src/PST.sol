@@ -479,6 +479,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
         emit TransferCanceled(msg.sender, receiver, transferId, tokenToCancel, amountToCancel);
+        emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
 
         if (tokenToCancel == address(0)) {
             (bool success,) = msg.sender.call{value: amountToCancel}("");

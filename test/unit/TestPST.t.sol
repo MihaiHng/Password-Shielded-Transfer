@@ -7,7 +7,9 @@ import {DeployPST} from "../../script/DeployPST.s.sol";
 import {PST} from "src/PST.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
 import {ERC20Mock} from "../mocks/ERC20Mock.sol";
-import {FailingERC20Mock} from "../mocks/FailingERC20Mock.sol";
+import {FailingERC20Mock_ForCreateTransferTest} from "../mocks/FailingERC20Mock_ForCreateTransferTest.sol";
+import {FailingERC20Mock_ForCancelTransferTest} from "../mocks/FailingERC20Mock_ForCancelTransferTest.sol";
+import {NonPayableContractMock} from "../mocks/NonPayableContractMock.sol";
 
 contract TestPST is Test {
     PST public pst;
@@ -65,6 +67,21 @@ contract TestPST is Test {
     /*//////////////////////////////////////////////////////////////
                               MODIFIERS
     //////////////////////////////////////////////////////////////*/
+    modifier transferCreated() {
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        _;
+    }
+
+    modifier transferCreatedAndCanceled() {
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        transferId = pst.s_transferCounter() - 1;
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+        _;
+    }
 
     /*//////////////////////////////////////////////////////////////
                                FEE TESTS
@@ -238,7 +255,7 @@ contract TestPST is Test {
         pst.createTransfer(RECEIVER, address(mockERC20Token), 0, PASSWORD);
     }
 
-    function testCreateTransferRevertsWhenReceiverIsNotValid() public {
+    function testCreateTransferRevertsWhenReceiverIsNotValid() public transferCreated {
         // Arrange
         address INVALID_RECEIVER = address(0);
 
@@ -280,11 +297,8 @@ contract TestPST is Test {
         pst.createTransfer(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, SHORT_PASSWORD);
     }
 
-    function testCreateTransferStoresTransferDetails() public {
+    function testCreateTransferStoresTransferDetails() public transferCreated {
         // Arrange / Act
-        vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
-
         transferId = pst.s_transferCounter() - 1;
 
         (
@@ -332,11 +346,8 @@ contract TestPST is Test {
         assertEq(secondTransferId + 1, thirdTransferId, "Third transfer ID should be second transfer ID + 1");
     }
 
-    function testCreateTransferUpdatesPendingStateToTrue() public {
+    function testCreateTransferUpdatesTransferPendingStateToTrue() public transferCreated {
         // Arrange / Act
-        vm.prank(SENDER);
-
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
         transferId = pst.s_transferCounter() - 1;
         bool pendingStatus = pst.s_isPending(transferId);
 
@@ -352,7 +363,6 @@ contract TestPST is Test {
 
         // Act
         vm.prank(SENDER);
-
         pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
 
         uint256[] memory updatedPendingTransfers = pst.getPendingTransfers();
@@ -377,7 +387,6 @@ contract TestPST is Test {
 
         // Act
         vm.prank(SENDER);
-
         pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
 
         uint256[] memory updatedPendingTransfersByAddressSender = pst.getPendingTransfersForAddress(SENDER);
@@ -387,7 +396,7 @@ contract TestPST is Test {
 
         // Assert
         assertEq(
-            newLengthSender, initialLengthSender + 1, "Pending transfer for address array length should increse by one"
+            newLengthSender, initialLengthSender + 1, "Pending transfer for address array length should increase by one"
         );
         assertEq(
             updatedPendingTransfersByAddressSender[newLengthSender - 1],
@@ -414,7 +423,6 @@ contract TestPST is Test {
 
         // Act
         vm.prank(SENDER);
-
         pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
 
         tracking = pst.isAddressInTracking(SENDER);
@@ -430,7 +438,6 @@ contract TestPST is Test {
 
         // Act
         vm.prank(SENDER);
-
         pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
 
         uint256 lastInteractionTime = pst.s_lastInteractionTime(SENDER);
@@ -483,16 +490,16 @@ contract TestPST is Test {
 
     function testCreateTransferRevertsForEthIfInsufficientFunds() public {
         // Arange
-        address TEST_SENDER = makeAddr("test sender");
-        uint256 SENDER_INSUFFICIENT_AMOUNT = 0.5 ether;
-        vm.deal(TEST_SENDER, SENDER_INSUFFICIENT_AMOUNT);
+        address IA_SENDER = makeAddr("insufficient amount sender");
+        uint256 INSUFFICIENT_AMOUNT = 0.5 ether;
+        vm.deal(IA_SENDER, INSUFFICIENT_AMOUNT);
 
         // Act / Assert
         vm.expectRevert(
-            abi.encodeWithSelector(PST.PST__NotEnoughFunds.selector, totalTransferCost, SENDER_INSUFFICIENT_AMOUNT)
+            abi.encodeWithSelector(PST.PST__NotEnoughFunds.selector, totalTransferCost, INSUFFICIENT_AMOUNT)
         );
-        vm.prank(TEST_SENDER);
-        pst.createTransfer{value: SENDER_INSUFFICIENT_AMOUNT}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        vm.prank(IA_SENDER);
+        pst.createTransfer{value: INSUFFICIENT_AMOUNT}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
     }
 
     /**
@@ -507,16 +514,16 @@ contract TestPST is Test {
 
     function testCreateTransferRefundsSenderForEthIfMsgValueExceedsTransferCost() public {
         // Arange
-        address TEST_SENDER = makeAddr("test sender");
-        uint256 SENDER_EXCEEDING_AMOUNT = 1.5 ether;
-        vm.deal(TEST_SENDER, SENDER_EXCEEDING_AMOUNT);
-        uint256 balanceSenderBefore = TEST_SENDER.balance;
+        address OS_SENDER = makeAddr("over spending sender");
+        uint256 EXCEEDING_AMOUNT = 1.5 ether;
+        vm.deal(OS_SENDER, EXCEEDING_AMOUNT);
+        uint256 balanceSenderBefore = OS_SENDER.balance;
         uint256 expectedBalanceSenderAfter = balanceSenderBefore - totalTransferCost;
 
         // Act
-        vm.prank(TEST_SENDER);
-        pst.createTransfer{value: SENDER_EXCEEDING_AMOUNT}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
-        uint256 balanceSenderAfter = TEST_SENDER.balance;
+        vm.prank(OS_SENDER);
+        pst.createTransfer{value: EXCEEDING_AMOUNT}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        uint256 balanceSenderAfter = OS_SENDER.balance;
 
         // Assert
         assertEq(balanceSenderAfter, expectedBalanceSenderAfter, "Refund not working");
@@ -542,25 +549,24 @@ contract TestPST is Test {
 
     function testCreateTransferRevertsForErc20IfInsufficientFunds() public {
         // Arange
-        address TEST_SENDER = makeAddr("test sender");
-        uint256 SENDER_INSUFFICIENT_AMOUNT = 0.5 ether;
-        vm.deal(TEST_SENDER, 100 ether);
-        mockERC20Token.transfer(TEST_SENDER, SENDER_INSUFFICIENT_AMOUNT);
-        vm.deal(TEST_SENDER, 100 ether);
+        address IA_SENDER = makeAddr("insufficient amount sender");
+        uint256 INSUFFICIENT_AMOUNT = 0.5 ether;
+        vm.deal(IA_SENDER, 100 ether);
+        mockERC20Token.transfer(IA_SENDER, INSUFFICIENT_AMOUNT);
+        vm.deal(IA_SENDER, 100 ether);
 
         // Act / Assert
         vm.expectRevert(
-            abi.encodeWithSelector(PST.PST__NotEnoughFunds.selector, totalTransferCost, SENDER_INSUFFICIENT_AMOUNT)
+            abi.encodeWithSelector(PST.PST__NotEnoughFunds.selector, totalTransferCost, INSUFFICIENT_AMOUNT)
         );
-        vm.prank(TEST_SENDER);
-        pst.createTransfer{value: SENDER_INSUFFICIENT_AMOUNT}(
-            RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD
-        );
+        vm.prank(IA_SENDER);
+        pst.createTransfer{value: INSUFFICIENT_AMOUNT}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
     }
 
     function testCreateTransferRevertsIfErc20TransferFails() public {
         // Arange
-        FailingERC20Mock failingERC20Mock = new FailingERC20Mock("FailingERC20MockToken", "FAILERC20MOCK", 1e6 ether);
+        FailingERC20Mock_ForCreateTransferTest failingERC20Mock =
+            new FailingERC20Mock_ForCreateTransferTest("FailingERC20MockToken", "FAILERC20MOCK", 1e6 ether);
         failingERC20Mock.transfer(SENDER, 100 ether);
         vm.prank(pst.owner());
         pst.addTokenToAllowList(address(failingERC20Mock));
@@ -636,6 +642,209 @@ contract TestPST is Test {
     //     pst.cancelTransfer(transferId);
     // }
 
+    function testCancelTransferUpdatesTransferPendingStateToFalse() public transferCreatedAndCanceled {
+        // Arrange / Act
+        bool pendingStatus = pst.s_isPending(transferId);
+
+        // Assert
+        assertFalse(pendingStatus, "Transfer state did not update to false");
+    }
+
+    function testCancelTransferUpdatesTransferCanceledStateToTrue() public transferCreatedAndCanceled {
+        // Arrange / Act
+        bool canceledStatus = pst.s_isCanceled(transferId);
+
+        // Assert
+        assertTrue(canceledStatus, "Transfer state did not update to true");
+    }
+
+    function testCancelTransferUpdatesTransferAmountToZero() public transferCreatedAndCanceled {
+        // Arrange / Act
+        (,,, uint256 transferAmount,,,) = pst.s_transfersById(transferId);
+
+        // Assert
+        assertEq(transferAmount, 0, "Transfer amount should be zero");
+    }
+
+    function testCancelTransferUpdatesCanceledTransferIdsArray() public {
+        // Arrange
+        uint256[] memory canceledTransfers = pst.getCanceledTransfers();
+        uint256 initialLength = canceledTransfers.length;
+        uint256 expectedTransferId = pst.s_transferCounter();
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+
+        uint256[] memory updatedCanceledTransfers = pst.getCanceledTransfers();
+        uint256 newLength = updatedCanceledTransfers.length;
+
+        // Assert
+        assertEq(newLength, initialLength + 1, "Canceled transfer array length should increse by one");
+        assertEq(
+            updatedCanceledTransfers[newLength - 1],
+            expectedTransferId,
+            "Last element should be the newly created transfer Id"
+        );
+    }
+
+    function testCancelTransferRemovesTransferIdfromPendingTransfersArray() public transferCreated {
+        // Arrange
+        uint256[] memory pendingTransfers = pst.getPendingTransfers();
+        uint256 initialLength = pendingTransfers.length;
+
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+
+        uint256[] memory updatedPendingTransfers = pst.getPendingTransfers();
+        uint256 newLength = updatedPendingTransfers.length;
+
+        // Assert
+        assertEq(newLength, initialLength, "Pending transfers array length should decrease by one");
+        for (uint256 i = 0; i < newLength; i++) {
+            assertFalse(updatedPendingTransfers[i] == transferId, "Transfer ID should be removed from pending list");
+        }
+    }
+
+    function testCancelTransferRemovesTransferIdfromPendingTransfersByAddressForSenderAndReceiver()
+        public
+        transferCreated
+    {
+        // Arrange
+        uint256[] memory senderPendingTransfers = pst.getPendingTransfersForAddress(SENDER);
+        uint256 initialSenderLength = senderPendingTransfers.length;
+
+        uint256[] memory receiverPendingTransfers = pst.getPendingTransfersForAddress(RECEIVER);
+        uint256 initialReceiverLength = receiverPendingTransfers.length;
+
+        // Act
+        transferId = pst.s_transferCounter() - 1;
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+
+        uint256[] memory updatedSenderPendingTransfers = pst.getPendingTransfersForAddress(SENDER);
+        uint256[] memory updatedReceiverPendingTransfers = pst.getPendingTransfersForAddress(RECEIVER);
+
+        // Assert
+        assertEq(
+            updatedSenderPendingTransfers.length,
+            initialSenderLength - 1,
+            "Sender's pending transfers should decrease by one"
+        );
+        assertEq(
+            updatedReceiverPendingTransfers.length,
+            initialReceiverLength - 1,
+            "Receiver's pending transfers should decrease by one"
+        );
+
+        for (uint256 i = 0; i < updatedSenderPendingTransfers.length; i++) {
+            assertFalse(
+                updatedSenderPendingTransfers[i] == transferId,
+                "Transfer ID should be removed from sender's pending list"
+            );
+        }
+
+        for (uint256 i = 0; i < updatedReceiverPendingTransfers.length; i++) {
+            assertFalse(
+                updatedReceiverPendingTransfers[i] == transferId,
+                "Transfer ID should be removed from receiver's pending list"
+            );
+        }
+    }
+
+    function testCancelTransferUpdatesLastInteractionTime() public transferCreated {
+        // Arrange
+        vm.expectEmit(true, true, false, false);
+        emit LastInteractionTimeUpdated(SENDER, block.timestamp);
+
+        // Act
+        transferId = pst.s_transferCounter() - 1;
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+        uint256 lastInteractionTime = pst.s_lastInteractionTime(SENDER);
+
+        // Assert
+        assertEq(lastInteractionTime, block.timestamp, "Last interaction time should be the same as block.timestamp");
+    }
+
+    function testCancelTransferRefundsEthToSender() public {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        uint256 senderBalanceBefore = SENDER.balance;
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+        uint256 senderBalanceAfter = SENDER.balance;
+
+        // Assert
+        assertEq(
+            senderBalanceAfter, senderBalanceBefore + AMOUNT_TO_SEND, "Sender should be refunded the transferred ETH"
+        );
+    }
+
+    function testCancelTransferRevertsIfEthRefundFails() public {
+        // Arrange
+        NonPayableContractMock nonPayable = new NonPayableContractMock();
+        vm.deal(address(nonPayable), SENDER_BALANCE);
+        vm.prank(address(nonPayable));
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act & Assert
+        vm.prank(address(nonPayable));
+        vm.expectRevert(PST.PST__TransferFailed.selector);
+        pst.cancelTransfer(transferId);
+    }
+
+    function testCancelTransferRefundsErc20TokenToSender() public transferCreated {
+        // Arrange
+        uint256 senderBalanceBefore = mockERC20Token.balanceOf(SENDER);
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+        uint256 senderBalanceAfter = mockERC20Token.balanceOf(SENDER);
+
+        // Assert
+        assertEq(
+            senderBalanceAfter, senderBalanceBefore + AMOUNT_TO_SEND, "Sender should be refunded the transferred ETH"
+        );
+    }
+
+    function testCancelTransferRevertsIfErc20TokenRefundFails() public {
+        // Arrange
+        vm.startPrank(SENDER);
+        FailingERC20Mock_ForCancelTransferTest failingERC20Mock =
+            new FailingERC20Mock_ForCancelTransferTest("FailingERC20MockToken", "FAILERC20MOCK", 1e6 ether);
+        failingERC20Mock.approve(address(pst), 100 ether);
+        vm.stopPrank();
+        vm.prank(pst.owner());
+        pst.addTokenToAllowList(address(failingERC20Mock));
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(failingERC20Mock), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        // Assert
+        vm.prank(SENDER);
+        vm.expectRevert(PST.PST__TransferFailed.selector);
+        pst.cancelTransfer(transferId);
+    }
+
     /*//////////////////////////////////////////////////////////////
                         CLAIM TRANSFER TESTS
     //////////////////////////////////////////////////////////////*/
@@ -654,10 +863,8 @@ contract TestPST is Test {
                         PASSWORD TESTS
     //////////////////////////////////////////////////////////////*/
 
-    function testEncodePassword() public {
+    function testEncodePassword() public transferCreated {
         // Arrange
-        vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
         (,,,,,, bytes32 encodedPassword) = pst.s_transfersById(transferId);
 
         // Act
@@ -667,10 +874,8 @@ contract TestPST is Test {
         assertEq(encodedPassword, hashedPassword, "Password hashes should match");
     }
 
-    function testPasswordEncodingWithSalt() public {
+    function testPasswordEncodingWithSalt() public transferCreated {
         // Arrange
-        vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
         transferId = pst.s_transferCounter() - 1;
         (address sender, address receiver,,,,, bytes32 encodedPassword) = pst.s_transfersById(transferId);
         bytes32 salt = keccak256(abi.encodePacked(transferId, sender, receiver));
@@ -682,10 +887,8 @@ contract TestPST is Test {
         assertEq(encodedPassword, expectedEncodedPassword, "Password encoding not correct");
     }
 
-    function testPasswordEncodingForDiffSalts() public {
+    function testPasswordEncodingForDiffSalts() public transferCreated {
         // Arrange / Act
-        vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
         (address sender1, address receiver1,,,,, bytes32 encodedPassword1) = pst.s_transfersById(transferId);
         bytes32 salt1 = keccak256(abi.encodePacked(transferId, sender1, receiver1));
 
@@ -703,5 +906,22 @@ contract TestPST is Test {
         assertFalse(
             encodedPassword1 == encodedPassword2, "Encoded passwords should be different due to different salts"
         );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        UTILITY FUNCTIONS TESTS
+    //////////////////////////////////////////////////////////////*/
+    function testRemoveFromPendingTransfersRevertsIfNoPendingTransfers() public {
+        // Act / Assert
+        vm.expectRevert(PST.PST__NoPendingTransfers.selector);
+        vm.prank(SENDER);
+        pst.removeFromPendingTransfers(0);
+    }
+
+    function testRemoveFromPendingTransfersByAddressRevertsIfNoPendingTransfers() public {
+        // Act / Assert
+        vm.expectRevert(PST.PST__NoPendingTransfers.selector);
+        vm.prank(SENDER);
+        pst.removeFromPendingTransfersByAddress(SENDER, 0);
     }
 }
