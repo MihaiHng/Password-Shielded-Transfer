@@ -9,8 +9,4 @@ contract NonPayableContractMock {
     receive() external payable {
         revert("NonPayableContract: Cannot receive ETH");
     }
-
-    fallback() external payable {
-        revert("NonPayableContract: Cannot receive ETH");
-    }
 }

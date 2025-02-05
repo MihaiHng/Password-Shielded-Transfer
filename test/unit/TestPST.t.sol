@@ -848,6 +848,34 @@ contract TestPST is Test {
     /*//////////////////////////////////////////////////////////////
                         CLAIM TRANSFER TESTS
     //////////////////////////////////////////////////////////////*/
+    function testClaimTransferRevertsIfClaimCooldownNotElapsed() public transferCreated {
+        // Arrange / Act / Assert
+        vm.expectRevert(PST.PST__CooldownPeriodNotElapsed.selector);
+        vm.prank(SENDER);
+        pst.claimTransfer(transferId, PASSWORD);
+    }
+
+    function testClaimTransferRevertsIfTransferNotPending() public transferCreatedAndCanceled {
+        // Arrange
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act / Assert
+        vm.expectRevert(PST.PST__TransferNotPending.selector);
+        vm.prank(SENDER);
+        pst.claimTransfer(transferId, PASSWORD);
+    }
+
+    function testClaimTransferRevertsWhenReceiverisNotMsgSender() public transferCreated {
+        // Arrange
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act / Assert
+        vm.expectRevert(PST.PST__InvalidReceiver.selector);
+        vm.prank(SENDER);
+        pst.claimTransfer(transferId, PASSWORD);
+    }
 
     /*//////////////////////////////////////////////////////////////
                         FEE WITHDRAWAL TESTS
