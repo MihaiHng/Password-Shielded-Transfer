@@ -83,6 +83,18 @@ contract TestPST is Test {
         _;
     }
 
+    modifier transferCreatedAndClaimed() {
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+        _;
+    }
+
     /*//////////////////////////////////////////////////////////////
                                FEE TESTS
     //////////////////////////////////////////////////////////////*/
@@ -287,9 +299,9 @@ contract TestPST is Test {
         pst.createTransfer(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, "");
     }
 
-    function testCreateTransferRevertsWhenPasswordIsToShort() public {
+    function testCreateTransferRevertsWhenPasswordIsTooShort() public {
         // Arrange
-        uint256 MIN_PASSWORD_LENGTH = 7;
+        uint256 MIN_PASSWORD_LENGTH = pst.s_minPasswordLength();
         string memory SHORT_PASSWORD = "NoGood";
 
         // Act // Assert
@@ -875,6 +887,64 @@ contract TestPST is Test {
         vm.expectRevert(PST.PST__InvalidReceiver.selector);
         vm.prank(SENDER);
         pst.claimTransfer(transferId, PASSWORD);
+    }
+
+    function testClaimTransferRevertsIfPasswordNotProvided() public transferCreated {
+        // Arrange
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act / Assert
+        vm.expectRevert(PST.PST__PasswordNotProvided.selector);
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, "");
+    }
+
+    function testClaimTransferRevertsIfPasswordIsTooShort() public transferCreated {
+        // Arrange
+        uint256 MIN_PASSWORD_LENGTH = pst.s_minPasswordLength();
+        string memory SHORT_PASSWORD = "NoGood";
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act // Assert
+        vm.expectRevert(abi.encodeWithSelector(PST.PST__PasswordTooShort.selector, MIN_PASSWORD_LENGTH));
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, SHORT_PASSWORD);
+    }
+
+    function testClaimTransferRevertsIfPasswordIsIncorrect() public transferCreated {
+        // Arrange
+        string memory INCORRECT_PASSWORD = "IncorrectPassword";
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act // Assert
+        vm.expectRevert(PST.PST__IncorrectPassword.selector);
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, INCORRECT_PASSWORD);
+    }
+
+    function testClaimTransferUpdatesTransferPendingStateToFalse() public transferCreatedAndClaimed {
+        // Arrange / Act / Assert
+        bool pendingStatus = pst.s_isPending(transferId);
+        assertFalse(pendingStatus, "Transfer state did not update to false");
+    }
+
+    function testClaimTransferUpdatesTransferClaimedStateToTrue() public transferCreatedAndClaimed {
+        // Arrange / Act / Assert
+        bool claimedStatus = pst.s_isClaimed(transferId);
+        assertTrue(claimedStatus, "Transfer state did not update to true");
+    }
+
+    function testClaimTransferUpdatesTransferAmountToZero() public transferCreatedAndClaimed {
+        // Arrange / Act
+        (,,, uint256 transferAmount,,,) = pst.s_transfersById(transferId);
+
+        // Assert
+        assertEq(transferAmount, 0, "Transfer amount should be zero");
     }
 
     /*//////////////////////////////////////////////////////////////

@@ -121,7 +121,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     uint256 private constant MIN_INACTIVITY_THRESHOLD = 1 weeks;
     uint256 private constant MIN_BATCH_LIMIT = 20;
 
-    uint256 private s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
+    uint256 public s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
     uint256 public s_claimCooldownPeriod = 30 minutes;
     uint256 private s_availabilityPeriod = 7 days;
     uint256 private s_cleanupInterval = 12 weeks;
