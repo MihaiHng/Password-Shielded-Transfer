@@ -389,7 +389,7 @@ contract TestPST is Test {
         );
     }
 
-    function testCreateTransferUpdatesPendingTransfersByAddressForSenderAndReceiver() public {
+    function testCreateTransferUpdatesPendingTransfersByAddressForSenderAndReceiver() public transferCreated {
         // Arrange
         uint256[] memory pendingTransfersByAddressSender = pst.getPendingTransfersForAddress(SENDER);
         uint256 initialLengthSender = pendingTransfersByAddressSender.length;
@@ -739,7 +739,10 @@ contract TestPST is Test {
         uint256 initialReceiverLength = receiverPendingTransfers.length;
 
         // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
         transferId = pst.s_transferCounter() - 1;
+
         vm.prank(SENDER);
         pst.cancelTransfer(transferId);
 
@@ -749,12 +752,12 @@ contract TestPST is Test {
         // Assert
         assertEq(
             updatedSenderPendingTransfers.length,
-            initialSenderLength - 1,
+            initialSenderLength,
             "Sender's pending transfers should decrease by one"
         );
         assertEq(
             updatedReceiverPendingTransfers.length,
-            initialReceiverLength - 1,
+            initialReceiverLength,
             "Receiver's pending transfers should decrease by one"
         );
 
@@ -945,6 +948,200 @@ contract TestPST is Test {
 
         // Assert
         assertEq(transferAmount, 0, "Transfer amount should be zero");
+    }
+
+    function testClaimTransferUpdatesClaimedTransferIdsArray() public {
+        // Arrange
+        uint256[] memory claimedTransfers = pst.getClaimedTransfers();
+        uint256 initialLength = claimedTransfers.length;
+        uint256 expectedTransferId = pst.s_transferCounter();
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        uint256[] memory updatedClaimedTransfers = pst.getClaimedTransfers();
+        uint256 newLength = updatedClaimedTransfers.length;
+
+        // Assert
+        assertEq(newLength, initialLength + 1, "Claimed transfer array length should increse by one");
+        assertEq(
+            updatedClaimedTransfers[newLength - 1],
+            expectedTransferId,
+            "Last element should be the newly created transfer Id"
+        );
+    }
+
+    function testClaimTransferUpdatesClaimedTransfersByAddressForSenderAndReceiver() public transferCreatedAndClaimed {
+        // Arrange
+        uint256[] memory claimedTransfersByAddressSender = pst.getClaimedTransfersForAddress(SENDER);
+        uint256 initialLengthSender = claimedTransfersByAddressSender.length;
+        uint256[] memory claimedTransfersByAddressReceiver = pst.getClaimedTransfersForAddress(RECEIVER);
+        uint256 initialLengthReceiver = claimedTransfersByAddressReceiver.length;
+        uint256 expectedTransferId = pst.s_transferCounter();
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        uint256[] memory updatedClaimedTransfersByAddressSender = pst.getClaimedTransfersForAddress(SENDER);
+        uint256 newLengthSender = updatedClaimedTransfersByAddressSender.length;
+        uint256[] memory updatedClaimedTransfersByAddressReceiver = pst.getClaimedTransfersForAddress(RECEIVER);
+        uint256 newLengthReceiver = updatedClaimedTransfersByAddressReceiver.length;
+
+        // Assert
+        assertEq(
+            newLengthSender, initialLengthSender + 1, "Claimed transfer for address array length should increase by one"
+        );
+        assertEq(
+            updatedClaimedTransfersByAddressSender[newLengthSender - 1],
+            expectedTransferId,
+            "Last element should be the newly created transfer Id"
+        );
+
+        assertEq(
+            newLengthReceiver,
+            initialLengthReceiver + 1,
+            "Claimed transfer for address array length should increse by one"
+        );
+        assertEq(
+            updatedClaimedTransfersByAddressReceiver[newLengthReceiver - 1],
+            expectedTransferId,
+            "Last element should be the newly created transfer Id"
+        );
+    }
+
+    function testClaimTransferRemovesTransferIdfromPendingTransfersArray() public transferCreated {
+        // Arrange
+        uint256[] memory pendingTransfers = pst.getPendingTransfers();
+        uint256 initialLength = pendingTransfers.length;
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        uint256[] memory updatedPendingTransfers = pst.getPendingTransfers();
+        uint256 newLength = updatedPendingTransfers.length;
+
+        // Assert
+        assertEq(newLength, initialLength, "Pending transfers array length should decrease by one");
+        for (uint256 i = 0; i < newLength; i++) {
+            assertFalse(updatedPendingTransfers[i] == transferId, "Transfer ID should be removed from pending list");
+        }
+    }
+
+    function testClaimTransferRemovesTransferIdfromPendingTransfersByAddressForSenderAndReceiver()
+        public
+        transferCreated
+    {
+        // Arrange
+        uint256[] memory senderPendingTransfers = pst.getPendingTransfersForAddress(SENDER);
+        uint256 initialSenderLength = senderPendingTransfers.length;
+        console.log(initialSenderLength);
+
+        uint256[] memory receiverPendingTransfers = pst.getPendingTransfersForAddress(RECEIVER);
+        uint256 initialReceiverLength = receiverPendingTransfers.length;
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        uint256[] memory updatedSenderPendingTransfers = pst.getPendingTransfersForAddress(SENDER);
+        uint256[] memory updatedReceiverPendingTransfers = pst.getPendingTransfersForAddress(RECEIVER);
+
+        // Assert
+        assertEq(
+            updatedSenderPendingTransfers.length,
+            initialSenderLength,
+            "Sender's pending transfers should decrease by one"
+        );
+        assertEq(
+            updatedReceiverPendingTransfers.length,
+            initialReceiverLength,
+            "Receiver's pending transfers should decrease by one"
+        );
+
+        for (uint256 i = 0; i < updatedSenderPendingTransfers.length; i++) {
+            assertFalse(
+                updatedSenderPendingTransfers[i] == transferId,
+                "Transfer ID should be removed from sender's pending list"
+            );
+        }
+
+        for (uint256 i = 0; i < updatedReceiverPendingTransfers.length; i++) {
+            assertFalse(
+                updatedReceiverPendingTransfers[i] == transferId,
+                "Transfer ID should be removed from receiver's pending list"
+            );
+        }
+    }
+
+    function testClaimTransferAddsAddressToTracking() public {
+        // Arrange
+        bool tracking = pst.isAddressInTracking(RECEIVER);
+        console.log("Is RECEIVER in tracking? ", tracking);
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        tracking = pst.isAddressInTracking(RECEIVER);
+
+        // Assert
+        assertTrue(tracking, "Adress is not in tracking");
+    }
+
+    function testClaimTransferUpdatesLastInteractionTime() public transferCreated {
+        // Arrange / Act
+        transferId = pst.s_transferCounter() - 1;
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.expectEmit(true, true, false, false);
+        emit LastInteractionTimeUpdated(RECEIVER, block.timestamp);
+
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        uint256 lastInteractionTime = pst.s_lastInteractionTime(RECEIVER);
+
+        // Assert
+        assertEq(lastInteractionTime, block.timestamp, "Last interaction time should be the same as block.timestamp");
     }
 
     /*//////////////////////////////////////////////////////////////

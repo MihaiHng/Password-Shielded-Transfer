@@ -544,6 +544,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
         emit TransferCompleted(sender, msg.sender, transferId, tokenToClaim, amountToClaim);
+        emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
 
         if (tokenToClaim == address(0)) {
             (bool success,) = msg.sender.call{value: amountToClaim}("");
@@ -1198,9 +1199,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         onlyValidAddress(user)
         returns (uint256[] memory)
     {
-        // if (s_pendingTransfersByAddress[user].length == 0) {
-        //     revert PST__NoPendingTransfers();
-        // }
+        if (s_pendingTransfersByAddress[user].length == 0) {
+            revert PST__NoPendingTransfers();
+        }
 
         return s_pendingTransfersByAddress[user];
     }
