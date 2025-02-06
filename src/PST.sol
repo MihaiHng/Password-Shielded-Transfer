@@ -182,9 +182,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     mapping(address user => uint256 lastActiveTime) public s_lastInteractionTime;
 
     // Mapping to track if a token address is whitelisted
-    mapping(address token => bool isAllowed) private s_allowedTokens;
+    mapping(address token => bool isAllowed) public s_allowedTokens;
     // Mappping to track the accumulated fees for each token allowed in whitelist
-    mapping(address token => uint256 feeBalance) private s_feeBalances;
+    mapping(address token => uint256 feeBalance) public s_feeBalances;
 
     /*//////////////////////////////////////////////////////////////
                               EVENTS
@@ -223,10 +223,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     event SuccessfulFeeWithdrawal(address indexed token, uint256 indexed amount);
 
     // Event to log a token being whitelisted
-    event TokenAddedToAllowList(address token);
+    event TokenAddedToAllowList(address indexed token);
 
     // Event to log a token being removed from whitelist
-    event TokenRemovedFromAllowList(address token);
+    event TokenRemovedFromAllowList(address indexed token);
 
     // Event to track fee changes by level
     event TransferFeeChanged(uint8 level, uint256 newTransferFee);
@@ -797,10 +797,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         s_isExpiredAndRefunded[transferId] = true;
         s_isPending[transferId] = false;
         transferToRefund.amount = 0;
-        s_expiredAndRefundedTransferIds.push(transferId);
 
+        s_expiredAndRefundedTransferIds.push(transferId);
         s_expiredAndRefundedTransfersByAddress[sender].push(transferId);
         s_expiredAndRefundedTransfersByAddress[receiver].push(transferId);
+
         removeFromPendingTransfers(transferId);
         removeFromPendingTransfersByAddress(sender, transferId);
         removeFromPendingTransfersByAddress(receiver, transferId);

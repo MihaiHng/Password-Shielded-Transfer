@@ -2,16 +2,20 @@
 
 pragma solidity ^0.8.28;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Test, console, console2} from "forge-std/Test.sol";
 import {DeployPST} from "../../script/DeployPST.s.sol";
 import {PST} from "src/PST.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
 import {ERC20Mock} from "../mocks/ERC20Mock.sol";
 import {FailingERC20Mock_ForCreateTransferTest} from "../mocks/FailingERC20Mock_ForCreateTransferTest.sol";
-import {FailingERC20Mock_ForCancelTransferTest} from "../mocks/FailingERC20Mock_ForCancelTransferTest.sol";
+import {FailingERC20Mock_ForCancelAndClaimTransferTest} from
+    "../mocks/FailingERC20Mock_ForCancelAndClaimTransferTest.sol";
 import {NonPayableContractMock} from "../mocks/NonPayableContractMock.sol";
 
 contract TestPST is Test {
+    error OwnableUnauthorizedAccount(address account);
+
     PST public pst;
     ERC20Mock public mockERC20Token;
 
@@ -42,6 +46,8 @@ contract TestPST is Test {
     uint256 public constant RECEIVER_BALANCE = 100 ether;
 
     event LastInteractionTimeUpdated(address indexed user, uint256 indexed lastInteractionTime);
+    event TokenAddedToAllowList(address indexed token);
+    event TokenRemovedFromAllowList(address indexed token);
 
     function setUp() external {
         DeployPST deployer = new DeployPST();
@@ -256,6 +262,8 @@ contract TestPST is Test {
         assertEq(transferFeeLvlTwo, TRANSFER_FEE_LVL_TWO, "Incorrect transfer fee level two");
         assertEq(transferFeeLvlThree, TRANSFER_FEE_LVL_THREE, "Incorrect transfer fee level three");
     }
+
+    function testFeeWithdrawalForToken() public {}
 
     /*//////////////////////////////////////////////////////////////
                         CREATE TRANSFER TESTS
@@ -805,7 +813,9 @@ contract TestPST is Test {
 
         // Assert
         assertEq(
-            senderBalanceAfter, senderBalanceBefore + AMOUNT_TO_SEND, "Sender should be refunded the transferred ETH"
+            senderBalanceAfter,
+            senderBalanceBefore + AMOUNT_TO_SEND,
+            "Sender should be refunded the transferred ETH amount"
         );
     }
 
@@ -835,15 +845,17 @@ contract TestPST is Test {
 
         // Assert
         assertEq(
-            senderBalanceAfter, senderBalanceBefore + AMOUNT_TO_SEND, "Sender should be refunded the transferred ETH"
+            senderBalanceAfter,
+            senderBalanceBefore + AMOUNT_TO_SEND,
+            "Sender should be refunded the transferred ERC20 token amount"
         );
     }
 
     function testCancelTransferRevertsIfErc20TokenRefundFails() public {
         // Arrange
         vm.startPrank(SENDER);
-        FailingERC20Mock_ForCancelTransferTest failingERC20Mock =
-            new FailingERC20Mock_ForCancelTransferTest("FailingERC20MockToken", "FAILERC20MOCK", 1e6 ether);
+        FailingERC20Mock_ForCancelAndClaimTransferTest failingERC20Mock =
+            new FailingERC20Mock_ForCancelAndClaimTransferTest("FailingERC20MockToken", "FAILERC20MOCK", 1e6 ether);
         failingERC20Mock.approve(address(pst), 100 ether);
         vm.stopPrank();
         vm.prank(pst.owner());
@@ -1144,16 +1156,92 @@ contract TestPST is Test {
         assertEq(lastInteractionTime, block.timestamp, "Last interaction time should be the same as block.timestamp");
     }
 
-    /*//////////////////////////////////////////////////////////////
-                        FEE WITHDRAWAL TESTS
-    //////////////////////////////////////////////////////////////*/
-    function testFeeWithdrawal() public {
+    function testClaimTransferSendsEthToReceiver() public {
         // Arrange
+        vm.prank(SENDER);
+        uint256 receiverBalanceBefore = RECEIVER.balance;
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
 
         // Act
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        uint256 receiverBalanceAfter = RECEIVER.balance;
 
         // Assert
+        assertEq(
+            receiverBalanceAfter,
+            receiverBalanceBefore + AMOUNT_TO_SEND,
+            "Receiver ETH balance should updated with the sent amount"
+        );
     }
+
+    function testClaimTransferRevertsIfEthTransferToReceiverFails() public {
+        // Arrange
+        NonPayableContractMock nonPayable = new NonPayableContractMock();
+
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(address(nonPayable), address(0), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act & Assert
+        vm.prank(address(nonPayable));
+        vm.expectRevert(PST.PST__TransferFailed.selector);
+        pst.claimTransfer(transferId, PASSWORD);
+    }
+
+    function testClaimTransferSendsErc20TokenToReceiver() public transferCreated {
+        // Arrange
+        uint256 receiverBalanceBefore = mockERC20Token.balanceOf(RECEIVER);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+        uint256 receiverBalanceAfter = mockERC20Token.balanceOf(RECEIVER);
+
+        // Assert
+        assertEq(
+            receiverBalanceAfter,
+            receiverBalanceBefore + AMOUNT_TO_SEND,
+            "Receiver ERC20 balance should updated with the sent amount"
+        );
+    }
+
+    function testClaimTransferRevertsIfErc20TokenTransferToReceiverFails() public {
+        // Arrange
+        vm.startPrank(SENDER);
+        FailingERC20Mock_ForCancelAndClaimTransferTest failingERC20Mock =
+            new FailingERC20Mock_ForCancelAndClaimTransferTest("FailingERC20MockToken", "FAILERC20MOCK", 1e6 ether);
+        failingERC20Mock.approve(address(pst), 100 ether);
+        vm.stopPrank();
+        vm.prank(pst.owner());
+        pst.addTokenToAllowList(address(failingERC20Mock));
+
+        // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(failingERC20Mock), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Assert
+        vm.prank(RECEIVER);
+        vm.expectRevert(PST.PST__TransferFailed.selector);
+        pst.claimTransfer(transferId, PASSWORD);
+    }
+
     /*//////////////////////////////////////////////////////////////
                         PASSWORD TESTS
     //////////////////////////////////////////////////////////////*/
@@ -1206,6 +1294,35 @@ contract TestPST is Test {
     /*//////////////////////////////////////////////////////////////
                         UTILITY FUNCTIONS TESTS
     //////////////////////////////////////////////////////////////*/
+    function testTransferOwnership() public {
+        // Arrange
+        address NEW_OWNER = makeAddr("NewOwner");
+
+        // Act
+        vm.prank(pst.owner());
+        pst.transferOwnership(NEW_OWNER);
+
+        // Assert
+        assertEq(NEW_OWNER, pst.owner(), "New owner should be NEW_OWNER");
+    }
+
+    function testOnlyOwnerCanTransferOwnership() public {
+        // Arrange
+        address NEW_OWNER = makeAddr("NewOwner");
+
+        // Act / Assert
+        vm.expectRevert(abi.encodeWithSelector(OwnableUnauthorizedAccount.selector, SENDER));
+        vm.prank(SENDER);
+        pst.transferOwnership(NEW_OWNER);
+    }
+
+    function testTransferOwnershipRevertsIfNewOwnerIsAddressZero() public {
+        // Arrange / Act / Assert
+        vm.prank(pst.owner());
+        vm.expectRevert(PST.PST__InvalidNewOwnerAddress.selector);
+        pst.transferOwnership(address(0));
+    }
+
     function testRemoveFromPendingTransfersRevertsIfNoPendingTransfers() public {
         // Act / Assert
         vm.expectRevert(PST.PST__NoPendingTransfers.selector);
@@ -1218,5 +1335,59 @@ contract TestPST is Test {
         vm.expectRevert(PST.PST__NoPendingTransfers.selector);
         vm.prank(SENDER);
         pst.removeFromPendingTransfersByAddress(SENDER, 0);
+    }
+
+    function testAddTokenToAllowList() public {
+        // Arrange
+        ERC20Mock newToken = new ERC20Mock("NewToken", "NT", 1e6);
+        address[] memory tokenListBefore = pst.getAllowedTokens();
+        uint256 initialLength = tokenListBefore.length;
+        bool allowedToken = pst.s_allowedTokens(address(newToken));
+
+        // Act
+        vm.prank(pst.owner());
+        vm.expectEmit(true, true, true, true);
+        emit TokenAddedToAllowList(address(newToken));
+        pst.addTokenToAllowList(address(newToken));
+        address[] memory tokenListAfter = pst.getAllowedTokens();
+        uint256 newLength = tokenListAfter.length;
+        allowedToken = pst.s_allowedTokens(address(newToken));
+        uint256 newTokenFeeBalance = pst.s_feeBalances(address(newToken));
+
+        // Assert
+        assertEq(newLength, initialLength + 1, "Token list should have a new added token");
+        assertTrue(allowedToken, "Token not in allow list");
+        assertEq(tokenListAfter[newLength - 1], address(newToken), "Token should be last in the list");
+        assertEq(newTokenFeeBalance, 0, "Fee balance should be initialized to 0");
+
+        vm.prank(pst.owner());
+        vm.expectRevert(PST.PST__TokenAlreadyWhitelisted.selector);
+        pst.addTokenToAllowList(address(newToken));
+    }
+
+    function testRemoveTokenFromAllowList() public {
+        // Arrange
+        ERC20Mock newToken = new ERC20Mock("NewToken", "NT", 1e6);
+        vm.prank(pst.owner());
+        pst.addTokenToAllowList(address(newToken));
+        address[] memory tokenListBefore = pst.getAllowedTokens();
+        uint256 initialLength = tokenListBefore.length;
+        bool allowedToken = pst.s_allowedTokens(address(newToken));
+
+        // Act
+        vm.prank(pst.owner());
+        vm.expectEmit(true, true, true, true);
+        emit TokenRemovedFromAllowList(address(newToken));
+        pst.removeTokenFromAllowList(address(newToken));
+        address[] memory tokenListAfter = pst.getAllowedTokens();
+        uint256 newLength = tokenListAfter.length;
+        allowedToken = pst.s_allowedTokens(address(newToken));
+
+        // Assert
+        assertEq(newLength, initialLength - 1, "Token list should have a removed token");
+        assertFalse(allowedToken, "Removed token should not be in allow list");
+        for (uint256 i = 0; i < newLength; i++) {
+            assertFalse(tokenListAfter[i] == address(newToken), "Removed token should not be in allow list");
+        }
     }
 }
