@@ -123,10 +123,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     uint256 public s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
     uint256 public s_claimCooldownPeriod = 30 minutes;
-    uint256 private s_availabilityPeriod = 7 days;
-    uint256 private s_cleanupInterval = 12 weeks;
-    uint256 private s_inactivityThreshhold = 12 weeks;
-    uint256 private s_batchLimit = 50;
+    uint256 public s_availabilityPeriod = 7 days;
+    uint256 public s_cleanupInterval = 12 weeks;
+    uint256 public s_inactivityThreshold = 12 weeks;
+    uint256 public s_batchLimit = 50;
 
     uint256 public s_transferCounter;
     uint256 public s_limitLevelOne = 10e18;
@@ -244,7 +244,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     event CleanupIntervalChanged(uint256 newCleanupInterval);
 
     // Event to log when the inactivity threshhold for addresses changed
-    event InactivityThreshholdChanged(uint256 newInactivityThreshhold);
+    event InactivityThresholdChanged(uint256 newInactivityThreshold);
 
     // Event to log when the batch limit changed
     event BatchLimitChanged(uint256 newBatchLimit);
@@ -679,7 +679,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         moreThanZero(amount)
         nonReentrant
     {
-        if (amount < s_feeBalances[token]) {
+        if (amount > s_feeBalances[token]) {
             revert PST__InsufficientFeeBalance();
         }
 
@@ -753,18 +753,18 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit CleanupIntervalChanged(newCleanupInterval);
     }
 
-    function setNewInactivityThreshhold(uint256 newInactivityThreshhold)
+    function setNewInactivityThreshold(uint256 newInactivityThreshold)
         external
         onlyOwner
-        moreThanZero(newInactivityThreshhold)
+        moreThanZero(newInactivityThreshold)
     {
-        if (newInactivityThreshhold < MIN_INACTIVITY_THRESHOLD) {
+        if (newInactivityThreshold < MIN_INACTIVITY_THRESHOLD) {
             revert PST__InvalidInactivityThreshhold({minRequired: MIN_INACTIVITY_THRESHOLD});
         }
 
-        s_inactivityThreshhold = newInactivityThreshhold;
+        s_inactivityThreshold = newInactivityThreshold;
 
-        emit InactivityThreshholdChanged(newInactivityThreshhold);
+        emit InactivityThresholdChanged(newInactivityThreshold);
     }
 
     function setNewBatchLimit(uint256 newBatchLimit) external onlyOwner {
@@ -1059,7 +1059,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         for (uint256 i = 0; i < addressList.length && countRemovedAddresses < batchLimit; i++) {
             address user = addressList[i];
 
-            if ((block.timestamp - s_lastInteractionTime[user]) >= s_inactivityThreshhold) {
+            if ((block.timestamp - s_lastInteractionTime[user]) >= s_inactivityThreshold) {
                 removeAddressFromTracking(user);
                 countRemovedAddresses++;
             }
