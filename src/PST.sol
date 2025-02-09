@@ -113,6 +113,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                           STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
     address private immutable i_owner;
+    address private immutable i_automationRegistry;
 
     uint256 private constant REQ_MIN_PASSWORD_LENGTH = 7;
     uint256 private constant MIN_CLAIM_COOLDOWN_PERIOD = 15 minutes;
@@ -330,12 +331,23 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         _;
     }
 
+    modifier onlyKeepers() {
+    require(msg.sender == i_automationRegistry, "Only Keepers can call this function");
+    _;
+}
+
     /*//////////////////////////////////////////////////////////////
                             FUNCTIONS
     //////////////////////////////////////////////////////////////*/
-    constructor(uint256 _transferFeeLvlOne, uint256 _transferFeeLvlTwo, uint256 _transferFeeLvlThree)
+    /**
+     * @param _automationRegistry = 0x6593c7De001fC8542bB1703532EE1E5aA0D458fD -> for Ethereum;
+     *                              0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad -> for Sepolia;
+     */
+    constructor(uint256 _transferFeeLvlOne, uint256 _transferFeeLvlTwo, uint256 _transferFeeLvlThree, address _automationRegistry)
         Ownable(msg.sender)
     {
+        i_automationRegistry = _automationRegistry;
+
         fee = TransferFeeLibrary.TransferFee({
             lvlOne: _transferFeeLvlOne,
             lvlTwo: _transferFeeLvlTwo,
@@ -609,7 +621,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
-    function performUpkeep(bytes calldata performData) external override {
+    function performUpkeep(bytes calldata performData) external override onlyKeepers {
         (uint256[] memory batchExpiredTransfers, uint256 batchExpiredCount) =
             abi.decode(performData, (uint256[], uint256));
 
@@ -1114,6 +1126,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_tokenList;
     }
 
+    // Function to get the list of all tracked addresses 
+    function getTrackedAddresses() external view returns (address[] memory) {
+        return s_addressList;
+    }
+    
     // Function to get all accumulated fees for a token
     function getAccumulatedFeesForToken(address token) external view onlyValidToken(token) returns (uint256) {
         return s_feeBalances[token];

@@ -279,4 +279,76 @@ contract TestPST is Test {
         // Assert
         assertEq(batchLimit, NEW_BATCH_LIMIT, "New batch limit is not correct");
     }
+
+    function testRefundExpiredTransferCorrectlyRefundsSenderForEth() public {
+        // Arrange
+        uint256 senderBalanceBefore = SENDER.balance;
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        pst.refundExpiredTransfer(transferId);
+        uint256 senderBalanceAfter = SENDER.balance;
+
+        // Assert
+        assertEq(senderBalanceAfter, senderBalanceBefore - transferFeeCost, "Sender should be refunded");
+    }
+
+    function testRefundExpiredTransferCorrectlyRefundsSenderForERC20() public {
+        // Arrange
+        uint256 senderBalanceBefore = mockERC20Token.balanceOf(SENDER);
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        pst.refundExpiredTransfer(transferId);
+        uint256 senderBalanceAfter = mockERC20Token.balanceOf(SENDER);
+
+        // Assert
+        assertEq(senderBalanceAfter, senderBalanceBefore - transferFeeCost, "Sender should be refunded");
+    }
+
+    function testRefundExpiredTransfer() public transferCreated {
+        // Arrange
+        transferId = pst.s_transferCounter() - 1;
+        uint256[] memory expiredAndRefundedTransfers = pst.getExpiredAndRefundedTransfers();
+        uint256 initialLength = expiredAndRefundedTransfers.length;
+
+        // Act
+        pst.refundExpiredTransfer(transferId);
+        bool isExpiredAndRefunded = pst.isExpiredAndRefundedTransfer(transferId);
+        bool isPending = pst.isPendingTransfer(transferId);
+        (,,, uint256 transferAmount,,,) = pst.s_transfersById(transferId);
+        uint256[] memory updatedExpiredAndRefundedTransfers = pst.getExpiredAndRefundedTransfers();
+        uint256 newLength = updatedExpiredAndRefundedTransfers.length;
+
+        // Assert
+        assertTrue(isExpiredAndRefunded, "Transfer Id should be classified as expired and refunded");
+        assertFalse(isPending, "Transfer Id should not be pending");
+        assertEq(transferAmount, 0, "Transfer amount should be 0");
+        assertEq(newLength, initialLength + 1, "Expired and refunded transfer array length should increse by one");
+        assertEq(
+            updatedExpiredAndRefundedTransfers[newLength - 1],
+            transferId,
+            "Last element should be the newly created transfer Id"
+        );
+    }
+
+    function testAddAddressToTracking() public transferCreated {
+        // Arrange
+        address[] memory addressList = pst.getTrackedAddresses();
+        uint256 initialLength = addressList.length;
+
+        // Act
+        pst.addAddressToTracking(SENDER);
+        address[] memory updatedAddressList = pst.getTrackedAddresses();
+        uint256 updatedLength = updatedAddressList.length;
+        bool tracking = pst.isAddressInTracking(SENDER);
+
+        // Assert
+        assertEq(updatedLength, initialLength + 1, "Tracked addresses array length should increse by one");
+        assertTrue(tracking, "Adress is not in tracking");
+    }
 }
