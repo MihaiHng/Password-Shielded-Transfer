@@ -338,17 +338,18 @@ contract TestPST is Test {
 
     function testAddAddressToTracking() public transferCreated {
         // Arrange
+        address RANDOM_USER = makeAddr("random user");
         address[] memory addressList = pst.getTrackedAddresses();
         uint256 initialLength = addressList.length;
 
         // Act
-        pst.addAddressToTracking(SENDER);
+        pst.addAddressToTracking(RANDOM_USER);
         address[] memory updatedAddressList = pst.getTrackedAddresses();
         uint256 updatedLength = updatedAddressList.length;
-        bool tracking = pst.isAddressInTracking(SENDER);
+        bool tracking = pst.isAddressInTracking(RANDOM_USER);
 
         // Assert
-        assertEq(updatedLength, initialLength + 1, "Tracked addresses array length should increse by one");
+        assertEq(updatedLength, initialLength + 1, "Tracked addresses array length should increase by one");
         assertTrue(tracking, "Adress is not in tracking");
     }
 }
