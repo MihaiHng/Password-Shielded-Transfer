@@ -336,13 +336,14 @@ contract TestPST is Test {
         );
     }
 
-    function testAddAddressToTracking() public transferCreated {
+    function testAddAddressToTracking() public {
         // Arrange
         address RANDOM_USER = makeAddr("random user");
         address[] memory addressList = pst.getTrackedAddresses();
         uint256 initialLength = addressList.length;
 
         // Act
+        vm.prank(pst.owner());
         pst.addAddressToTracking(RANDOM_USER);
         address[] memory updatedAddressList = pst.getTrackedAddresses();
         uint256 updatedLength = updatedAddressList.length;
@@ -350,6 +351,38 @@ contract TestPST is Test {
 
         // Assert
         assertEq(updatedLength, initialLength + 1, "Tracked addresses array length should increase by one");
+        assertEq(
+            pst.s_addressList(updatedLength - 1), RANDOM_USER, "User should be the last element in the address list"
+        );
         assertTrue(tracking, "Adress is not in tracking");
+        assertEq(
+            pst.s_lastCleanupTimeByAddress(RANDOM_USER), block.timestamp, "Last cleanup time should be set correctly"
+        );
+    }
+
+    function testRemoveAddressFromTracking() public transferCreated {
+        // Arrange
+        address RANDOM_USER = makeAddr("random user");
+        vm.prank(pst.owner());
+        pst.addAddressToTracking(RANDOM_USER);
+        address[] memory expiredAndRefundedTransfers = pst.getTrackedAddresses();
+        uint256 initialLength = expiredAndRefundedTransfers.length;
+
+        // Act
+        vm.prank(pst.owner());
+        pst.removeAddressFromTracking(RANDOM_USER);
+        address[] memory updatedAddressList = pst.getTrackedAddresses();
+        uint256 updatedLength = updatedAddressList.length;
+
+        // Assert
+        assertEq(updatedLength, initialLength - 1, "Address list size should decrease by 1");
+
+        for (uint256 i = 0; i < updatedLength; i++) {
+            assertFalse(pst.s_addressList(i) == RANDOM_USER, "User should be removed from address list");
+        }
+
+        assertFalse(pst.isAddressInTracking(RANDOM_USER), "User should no longer be tracked");
+        assertEq(pst.s_lastInteractionTime(RANDOM_USER), 0, "Last interaction time should be reset");
+        assertEq(pst.s_lastCleanupTimeByAddress(RANDOM_USER), 0, "Last cleanup time should be reset");
     }
 }

@@ -1126,4 +1126,12 @@ contract TestPST is Test {
             encodedPassword1 == encodedPassword2, "Encoded passwords should be different due to different salts"
         );
     }
+
+    function testCheckPassword() public transferCreated {
+        // Arrange / Act
+        bool correctPassword = pst.checkPassword(transferId, "Strongpass");
+
+        // Assert
+        assertTrue(correctPassword, "Entered password is not correct");
+    }
 }
