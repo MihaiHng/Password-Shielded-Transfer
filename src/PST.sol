@@ -1169,6 +1169,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Function to get all pending transfers in the system
     function getPendingTransfers() external view returns (uint256[] memory) {
+        if (s_pendingTransferIds.length == 0) {
+            revert PST__NoPendingTransfers();
+        }
         return s_pendingTransferIds;
     }
 
@@ -1182,6 +1185,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Function to get all expired and refunded transfers in the system
     function getExpiredAndRefundedTransfers() external view returns (uint256[] memory) {
+        if (s_expiredAndRefundedTransferIds.length == 0) {
+            revert PST__NoExpiredTransfers();
+        }
         return s_expiredAndRefundedTransferIds;
     }
 

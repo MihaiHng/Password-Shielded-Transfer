@@ -319,10 +319,14 @@ contract TestPST is Test {
     function testRefundExpiredTransfer() public transferCreated {
         // Arrange
         transferId = pst.s_transferCounter() - 1;
+        pst.refundExpiredTransfer(transferId);
         uint256[] memory expiredAndRefundedTransfers = pst.getExpiredAndRefundedTransfers();
         uint256 initialLength = expiredAndRefundedTransfers.length;
 
         // Act
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
         pst.refundExpiredTransfer(transferId);
         bool isExpiredAndRefunded = pst.isExpiredAndRefundedTransfer(transferId);
         bool isPending = pst.isPendingTransfer(transferId);
@@ -392,6 +396,8 @@ contract TestPST is Test {
 
     function testRemoveFromPendingTransfers() public transferCreated {
         // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
         uint256[] memory pendingTransfers = pst.getPendingTransfers();
         uint256 initialLength = pendingTransfers.length;
         transferId = pst.s_transferCounter() - 1;
@@ -467,11 +473,11 @@ contract TestPST is Test {
         // Act
         vm.prank(pst.owner());
         pst.removeAllExpiredAndRefundedTransfers();
-        uint256[] memory expiredAndRefundedTransfers = pst.getExpiredAndRefundedTransfers();
-        uint256 length = expiredAndRefundedTransfers.length;
 
         // Assert
-        assertEq(length, 0, "Expired and refunded transfers array should have length 0");
+        vm.prank(pst.owner());
+        vm.expectRevert(PST.PST__NoExpiredTransfers.selector);
+        pst.getExpiredAndRefundedTransfers();
     }
 
     function testRemoveAllClaimedTransfers() public transferCreatedAndClaimed {

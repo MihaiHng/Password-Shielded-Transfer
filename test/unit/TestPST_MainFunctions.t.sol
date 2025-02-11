@@ -211,7 +211,7 @@ contract TestPST is Test {
         assertTrue(pendingStatus, "Transfer state did not update to true");
     }
 
-    function testCreateTransferUpdatesPendingTransferIdsArray() public {
+    function testCreateTransferUpdatesPendingTransferIdsArray() public transferCreated {
         // Arrange
         uint256[] memory pendingTransfers = pst.getPendingTransfers();
         uint256 initialLength = pendingTransfers.length;
