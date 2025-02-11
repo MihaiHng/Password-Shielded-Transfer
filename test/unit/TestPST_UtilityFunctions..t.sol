@@ -43,8 +43,10 @@ contract TestPST is Test {
 
     address public SENDER = makeAddr("sender");
     address public RECEIVER = makeAddr("receiver");
+    address RANDOM_USER = makeAddr("Random user");
     uint256 public constant SENDER_BALANCE = 100 ether;
     uint256 public constant RECEIVER_BALANCE = 100 ether;
+    uint256 public constant RANDOM_USER_BALANCE = 100 ether;
 
     event LastInteractionTimeUpdated(address indexed user, uint256 indexed lastInteractionTime);
     event TokenAddedToAllowList(address indexed token);
@@ -60,13 +62,17 @@ contract TestPST is Test {
 
         vm.deal(SENDER, SENDER_BALANCE);
         mockERC20Token.transfer(SENDER, 100 ether);
+        vm.prank(SENDER);
+        mockERC20Token.approve(address(pst), 100 ether);
+
+        vm.deal(RANDOM_USER, RANDOM_USER_BALANCE);
+        mockERC20Token.transfer(RANDOM_USER, 100 ether);
+        vm.prank(RANDOM_USER);
+        mockERC20Token.approve(address(pst), 100 ether);
 
         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
             AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getFee()
         );
-
-        vm.prank(SENDER);
-        mockERC20Token.approve(address(pst), 100 ether);
 
         transferId = pst.s_transferCounter();
     }
@@ -338,7 +344,6 @@ contract TestPST is Test {
 
     function testAddAddressToTracking() public {
         // Arrange
-        address RANDOM_USER = makeAddr("random user");
         address[] memory addressList = pst.getTrackedAddresses();
         uint256 initialLength = addressList.length;
 
@@ -362,7 +367,6 @@ contract TestPST is Test {
 
     function testRemoveAddressFromTracking() public transferCreated {
         // Arrange
-        address RANDOM_USER = makeAddr("random user");
         vm.prank(pst.owner());
         pst.addAddressToTracking(RANDOM_USER);
         address[] memory expiredAndRefundedTransfers = pst.getTrackedAddresses();
@@ -384,5 +388,187 @@ contract TestPST is Test {
         assertFalse(pst.isAddressInTracking(RANDOM_USER), "User should no longer be tracked");
         assertEq(pst.s_lastInteractionTime(RANDOM_USER), 0, "Last interaction time should be reset");
         assertEq(pst.s_lastCleanupTimeByAddress(RANDOM_USER), 0, "Last cleanup time should be reset");
+    }
+
+    function testRemoveFromPendingTransfers() public transferCreated {
+        // Arrange
+        uint256[] memory pendingTransfers = pst.getPendingTransfers();
+        uint256 initialLength = pendingTransfers.length;
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        pst.removeFromPendingTransfers(transferId);
+        uint256[] memory updatedPendingTransfers = pst.getPendingTransfers();
+        uint256 newLength = updatedPendingTransfers.length;
+
+        // Assert
+        assertEq(newLength, initialLength - 1, "Pending transfers array length should decrease by one");
+
+        for (uint256 i = 0; i < newLength; i++) {
+            assertFalse(updatedPendingTransfers[i] == transferId, "Transfer ID should be removed from pending list");
+        }
+    }
+
+    function testRemoveFromPendingTransfersByAddress() public transferCreated {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        uint256[] memory pendingTransfers = pst.getPendingTransfersForAddress(SENDER);
+        uint256 initialLength = pendingTransfers.length;
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        pst.removeFromPendingTransfersByAddress(SENDER, transferId);
+        uint256[] memory updatedPendingTransfers = pst.getPendingTransfersForAddress(SENDER);
+        uint256 newLength = updatedPendingTransfers.length;
+
+        // Assert
+        assertEq(newLength, initialLength - 1, "Pending transfers array length should decrease by one");
+
+        for (uint256 i = 0; i < newLength; i++) {
+            assertFalse(updatedPendingTransfers[i] == transferId, "Transfer ID should be removed from pending list");
+        }
+    }
+
+    function testRemoveAllCanceledTransfers() public transferCreatedAndCanceled {
+        // Arrange
+        vm.prank(RANDOM_USER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.prank(RANDOM_USER);
+        pst.cancelTransfer(transferId);
+
+        // Act
+        vm.prank(pst.owner());
+        pst.removeAllCanceledTransfers();
+
+        // Assert
+        vm.prank(pst.owner());
+        vm.expectRevert(PST.PST__NoCanceledTransfers.selector);
+        pst.getCanceledTransfers();
+    }
+
+    function testRemoveAllExpiredAndRefundedTransfers() public transferCreated {
+        // Arrange
+        vm.prank(RANDOM_USER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        vm.warp(block.timestamp + pst.s_availabilityPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        uint256[] memory expiredTransfers = pst.getExpiredTransfers();
+        uint256 expiredCount = expiredTransfers.length;
+
+        for (uint256 i = 0; i < expiredCount; i++) {
+            pst.refundExpiredTransfer(expiredTransfers[i]);
+        }
+
+        // Act
+        vm.prank(pst.owner());
+        pst.removeAllExpiredAndRefundedTransfers();
+        uint256[] memory expiredAndRefundedTransfers = pst.getExpiredAndRefundedTransfers();
+        uint256 length = expiredAndRefundedTransfers.length;
+
+        // Assert
+        assertEq(length, 0, "Expired and refunded transfers array should have length 0");
+    }
+
+    function testRemoveAllClaimedTransfers() public transferCreatedAndClaimed {
+        // Arrange
+        vm.prank(RANDOM_USER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        transferId = pst.s_transferCounter() - 1;
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+
+        // Act
+        vm.prank(pst.owner());
+        pst.removeAllClaimedTransfers();
+        uint256[] memory claimedTransfers = pst.getClaimedTransfers();
+        uint256 length = claimedTransfers.length;
+
+        // Assert
+        assertEq(length, 0, "Claimed transfers array should have length 0");
+    }
+
+    function testRemoveAllCanceledTransfersByAddress() public transferCreatedAndCanceled {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        transferId = pst.s_transferCounter() - 1;
+
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+        uint256[] memory canceledTransfersByAddress = pst.getCanceledTransfersForAddress(SENDER);
+        uint256 length = canceledTransfersByAddress.length;
+        console.log(length);
+
+        // Act
+        vm.prank(pst.owner());
+        pst.removeAllCanceledTransfersByAddress(SENDER);
+
+        // Assert
+        vm.prank(pst.owner());
+        vm.expectRevert(PST.PST__NoCanceledTransfers.selector);
+        pst.getCanceledTransfersForAddress(SENDER);
+    }
+
+    function testRemoveAllExpiredAndRefundedTransfersByAddress() public transferCreated {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        vm.warp(block.timestamp + pst.s_availabilityPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        uint256[] memory expiredTransfers = pst.getExpiredTransfers();
+        uint256 expiredCount = expiredTransfers.length;
+
+        for (uint256 i = 0; i < expiredCount; i++) {
+            pst.refundExpiredTransfer(expiredTransfers[i]);
+        }
+
+        uint256[] memory expiredAndRefundedTransfersByAddress = pst.getExpiredAndRefundedTransfersForAddress(SENDER);
+        uint256 length = expiredAndRefundedTransfersByAddress.length;
+        console.log(length);
+
+        // Act
+        vm.prank(pst.owner());
+        pst.removeAllExpiredAndRefundedTransfersByAddress(SENDER);
+
+        // Assert
+        vm.prank(pst.owner());
+        vm.expectRevert(PST.PST__NoExpiredTransfers.selector);
+        pst.getExpiredAndRefundedTransfersForAddress(SENDER);
+    }
+
+    function testRemoveAllClaimedTransfersByAddress() public transferCreatedAndClaimed {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        transferId = pst.s_transferCounter() - 1;
+        vm.prank(RECEIVER);
+        pst.claimTransfer(transferId, PASSWORD);
+        uint256[] memory claimedTransfersByAddress = pst.getClaimedTransfersForAddress(SENDER);
+        uint256 length = claimedTransfersByAddress.length;
+        console.log(length);
+
+        // Act
+        vm.prank(pst.owner());
+        pst.removeAllClaimedTransfersByAddress(SENDER);
+
+        // Assert
+        vm.prank(pst.owner());
+        vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
+        pst.getClaimedTransfersForAddress(SENDER);
     }
 }

@@ -1174,6 +1174,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Function to get all canceled transfers in the system
     function getCanceledTransfers() external view returns (uint256[] memory) {
+        if (s_canceledTransferIds.length == 0) {
+            revert PST__NoCanceledTransfers();
+        }
         return s_canceledTransferIds;
     }
 

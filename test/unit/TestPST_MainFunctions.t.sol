@@ -522,7 +522,7 @@ contract TestPST is Test {
         assertEq(transferAmount, 0, "Transfer amount should be zero");
     }
 
-    function testCancelTransferUpdatesCanceledTransferIdsArray() public {
+    function testCancelTransferUpdatesCanceledTransferIdsArray() public transferCreatedAndCanceled {
         // Arrange
         uint256[] memory canceledTransfers = pst.getCanceledTransfers();
         uint256 initialLength = canceledTransfers.length;
