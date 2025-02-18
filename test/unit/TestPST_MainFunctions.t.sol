@@ -27,9 +27,9 @@ contract TestPST is Test {
     uint8 private constant LVL1 = 1;
     uint8 private constant LVL2 = 2;
     uint8 private constant LVL3 = 3;
-    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.1% for <= LIMIT_LEVEL_ONE
-    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.01% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
-    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.001% for > LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.01% for <= LIMIT_LEVEL_ONE
+    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.001% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.0001% for > LIMIT_LEVEL_TWO
     uint256 private constant AMOUNT_LVL_ONE = 5 ether;
     uint256 private constant AMOUNT_LVL_TWO = 50 ether;
     uint256 private constant AMOUNT_LVL_THREE = 150 ether;
@@ -61,7 +61,7 @@ contract TestPST is Test {
         mockERC20Token.transfer(SENDER, 100 ether);
 
         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getFee()
+            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
         );
 
         vm.prank(SENDER);
@@ -211,7 +211,7 @@ contract TestPST is Test {
         assertTrue(pendingStatus, "Transfer state did not update to true");
     }
 
-    function testCreateTransferUpdatesPendingTransferIdsArray() public transferCreated {
+    function testCreateTransferUpdatesClaimedTransferIdsArray() public transferCreated {
         // Arrange
         uint256[] memory pendingTransfers = pst.getPendingTransfers();
         uint256 initialLength = pendingTransfers.length;
@@ -320,7 +320,7 @@ contract TestPST is Test {
         uint256 expectedTotalTransferCost = totalTransferCost;
 
         // Act
-        TransferFeeLibrary.TransferFee memory transferFees = pst.getFee();
+        TransferFeeLibrary.TransferFee memory transferFees = pst.getTransferFees();
         uint256 transferFee =
             TransferFeeLibrary.selectTransferFee(AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, transferFees);
         uint256 _transferFeeCost = (AMOUNT_TO_SEND * transferFee) / FEE_SCALING_FACTOR;
@@ -335,7 +335,7 @@ contract TestPST is Test {
         uint256 expectedTransferFeeCost = transferFeeCost;
 
         // Act
-        TransferFeeLibrary.TransferFee memory transferFees = pst.getFee();
+        TransferFeeLibrary.TransferFee memory transferFees = pst.getTransferFees();
         uint256 transferFee =
             TransferFeeLibrary.selectTransferFee(AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, transferFees);
         uint256 _transferFeeCost = (AMOUNT_TO_SEND * transferFee) / FEE_SCALING_FACTOR;
@@ -798,7 +798,7 @@ contract TestPST is Test {
         assertEq(transferAmount, 0, "Transfer amount should be zero");
     }
 
-    function testClaimTransferUpdatesClaimedTransferIdsArray() public {
+    function testClaimTransferUpdatesClaimedTransferIdsArray() public transferCreatedAndClaimed {
         // Arrange
         uint256[] memory claimedTransfers = pst.getClaimedTransfers();
         uint256 initialLength = claimedTransfers.length;

@@ -27,9 +27,9 @@ contract TestPST is Test {
     uint8 private constant LVL1 = 1;
     uint8 private constant LVL2 = 2;
     uint8 private constant LVL3 = 3;
-    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.1% for <= LIMIT_LEVEL_ONE
-    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.01% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
-    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.001% for > LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.01% for <= LIMIT_LEVEL_ONE
+    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.001% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.0001% for > LIMIT_LEVEL_TWO
     uint256 private constant AMOUNT_LVL_ONE = 5 ether;
     uint256 private constant AMOUNT_LVL_TWO = 50 ether;
     uint256 private constant AMOUNT_LVL_THREE = 150 ether;
@@ -61,7 +61,7 @@ contract TestPST is Test {
         mockERC20Token.transfer(SENDER, 100 ether);
 
         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getFee()
+            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
         );
 
         vm.prank(SENDER);
@@ -135,7 +135,7 @@ contract TestPST is Test {
 
     function testSelectTransferFee() public view {
         // Arrange
-        (uint256 lvlOne, uint256 lvlTwo, uint256 lvlThree) = pst.fee();
+        (uint256 lvlOne, uint256 lvlTwo, uint256 lvlThree) = pst.transferFee();
 
         TransferFeeLibrary.TransferFee memory transferFees =
             TransferFeeLibrary.TransferFee({lvlOne: lvlOne, lvlTwo: lvlTwo, lvlThree: lvlThree});
@@ -164,7 +164,7 @@ contract TestPST is Test {
         vm.startPrank(SENDER);
         mockERC20Token.approve(address(pst), 10 ether);
 
-        (uint256 lvlOne, uint256 lvlTwo, uint256 lvlThree) = pst.fee();
+        (uint256 lvlOne, uint256 lvlTwo, uint256 lvlThree) = pst.transferFee();
 
         TransferFeeLibrary.TransferFee memory transferFees =
             TransferFeeLibrary.TransferFee({lvlOne: lvlOne, lvlTwo: lvlTwo, lvlThree: lvlThree});

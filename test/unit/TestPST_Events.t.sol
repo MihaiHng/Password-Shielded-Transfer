@@ -27,9 +27,9 @@ contract TestPST is Test {
     uint8 private constant LVL1 = 1;
     uint8 private constant LVL2 = 2;
     uint8 private constant LVL3 = 3;
-    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.1% for <= LIMIT_LEVEL_ONE
-    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.01% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
-    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.001% for > LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.01% for <= LIMIT_LEVEL_ONE
+    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.001% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.0001% for > LIMIT_LEVEL_TWO
     uint256 private constant AMOUNT_LVL_ONE = 5 ether;
     uint256 private constant AMOUNT_LVL_TWO = 50 ether;
     uint256 private constant AMOUNT_LVL_THREE = 150 ether;
@@ -45,10 +45,6 @@ contract TestPST is Test {
     uint256 public constant SENDER_BALANCE = 100 ether;
     uint256 public constant RECEIVER_BALANCE = 100 ether;
 
-    event LastInteractionTimeUpdated(address indexed user, uint256 indexed lastInteractionTime);
-    event TokenAddedToAllowList(address indexed token);
-    event TokenRemovedFromAllowList(address indexed token);
-    // Event to log a created transfer
     event TransferInitiated(
         address indexed sender,
         address indexed receiver,
@@ -60,6 +56,21 @@ contract TestPST is Test {
     event TransferCanceled(
         address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
     );
+    event TransferCompleted(
+        address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
+    );
+    event TransferExpiredAndRefunded(
+        address indexed sender,
+        address indexed receiver,
+        uint256 indexed transferIndex,
+        address token,
+        uint256 amount,
+        uint256 expiringTime
+    );
+    event SuccessfulFeeWithdrawal(address indexed token, uint256 indexed amount);
+    event TokenAddedToAllowList(address indexed token);
+    event TokenRemovedFromAllowList(address indexed token);
+    event TransferFeeChanged(uint8 level, uint256 newTransferFee);
 
     function setUp() external {
         DeployPST deployer = new DeployPST();
@@ -73,7 +84,7 @@ contract TestPST is Test {
         mockERC20Token.transfer(SENDER, 100 ether);
 
         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getFee()
+            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
         );
 
         vm.prank(SENDER);
@@ -120,9 +131,6 @@ contract TestPST is Test {
     function testEmitTransferInitiated() public {
         // Arrange
         uint256 expectedTransferIndex = pst.s_transferCounter();
-        // address token = address(mockERC20Token);
-        // uint256 amount = AMOUNT_TO_SEND;
-        // uint256 transferFeeCost = pst.calculateFee(amount);
 
         // Act & Assert
         vm.expectEmit(true, true, true, true);
@@ -144,5 +152,80 @@ contract TestPST is Test {
 
         vm.prank(SENDER);
         pst.cancelTransfer(expectedTransferIndex);
+    }
+
+    function testEmitTransferCompleted() public transferCreated {
+        // Arrange
+        uint256 expectedTransferIndex = pst.s_transferCounter() - 1;
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act & Assert
+        vm.expectEmit(true, true, true, true);
+        emit TransferCompleted(SENDER, RECEIVER, expectedTransferIndex, address(mockERC20Token), AMOUNT_TO_SEND);
+
+        vm.prank(RECEIVER);
+        pst.claimTransfer(expectedTransferIndex, PASSWORD);
+    }
+
+    function testEmitTransferExpiredAndRefunded() public transferCreated {
+        // Arrange
+        uint256 expectedTransferIndex = pst.s_transferCounter() - 1;
+        (,,,,, uint256 expiringTime,) = pst.s_transfersById(expectedTransferIndex);
+
+        // Act & Assert
+        vm.expectEmit(true, true, true, true);
+        emit TransferExpiredAndRefunded(
+            SENDER, RECEIVER, expectedTransferIndex, address(mockERC20Token), AMOUNT_TO_SEND, expiringTime
+        );
+
+        vm.prank(SENDER);
+        pst.refundExpiredTransfer(expectedTransferIndex);
+    }
+
+    function testEmitSuccessfulFeeWithdrawal() public transferCreated {
+        // Arrange
+        uint256 balanceToken = pst.getAccumulatedFeesForToken(address(mockERC20Token));
+
+        // Act & Assert
+        vm.expectEmit(true, true, false, false);
+        emit SuccessfulFeeWithdrawal(address(mockERC20Token), balanceToken);
+        vm.prank(pst.owner());
+        pst.withdrawFeesForToken(address(mockERC20Token), balanceToken);
+    }
+
+    function testEmitTokenAddedToAllowList() public {
+        // Arrange
+        ERC20Mock anotherMockERC20Token = new ERC20Mock("AnotherERC20MockToken", "ERC20MOCKA", 1e6 ether);
+
+        // Act & Assert
+        vm.expectEmit(true, false, false, false);
+        emit TokenAddedToAllowList(address(anotherMockERC20Token));
+        vm.prank(pst.owner());
+        pst.addTokenToAllowList(address(anotherMockERC20Token));
+    }
+
+    function testEmitTokenRemovedFromAllowList() public {
+        // Arrange
+        ERC20Mock anotherMockERC20Token = new ERC20Mock("AnotherERC20MockToken", "ERC20MOCKA", 1e6 ether);
+        vm.prank(pst.owner());
+        pst.addTokenToAllowList(address(anotherMockERC20Token));
+
+        // Act & Assert
+        vm.expectEmit(true, false, false, false);
+        emit TokenRemovedFromAllowList(address(anotherMockERC20Token));
+        vm.prank(pst.owner());
+        pst.removeTokenFromAllowList(address(anotherMockERC20Token));
+    }
+
+    function testEmitTransferFeeChanged() public {
+        // Arrange
+        uint256 newTransferFee = 10;
+
+        // Act & Assert
+        vm.expectEmit(false, false, false, false);
+        emit TransferFeeChanged(LVL2, newTransferFee);
+        vm.prank(pst.owner());
+        pst.setTransferFee(LVL2, newTransferFee);
     }
 }

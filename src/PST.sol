@@ -141,7 +141,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     address[] public s_addressList;
     address[] public s_tokenList;
 
-    TransferFeeLibrary.TransferFee public fee;
+    TransferFeeLibrary.TransferFee public transferFee;
 
     struct Transfer {
         address sender;
@@ -176,7 +176,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     // Mapping of transfer Id to last failed claim attempt time
     mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime) private s_lastFailedClaimAttempt;
     // Mapping to track active addresses
-    mapping(address user => bool) private s_trackedAddresses;
+    mapping(address user => bool) public s_trackedAddresses;
     // Mapping to track an address to its last cleanup time
     mapping(address user => uint256 lastCleanupTime) public s_lastCleanupTimeByAddress;
     // Mapping to track an address to its last active time
@@ -268,13 +268,13 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     // Event to log the time when Claimed Transfers were removed from tracking
     event ClaimedTransfersHistoryCleared();
 
-    // Event to log the time when Canceled Transfers for an Address were removed from tracking
+    // Event to log Canceled Transfers for an Address were removed from tracking
     event CanceledTransfersForAddressHistoryCleared(address user);
 
-    // Event to log the time when Expired and Refunded Transfers for an Address were removed from tracking
+    // Event to log Expired and Refunded Transfers for an Address were removed from tracking
     event ExpiredAndRefundedTransfersForAddressHistoryCleared(address user);
 
-    // Event to log the time when Claimed Transfers for an Address were removed from tracking
+    // Event to log Claimed Transfers for an Address were removed from tracking
     event ClaimedTransfersForAddressHistoryCleared(address user);
 
     /*//////////////////////////////////////////////////////////////
@@ -351,7 +351,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     ) Ownable(msg.sender) {
         i_automationRegistry = _automationRegistry;
 
-        fee = TransferFeeLibrary.TransferFee({
+        transferFee = TransferFeeLibrary.TransferFee({
             lvlOne: _transferFeeLvlOne,
             lvlTwo: _transferFeeLvlTwo,
             lvlThree: _transferFeeLvlThree
@@ -402,7 +402,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
         uint256 transferId = s_transferCounter++;
 
-        TransferFeeLibrary.TransferFee memory currentFee = fee;
+        TransferFeeLibrary.TransferFee memory currentFee = transferFee;
 
         (uint256 totalTransferCost, uint256 transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
             amount, s_limitLevelOne, s_limitLevelTwo, s_feeScalingFactor, currentFee
@@ -651,13 +651,21 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         _removeTokenFromAllowList(token);
     }
 
+    function clearHistory() external onlyOwner {
+        _clearHistory();
+    }
+
+    function removeInactiveAddresses() external onlyOwner {
+        _removeInactiveAddresses();
+    }
+
     function setTransferFee(uint8 level, uint256 newTransferFee) external onlyOwner moreThanZero(newTransferFee) {
         if (level == 1) {
-            fee.lvlOne = newTransferFee;
+            transferFee.lvlOne = newTransferFee;
         } else if (level == 2) {
-            fee.lvlTwo = newTransferFee;
+            transferFee.lvlTwo = newTransferFee;
         } else if (level == 3) {
-            fee.lvlThree = newTransferFee;
+            transferFee.lvlThree = newTransferFee;
         } else {
             revert PST__InvalidFeeLevel();
         }
@@ -892,7 +900,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         returns (uint256 totalTransferCost, uint256 transferFeeCost)
     {
         return TransferFeeLibrary.calculateTotalTransferCost(
-            amount, s_limitLevelOne, s_limitLevelTwo, s_feeScalingFactor, fee
+            amount, s_limitLevelOne, s_limitLevelTwo, s_feeScalingFactor, transferFee
         );
     }
 
@@ -1079,6 +1087,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                 countRemovedAddresses++;
             }
         }
+
+        if (countRemovedAddresses < batchLimit / 2) {
+            s_batchLimit = batchLimit - countRemovedAddresses;
+        } else {
+            s_batchLimit = batchLimit / 2;
+        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1139,17 +1153,17 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_feeBalances[token];
     }
 
-    function getFee() external view returns (TransferFeeLibrary.TransferFee memory) {
-        return fee;
+    function getTransferFees() external view returns (TransferFeeLibrary.TransferFee memory) {
+        return transferFee;
     }
 
     function getTransferFee(uint8 level) external view returns (uint256) {
         if (level == 1) {
-            return fee.lvlOne;
+            return transferFee.lvlOne;
         } else if (level == 2) {
-            return fee.lvlTwo;
+            return transferFee.lvlTwo;
         } else if (level == 3) {
-            return fee.lvlThree;
+            return transferFee.lvlThree;
         } else {
             revert PST__InvalidFeeLevel();
         }
@@ -1193,6 +1207,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Function to get all claimed transfers in the system
     function getClaimedTransfers() external view returns (uint256[] memory) {
+        if (s_claimedTransferIds.length == 0) {
+            revert PST__NoClaimedTransfers();
+        }
         return s_claimedTransferIds;
     }
 

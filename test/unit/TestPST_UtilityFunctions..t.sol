@@ -27,9 +27,9 @@ contract TestPST is Test {
     uint8 private constant LVL1 = 1;
     uint8 private constant LVL2 = 2;
     uint8 private constant LVL3 = 3;
-    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.1% for <= LIMIT_LEVEL_ONE
-    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.01% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
-    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.001% for > LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.01% for <= LIMIT_LEVEL_ONE
+    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.001% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.0001% for > LIMIT_LEVEL_TWO
     uint256 private constant AMOUNT_LVL_ONE = 5 ether;
     uint256 private constant AMOUNT_LVL_TWO = 50 ether;
     uint256 private constant AMOUNT_LVL_THREE = 150 ether;
@@ -71,7 +71,7 @@ contract TestPST is Test {
         mockERC20Token.approve(address(pst), 100 ether);
 
         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getFee()
+            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
         );
 
         transferId = pst.s_transferCounter();
@@ -100,11 +100,25 @@ contract TestPST is Test {
         vm.prank(SENDER);
         pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
 
+        transferId = pst.s_transferCounter() - 1;
         vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
         pst.claimTransfer(transferId, PASSWORD);
+        _;
+    }
+
+    modifier transferCreatedThenExpiredAndRefunded() {
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+
+        transferId = pst.s_transferCounter() - 1;
+        vm.warp(block.timestamp + pst.s_availabilityPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(pst.owner());
+        pst.refundExpiredTransfer(transferId);
         _;
     }
 
@@ -495,11 +509,11 @@ contract TestPST is Test {
         // Act
         vm.prank(pst.owner());
         pst.removeAllClaimedTransfers();
-        uint256[] memory claimedTransfers = pst.getClaimedTransfers();
-        uint256 length = claimedTransfers.length;
 
         // Assert
-        assertEq(length, 0, "Claimed transfers array should have length 0");
+        vm.prank(pst.owner());
+        vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
+        pst.getClaimedTransfers();
     }
 
     function testRemoveAllCanceledTransfersByAddress() public transferCreatedAndCanceled {
@@ -576,5 +590,179 @@ contract TestPST is Test {
         vm.prank(pst.owner());
         vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
         pst.getClaimedTransfersForAddress(SENDER);
+    }
+
+    function testClearHistory()
+        public
+        transferCreatedAndClaimed
+        transferCreatedAndCanceled
+        transferCreatedThenExpiredAndRefunded
+    {
+        // Arrange
+        uint256 initialBatchLimit = pst.s_batchLimit();
+        uint256 expectedCleanupTime = block.timestamp + pst.s_cleanupInterval() + 1;
+        vm.warp(block.timestamp + pst.s_cleanupInterval() + 1);
+
+        // Act
+        vm.prank(pst.owner());
+        pst.clearHistory();
+
+        uint256 lastCleanupTime = pst.s_lastCleanupTimeByAddress(SENDER);
+        uint256 updatedBatchLimit = pst.s_batchLimit();
+        bool isTracked = pst.s_trackedAddresses(SENDER);
+
+        // Assert
+        assertEq(lastCleanupTime, expectedCleanupTime, "Cleanup time should be updated");
+
+        assertTrue(updatedBatchLimit < initialBatchLimit, "Batch limit should decrease after cleanup");
+
+        assertTrue(isTracked, "Address should still be tracked if more pending transfers exist");
+
+        vm.startPrank(pst.owner());
+        vm.expectRevert(PST.PST__NoCanceledTransfers.selector);
+        pst.getCanceledTransfersForAddress(SENDER);
+        vm.expectRevert(PST.PST__NoExpiredTransfers.selector);
+        pst.getExpiredAndRefundedTransfersForAddress(SENDER);
+        vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
+        pst.getClaimedTransfersForAddress(SENDER);
+        vm.stopPrank();
+    }
+
+    function testRemoveInactiveAddresses() public {
+        // Arrange
+        uint256 initialBatchLimit = pst.s_batchLimit();
+        pst.addAddressToTracking(SENDER);
+        pst.addAddressToTracking(RECEIVER);
+        address[] memory initialAddressList = pst.getTrackedAddresses();
+        uint256 initialLength = initialAddressList.length;
+        vm.warp(block.timestamp + pst.s_inactivityThreshold() + 1);
+        vm.roll(block.timestamp + 1);
+
+        // Act
+        vm.prank(pst.owner());
+        pst.removeInactiveAddresses();
+        uint256 updatedBatchLimit = pst.s_batchLimit();
+        address[] memory updatedAddressList = pst.getTrackedAddresses();
+        uint256 updatedLength = updatedAddressList.length;
+
+        // Assert
+        assertTrue(updatedBatchLimit < initialBatchLimit, "Batch limit should decrease after cleanup");
+        assertEq(updatedLength, initialLength - 2, "Tracked addresses array length should decrease by two");
+    }
+
+    function testGetAllTransfersByAddress()
+        public
+        transferCreated
+        transferCreatedAndClaimed
+        transferCreatedAndCanceled
+        transferCreatedThenExpiredAndRefunded
+    {
+        // Arrange
+        uint256[] memory expectedPending = pst.getPendingTransfersForAddress(SENDER);
+        uint256[] memory expectedCanceled = pst.getCanceledTransfersForAddress(SENDER);
+        uint256[] memory expectedExpired = pst.getExpiredAndRefundedTransfersForAddress(SENDER);
+        uint256[] memory expectedClaimed = pst.getClaimedTransfersForAddress(SENDER);
+
+        // Log stored transfer IDs
+        console.log("Pending:", expectedPending[0]);
+        console.log("Canceled:", expectedCanceled[0]);
+        console.log("Expired:", expectedExpired[0]);
+        console.log("Claimed:", expectedClaimed[0]);
+
+        // Act
+        (uint256[] memory pending, uint256[] memory canceled, uint256[] memory expired, uint256[] memory claimed) =
+            pst.getAllTransfersByAddress(SENDER);
+
+        //console.log("All Transfers:", pending[0], canceled[0], expired[0], claimed[0]);
+
+        // Assert
+        assertEq(pending.length, expectedPending.length, "Pending transfers array length should match");
+        assertEq(canceled.length, expectedCanceled.length, "Canceled transfers array length should match");
+        assertEq(expired.length, expectedExpired.length, "Expired transfers array length should match");
+        assertEq(claimed.length, expectedClaimed.length, "Claimed transfers array length should match");
+
+        for (uint256 i = 0; i < pending.length; i++) {
+            assertEq(pending[i], expectedPending[i], "Pending transfer ID mismatch");
+        }
+
+        for (uint256 i = 0; i < canceled.length; i++) {
+            assertEq(canceled[i], expectedCanceled[i], "Canceled transfer ID mismatch");
+        }
+
+        for (uint256 i = 0; i < expired.length; i++) {
+            assertEq(expired[i], expectedExpired[i], "Expired transfer ID mismatch");
+        }
+
+        for (uint256 i = 0; i < claimed.length; i++) {
+            assertEq(claimed[i], expectedClaimed[i], "Claimed transfer ID mismatch");
+        }
+    }
+
+    function testGetTransferDetails_Pending() public transferCreated {
+        // Arrange
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        (
+            address sender,
+            address receiver,
+            address token,
+            uint256 amount,
+            uint256 creationTime,
+            uint256 expiringTime,
+            string memory state
+        ) = pst.getTransferDetails(transferId);
+
+        // Assert
+        assertEq(sender, SENDER, "Sender address mismatch");
+        assertEq(receiver, RECEIVER, "Receiver address mismatch");
+        assertEq(token, address(mockERC20Token), "Token address mismatch");
+        assertEq(amount, AMOUNT_TO_SEND, "Amount mismatch");
+        assertTrue(creationTime > 0, "Creation time should be set");
+        assertTrue(expiringTime > creationTime, "Expiring time should be after creation");
+        assertEq(state, "Pending", "State should be Pending");
+    }
+
+    function testGetTransferDetails_Canceled() public transferCreatedAndCanceled {
+        // Arrange
+        transferId = pst.s_transferCounter() - 1;
+
+        // Act
+        (,,,,,, string memory state) = pst.getTransferDetails(transferId);
+
+        // Assert
+        assertEq(state, "Canceled", "State should be Canceled");
+    }
+
+    function testIsPendingTransferReturnsTrue() public transferCreated {
+        // Act
+        bool isPending = pst.isPendingTransfer(transferId);
+
+        // Assert
+        assertTrue(isPending, "Transfer should be pending initially");
+    }
+
+    function testIsClaimedReturnsTrue() public transferCreatedAndClaimed {
+        // Act
+        bool claimed = pst.isClaimed(transferId);
+
+        // Assert
+        assertTrue(claimed, "Transfer should be marked as claimed");
+    }
+
+    function testIsCanceledTransferReturnsTrue() public transferCreatedAndCanceled {
+        // Act
+        bool isCanceled = pst.isCanceledTransfer(transferId);
+
+        // Assert
+        assertTrue(isCanceled, "Canceled transfer should return true");
+    }
+
+    function testIsExpiredAndRefundedTransferReturnsTrue() public transferCreatedThenExpiredAndRefunded {
+        // Act
+        bool isExpiredAndRefunded = pst.isExpiredAndRefundedTransfer(transferId);
+
+        // Assert
+        assertTrue(isExpiredAndRefunded, "Transfer should be expired and refunded after refund");
     }
 }
