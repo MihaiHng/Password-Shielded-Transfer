@@ -13,7 +13,7 @@ import {FailingERC20Mock_ForCancelAndClaimTransferTest} from
     "../mocks/FailingERC20Mock_ForCancelAndClaimTransferTest.sol";
 import {NonPayableContractMock} from "../mocks/NonPayableContractMock.sol";
 
-contract TestPST is Test {
+contract TestPST_MainFunctions is Test {
     error OwnableUnauthorizedAccount(address account);
 
     PST public pst;

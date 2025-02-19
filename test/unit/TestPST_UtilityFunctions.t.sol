@@ -8,12 +8,8 @@ import {DeployPST} from "../../script/DeployPST.s.sol";
 import {PST} from "src/PST.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
 import {ERC20Mock} from "../mocks/ERC20Mock.sol";
-import {FailingERC20Mock_ForCreateTransferTest} from "../mocks/FailingERC20Mock_ForCreateTransferTest.sol";
-import {FailingERC20Mock_ForCancelAndClaimTransferTest} from
-    "../mocks/FailingERC20Mock_ForCancelAndClaimTransferTest.sol";
-import {NonPayableContractMock} from "../mocks/NonPayableContractMock.sol";
 
-contract TestPST is Test {
+contract TestPST_UtilityFunctions is Test {
     error OwnableUnauthorizedAccount(address account);
 
     PST public pst;
