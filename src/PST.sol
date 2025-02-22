@@ -35,6 +35,9 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
 // Batch processing - check
 // Setters funtions for important parameters - check
+// Fuzz testing
+// Invariant testing 
+// Differential Testing ?
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 /**
