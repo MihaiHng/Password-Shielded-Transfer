@@ -26,7 +26,8 @@ pragma solidity ^0.8.28;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {AutomationCompatibleInterface} from "@chainlink/contracts/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
+import {AutomationCompatibleInterface} from
+    "@chainlink/contracts/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 
@@ -36,7 +37,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Batch processing - check
 // Setters funtions for important parameters - check
 // Fuzz testing
-// Invariant testing 
+// Invariant testing
 // Differential Testing ?
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -135,7 +136,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     uint256 public s_transferCounter;
     uint256 public s_limitLevelOne = 10e18;
     uint256 public s_limitLevelTwo = 100e18;
-    uint256 public s_feeScalingFactor = 10e6;
+    uint256 public s_feeScalingFactor = 1e7;
 
     uint256[] public s_pendingTransferIds;
     uint256[] public s_canceledTransferIds;
