@@ -30,9 +30,9 @@ contract TestFuzzPST is Test {
     uint256 private constant LIMIT_LEVEL_TWO = 100e18;
     uint256 private constant FEE_SCALING_FACTOR = 10e6;
     uint256 private constant AMOUNT_TO_SEND = 1 ether;
+    uint256 private constant MIN_AMOUNT_TO_SEND = 1e14; // 1 ether / 1e4 => 0.0001 ether
 
     string private constant PASSWORD = "Strongpass";
-    //uint256 private constant MIN_PASSWORD_LENGTH = ;
 
     address public SENDER = makeAddr("sender");
     address public RECEIVER = makeAddr("receiver");
@@ -69,7 +69,7 @@ contract TestFuzzPST is Test {
     ) public {
         // Arrange
         vm.assume(_sender != address(0) && _receiver != address(0) && _sender != _receiver);
-        vm.assume(_amount > 0 && _amount < 100 ether);
+        vm.assume(_amount > MIN_AMOUNT_TO_SEND && _amount < 100 ether);
         vm.assume(bytes(_password).length >= 7);
 
         uint256 initialBalance = address(pst).balance;
@@ -110,7 +110,7 @@ contract TestFuzzPST is Test {
     ) public {
         // Arrange
         vm.assume(_sender != address(0) && _receiver != address(0) && _sender != _receiver);
-        vm.assume(_amount > 0 && _amount < 100 ether);
+        vm.assume(_amount > MIN_AMOUNT_TO_SEND && _amount < 100 ether);
         vm.assume(bytes(_password).length >= 7);
 
         uint256 initialBalance = mockERC20Token.balanceOf(address(pst));
@@ -156,7 +156,7 @@ contract TestFuzzPST is Test {
     ) public {
         // Arrange
         vm.assume(_sender != address(0) && _receiver != address(0) && _sender != _receiver);
-        vm.assume(_amount > 0 && _amount < 100 ether);
+        vm.assume(_amount > MIN_AMOUNT_TO_SEND && _amount < 100 ether);
         vm.assume(bytes(_correctPassword).length >= 7);
         vm.assume(bytes(_wrongPassword).length >= 4);
         vm.assume(keccak256(abi.encodePacked(_correctPassword)) != keccak256(abi.encodePacked(_wrongPassword)));
@@ -197,7 +197,7 @@ contract TestFuzzPST is Test {
     {
         // Arrange
         vm.assume(_sender != address(0) && _receiver != address(0) && _sender != _receiver);
-        vm.assume(_amount > 0 && _amount < 100 ether);
+        vm.assume(_amount > MIN_AMOUNT_TO_SEND && _amount < 100 ether);
         vm.assume(bytes(_password).length >= 7);
 
         mockERC20Token.transfer(_receiver, 0);
@@ -205,9 +205,6 @@ contract TestFuzzPST is Test {
         (uint256 _totalTransferCost, uint256 _transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
             _amount, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
         );
-
-        console.log("Expected total cost:", _totalTransferCost);
-        console.log("Expected fee:", _transferFeeCost);
 
         // Act
         mockERC20Token.transfer(_sender, 101 ether);
@@ -219,10 +216,9 @@ contract TestFuzzPST is Test {
         pst.createTransfer(_receiver, address(mockERC20Token), _amount, _password);
         vm.stopPrank();
 
-        console.log(mockERC20Token.balanceOf(_sender));
         uint256 updatedBalanceSender = mockERC20Token.balanceOf(_sender);
         uint256 initialBalanceReceiver = mockERC20Token.balanceOf(_receiver);
-        uint256 balancePST = mockERC20Token.balanceOf(address(pst));
+        uint256 initialBalancePST = mockERC20Token.balanceOf(address(pst));
 
         // Assert
         assertEq(
@@ -232,13 +228,27 @@ contract TestFuzzPST is Test {
         );
 
         assertEq(
-            balancePST, _amount + _transferFeeCost, "Contract should hold the full transfer amount + the transfer fee"
+            initialBalancePST,
+            _amount + _transferFeeCost,
+            "Contract should hold the full transfer amount + the transfer fee"
         );
 
         assertEq(initialBalanceReceiver, 0, "Receiver should not have funds before claiming");
 
-        // vm.prank(_receiver);
-        // pst.claimTransfer(transferId, _password);
-        // uint256 updatedBalanceReceiver = mockERC20Token.balanceOf(_receiver);
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        vm.prank(_receiver);
+        pst.claimTransfer(transferId, _password);
+        uint256 updatedBalanceReceiver = mockERC20Token.balanceOf(_receiver);
+        uint256 updatedBalancePST = mockERC20Token.balanceOf(address(pst));
+
+        uint256 tokenBalance = pst.getAccumulatedFeesForToken(address(mockERC20Token));
+
+        assertEq(updatedBalanceReceiver, _amount, "Receiver should receive the correct amount");
+
+        assertEq(updatedBalancePST, _transferFeeCost, "Contract should retain the correct fee");
+
+        assertEq(tokenBalance, _transferFeeCost, "Balance of token should update with the correct transfer fee");
     }
 }

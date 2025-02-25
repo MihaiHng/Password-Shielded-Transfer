@@ -32,13 +32,19 @@ import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// Complete events - check
-// Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices)
-// Batch processing - check
-// Setters funtions for important parameters - check
-// Fuzz testing
+// Complete events ✅
+// Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices) ✅
+// Batch processing ✅
+// Setter funtions for important parameters ✅
+// Unit testing ✅
+// Fuzz testing ✅
 // Invariant testing
 // Differential Testing ?
+// Gas Tracking/Optimization 
+// Security checklist 
+// Comments on functions
+// Frontend
+// Finalize Readme 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 /**
@@ -72,6 +78,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     //////////////////////////////////////////////////////////////*/
     error PST__NeedsMoreThanZero();
     error PST__InvalidAddress();
+    error PST__AmountToSendShouldBeHigher(uint256 minAmount);
     error PST__PasswordNotProvided();
     error PST__PasswordTooShort(uint256 minCharactersRequired);
     error PST__MinPasswordLengthIsSeven();
@@ -125,6 +132,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     uint256 private constant MIN_CLEANUP_INTERVAL = 1 weeks;
     uint256 private constant MIN_INACTIVITY_THRESHOLD = 1 weeks;
     uint256 private constant MIN_BATCH_LIMIT = 20;
+    uint256 private constant MIN_AMOUNT_TO_SEND = 1e14; // 1 ether / 1e4 => 0.0001 ether
 
     uint256 public s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
     uint256 public s_claimCooldownPeriod = 30 minutes;
@@ -394,6 +402,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     {
         if (receiver == msg.sender) {
             revert PST__CantSendToOwnAddress();
+        }
+
+        if (amount < MIN_AMOUNT_TO_SEND) {
+            revert PST__AmountToSendShouldBeHigher({minAmount: MIN_AMOUNT_TO_SEND});
         }
 
         if (bytes(password).length == 0) {

@@ -37,6 +37,7 @@ contract TestPST_MainFunctions is Test {
     uint256 private constant LIMIT_LEVEL_TWO = 100e18;
     uint256 private constant FEE_SCALING_FACTOR = 10e6;
     uint256 private constant AMOUNT_TO_SEND = 1 ether;
+    uint256 private constant MIN_AMOUNT_TO_SEND = 1e14; // 1 ether / 1e4 => 0.0001 ether
 
     string private constant PASSWORD = "Strongpass";
 
@@ -135,6 +136,16 @@ contract TestPST_MainFunctions is Test {
         vm.expectRevert(PST.PST__CantSendToOwnAddress.selector);
         vm.prank(SENDER);
         pst.createTransfer(SENDER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+    }
+
+    function testCreateTransferRevertsWhenAmountToSendIsTooLow() public {
+        // Arrange / Act 
+        uint256 TOO_SMALL_AMOUNT = 1e12;
+        
+        // Assert
+        vm.expectRevert(abi.encodeWithSelector(PST.PST__AmountToSendShouldBeHigher.selector, MIN_AMOUNT_TO_SEND));
+        vm.prank(SENDER);
+        pst.createTransfer(RECEIVER, address(mockERC20Token), TOO_SMALL_AMOUNT, PASSWORD);
     }
 
     function testCreateTransferRevertsWhenPasswordNotProvided() public {
