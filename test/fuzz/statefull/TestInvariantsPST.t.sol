@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: MIT
 
+// 1. Pst balance is always equal to the sum of the total pending transfers value
+// 2. A pending transfer can only be claimed with the correct password
+// 3. A pending transfer can only be canceled by its sender/creator
+// 4. A pending transfer always expires after the availability period has elapsed
+// 5. A receiver can only withdraw the amount sent to him
+
 pragma solidity ^0.8.28;
 
 import {PST} from "src/PST.sol";
 import {Test, console, console2} from "forge-std/Test.sol";
-import {DeployPST} from "../../script/DeployPST.s.sol";
+import {DeployPST} from "../../../script/DeployPST.s.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
-import {ERC20Mock} from "../mocks/ERC20Mock.sol";
+import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
 
 contract TestFuzzPST is Test {
     PST public pst;
