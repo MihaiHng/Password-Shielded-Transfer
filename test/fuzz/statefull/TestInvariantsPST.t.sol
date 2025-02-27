@@ -29,21 +29,4 @@ contract TestFuzzPST is Test {
     uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.01% for <= LIMIT_LEVEL_ONE
     uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.001% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
     uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.0001% for > LIMIT_LEVEL_TWO
-    uint256 private constant AMOUNT_LVL_ONE = 5 ether;
-    uint256 private constant AMOUNT_LVL_TWO = 50 ether;
-    uint256 private constant AMOUNT_LVL_THREE = 150 ether;
-    uint256 private constant LIMIT_LEVEL_ONE = 10e18;
-    uint256 private constant LIMIT_LEVEL_TWO = 100e18;
-    uint256 private constant FEE_SCALING_FACTOR = 10e6;
-    uint256 private constant AMOUNT_TO_SEND = 1 ether;
-
-    string private constant PASSWORD = "Strongpass";
-    //uint256 private constant MIN_PASSWORD_LENGTH = ;
-
-    address public SENDER = makeAddr("sender");
-    address public RECEIVER = makeAddr("receiver");
-    address RANDOM_USER = makeAddr("Random user");
-    uint256 public constant SENDER_BALANCE = 100 ether;
-    uint256 public constant RECEIVER_BALANCE = 100 ether;
-    uint256 public constant RANDOM_USER_BALANCE = 100 ether;
 }
