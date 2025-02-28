@@ -3,10 +3,9 @@
 pragma solidity ^0.8.28;
 
 import {Test, console, console2} from "forge-std/Test.sol";
-import {StdUtils} from "forge-std/StdUtils.sol";
 import {PST} from "src/PST.sol";
 
-contract Handler {
+contract Handler is Test {
     PST public pst;
 
     uint256 MAX_AMOUNT_TO_SEND = type(uint96).max;
