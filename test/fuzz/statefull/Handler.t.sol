@@ -32,7 +32,7 @@ contract Handler is Test {
         pst.cancelTransfer(transferId);
     }
 
-    function claimTransfer(uint256 transferId) public {
-        //pst.claimTransfer(transferId);
+    function claimTransfer(uint256 transferId, string memory password) public {
+        pst.claimTransfer(transferId, password);
     }
 }
