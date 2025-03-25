@@ -5,10 +5,12 @@
 // 3. A pending transfer can only be canceled by its sender/creator
 // 4. A pending transfer always expires after the availability period has elapsed
 // 5. A receiver can only withdraw the amount sent to him
+// 6. Getter view functions should never revert
 
 pragma solidity ^0.8.28;
 
 import {PST} from "src/PST.sol";
+import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {Test, console, console2} from "forge-std/Test.sol";
 import {DeployPST} from "../../../script/DeployPST.s.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";

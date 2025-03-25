@@ -19,7 +19,7 @@ contract Handler is Test {
         require(receiver != address(0), "Invalid receiver: zero address");
         require(receiver != msg.sender, "Invalid receiver: cannot be sender");
 
-        require(token != address(0), "Invalid token: zero address");
+        // require(token != address(0), "Invalid token: zero address");
 
         amount = bound(amount, MIN_AMOUNT_TO_SEND, MAX_AMOUNT_TO_SEND);
 
