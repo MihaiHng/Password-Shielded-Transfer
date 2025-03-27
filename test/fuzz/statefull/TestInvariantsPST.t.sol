@@ -51,10 +51,13 @@ contract TestFuzzPST is Test {
         uint256 pstTokenBalance = pst.getBalanceForToken(address(mockERC20Token));
 
         uint256 totalPendingValue;
+        uint256[] memory pendingTransfers = pst.getPendingTransfers();
 
-        for (uint256 i = 0; i < newLength; i++) {
-            uint256 totalPendingValue
+        for (uint256 i = 0; i < pendingTransfers.length; i++) {
+            //uint256 totalPendingValue;
         }
+
+        assert(pstTokenBalance == totalPendingValue);
 
         // Create new mapping to store the contract pending balance for each token, separately from the fee mapping
         // Create a getter for the pending token balance
