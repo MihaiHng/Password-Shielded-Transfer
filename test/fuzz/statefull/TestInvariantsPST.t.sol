@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-// 1. Pst balance is always equal to the sum of the total pending transfers value
+// 1. Pst balance is always equal to the sum of the total pending transfers value + fees value
 // 2. A pending transfer can only be claimed with the correct password
 // 3. A pending transfer can only be canceled by its sender/creator
 // 4. A pending transfer always expires after the availability period has elapsed
@@ -40,9 +40,24 @@ contract TestFuzzPST is Test {
 
         mockERC20Token = new ERC20Mock("ERC20MockToken", "ERC20MOCK", 1e6 ether);
 
+        vm.prank(pst.owner());
+        pst.addTokenToAllowList(address(mockERC20Token));
+
         handler = new Handler(pst);
         targetContract(address(handler));
     }
 
-    function invariant_TotalPendingTransfersDoesNotExceedBalance() public {}
+    function invariant_TotalPendingTransfersDoesNotExceedBalance() public {
+        uint256 pstTokenBalance = pst.getBalanceForToken(address(mockERC20Token));
+
+        uint256 totalPendingValue;
+
+        for (uint256 i = 0; i < newLength; i++) {
+            uint256 totalPendingValue
+        }
+
+        // Create new mapping to store the contract pending balance for each token, separately from the fee mapping
+        // Create a getter for the pending token balance
+        // Check if the contract token balance pending token balance is equal with the pending token balance + token fee balance
+    }
 }

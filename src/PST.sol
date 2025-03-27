@@ -40,11 +40,11 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Fuzz testing ✅
 // Invariant testing
 // Differential Testing ?
-// Gas Tracking/Optimization 
-// Security checklist 
+// Gas Tracking/Optimization
+// Security checklist
 // Comments on functions
 // Frontend
-// Finalize Readme 
+// Finalize Readme
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 /**
@@ -186,7 +186,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     // Mapping of transfer Id to Transfer info struct
     mapping(uint256 transferId => Transfer transfer) public s_transfersById;
     // Mapping of transfer Id to last failed claim attempt time
-    mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime) private s_lastFailedClaimAttempt;
+    mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime) public s_lastFailedClaimAttempt;
     // Mapping to track active addresses
     mapping(address user => bool) public s_trackedAddresses;
     // Mapping to track an address to its last cleanup time
@@ -1162,6 +1162,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     // Function to get the list of all tracked addresses
     function getTrackedAddresses() external view returns (address[] memory) {
         return s_addressList;
+    }
+
+    // Function to get contract balance for a token
+    function getBalanceForToken(address token) external view onlyValidToken(token) returns (uint256) {
+        return IERC20(token).balanceOf(address(this));
     }
 
     // Function to get all accumulated fees for a token
