@@ -16,11 +16,13 @@ import {DeployPST} from "../../../script/DeployPST.s.sol";
 import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
 import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
 import {Handler} from "./Handler.t.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
 
-contract TestFuzzPST is Test {
+contract TestInvariantsPST is StdInvariant, Test {
     PST public pst;
     Handler public handler;
-    ERC20Mock public mockERC20Token;
+    ERC20Mock public mockERC20Token1;
 
     uint256 public totalTransferCost;
     uint256 public transferFeeCost;
@@ -33,29 +35,69 @@ contract TestFuzzPST is Test {
     uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.01% for <= LIMIT_LEVEL_ONE
     uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.001% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
     uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.0001% for > LIMIT_LEVEL_TWO
+    uint256 private constant LIMIT_LEVEL_ONE = 10e18;
+    uint256 private constant LIMIT_LEVEL_TWO = 100e18;
+    uint256 private constant FEE_SCALING_FACTOR = 10e6;
 
-    function setUp() public {
+    function setUp() external {
         DeployPST deployer = new DeployPST();
         pst = deployer.run();
 
-        mockERC20Token = new ERC20Mock("ERC20MockToken", "ERC20MOCK", 1e6 ether);
-
-        vm.prank(pst.owner());
-        pst.addTokenToAllowList(address(mockERC20Token));
-
         handler = new Handler(pst);
         targetContract(address(handler));
+
+        mockERC20Token1 = new ERC20Mock("MockToken1", "MCK1", 1e24 ether);
+        vm.prank(pst.owner());
+        pst.addTokenToAllowList(address(mockERC20Token1));
+
+        mockERC20Token1.transfer(address(handler), 1000 ether);
+        mockERC20Token1.approve(address(pst), 2000 ether);
+
+        address mockReceiver = address(0x1234);
+        uint256 mockAmount = 1e18;
+        string memory mockPassword = "securepass";
+
+        console.log("Sender initial balance: ", IERC20(mockERC20Token1).balanceOf(address(this)));
+
+        console.log("Handler balance before transfer: ", mockERC20Token1.balanceOf(address(handler)));
+
+        console.log("Calling createTransfer...");
+        handler.createTransfer(mockReceiver, address(mockERC20Token1), mockAmount, mockPassword);
     }
 
+    // function setUp() public {
+    //     console.log("Starting setup...");
+
+    //     DeployPST deployer = new DeployPST();
+    //     console.log("Deploying PST contract...");
+    //     pst = deployer.run();
+    //     console.log("PST contract deployed!");
+
+    //     handler = new Handler(pst);
+    //     targetContract(address(handler));
+    //     console.log("Handler contract deployed!");
+
+    //     console.log("Setup complete!");
+    // }
+
     function invariant_TotalPendingTransfersDoesNotExceedBalance() public {
-        uint256 pstTokenBalance = pst.getBalanceForToken(address(mockERC20Token));
+        console.log("Test started");
+        uint256 pstTokenBalance = pst.getBalanceForToken(address(mockERC20Token1));
+        console.log("Balance: ", pstTokenBalance);
 
         uint256 totalPendingValue;
         uint256[] memory pendingTransfers = pst.getPendingTransfers();
 
         for (uint256 i = 0; i < pendingTransfers.length; i++) {
-            //uint256 totalPendingValue;
+            uint256 pendingTransferId = pendingTransfers[i];
+            (,,, uint256 amount,,,) = pst.s_transfersById(pendingTransferId);
+            (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
+                amount, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
+            );
+
+            totalPendingValue += totalTransferCost;
         }
+        console.log("Total pending value: ", totalPendingValue);
 
         assert(pstTokenBalance == totalPendingValue);
 
@@ -63,4 +105,11 @@ contract TestFuzzPST is Test {
         // Create a getter for the pending token balance
         // Check if the contract token balance pending token balance is equal with the pending token balance + token fee balance
     }
+
+    // function invariant_Test() public pure {
+    //     uint256 x = 1;
+    //     uint256 y = 2;
+
+    //     assert(x < y);
+    // }
 }

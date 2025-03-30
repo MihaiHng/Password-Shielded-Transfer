@@ -12,67 +12,91 @@ contract Handler is Test {
     uint256 MAX_AMOUNT_TO_SEND = type(uint96).max;
     uint256 MIN_AMOUNT_TO_SEND = 1e14;
 
-    address[] public actors;
-    address internal currentActor;
+    // address[] public actors;
+    // address internal currentActor;
 
     constructor(PST _pst) {
         pst = _pst;
     }
 
-    modifier useActor(uint256 actorIndexSeed) {
-        currentActor = actors[bound(actorIndexSeed, 0, actors.length - 1)];
-        vm.startPrank(currentActor);
-        _;
-        vm.stopPrank();
-    }
+    // modifier useActor(uint256 actorIndexSeed) {
+    //     currentActor = actors[bound(actorIndexSeed, 0, actors.length - 1)];
+    //     vm.startPrank(currentActor);
+    //     _;
+    //     vm.stopPrank();
+    // }
 
-    function createTransfer(
-        address receiver,
-        address token,
-        uint256 amount,
-        string memory password,
-        uint256 actorIndexSeed
-    ) public useActor(actorIndexSeed) {
-        require(receiver != address(0), "Invalid receiver: zero address");
-        require(receiver != msg.sender, "Invalid receiver: cannot be sender");
+    // function createTransfer(
+    //     address receiver,
+    //     address token,
+    //     uint256 amount,
+    //     string memory password /*uint256 actorIndexSeed*/
+    // ) public /*useActor(actorIndexSeed)*/ {
+    //     console.log("Handler: createTransfer called");
 
-        require(token != address(0), "Invalid token address");
+    //     vm.assume(receiver != address(0) && receiver != msg.sender);
 
-        require(pst.s_allowedTokens(token), "Invalid token: token not supported");
+    //     vm.assume(token != address(0) && pst.s_allowedTokens(token));
+
+    //     vm.assume(bytes(password).length >= 7);
+
+    //     amount = bound(amount, MIN_AMOUNT_TO_SEND, MAX_AMOUNT_TO_SEND);
+
+    //     IERC20(token).transfer(msg.sender, MAX_AMOUNT_TO_SEND);
+
+    //     pst.createTransfer(receiver, token, amount, password);
+    // }
+
+    function createTransfer(address receiver, address token, uint256 amount, string memory password) public {
+        console.log("Handler: createTransfer called");
+
+        console.log("Checking receiver != address(0)");
+        require(receiver != address(0), "Receiver cannot be zero address");
+
+        console.log("Checking receiver != sender");
+        require(receiver != msg.sender, "Receiver cannot be sender");
+
+        console.log("Checking token != address(0)");
+        require(token != address(0), "Token cannot be zero address");
+
+        console.log("Checking if token is allowed");
+        require(pst.s_allowedTokens(token), "Token not allowed");
+
+        console.log("Checking password length");
+        require(bytes(password).length >= 7, "Password too short");
 
         amount = bound(amount, MIN_AMOUNT_TO_SEND, MAX_AMOUNT_TO_SEND);
+        console.log("Bound amount: ", amount);
 
-        require(bytes(password).length >= 7, "Password length must be at least 7");
+        IERC20(token).approve(address(pst), 2000 ether);
 
-        IERC20(token).transfer(msg.sender, MAX_AMOUNT_TO_SEND);
-        vm.deal(msg.sender, MAX_AMOUNT_TO_SEND);
-
+        console.log("Calling createTransfer on PST contract...");
         pst.createTransfer(receiver, token, amount, password);
+
+        console.log("createTransfer completed!");
     }
 
-    function cancelTransfer(uint256 transferId, uint256 actorIndexSeed) public useActor(actorIndexSeed) {
+    function cancelTransfer(uint256 transferId /*uint256 actorIndexSeed*/ ) public /*useActor(actorIndexSeed)*/ {
         (address sender,,,,,,) = pst.s_transfersById(transferId);
-        require(msg.sender == sender, "Only sender can cancel a transfer");
+        vm.assume(msg.sender == sender);
 
-        require(pst.s_isPending(transferId), "Only pending transfers can be canceled");
+        vm.assume(pst.s_isPending(transferId));
 
-        uint256 transferCounter = pst.s_transferCounter();
-        require(transferId >= transferCounter, "Transfer Id not valid");
+        vm.assume(transferId < pst.s_transferCounter());
 
         pst.cancelTransfer(transferId);
     }
 
     function claimTransfer(uint256 transferId, string memory password) public {
         uint256 lastAttempt = pst.s_lastFailedClaimAttempt(transferId);
-        require(block.timestamp < lastAttempt + pst.s_claimCooldownPeriod(), "Claim cooldown period not elapsed");
+        vm.assume(block.timestamp < lastAttempt + pst.s_claimCooldownPeriod());
 
         (, address receiver,,,,,) = pst.s_transfersById(transferId);
-        require(msg.sender != receiver, "Only receiver can claim the transfer");
+        vm.assume(msg.sender != receiver);
 
-        require(pst.s_isPending(transferId), "Only pending transfers can be claimed");
+        vm.assume(pst.s_isPending(transferId));
 
-        require(bytes(password).length != 0, "No password provided");
-        require(bytes(password).length >= pst.s_minPasswordLength(), "Password must be at least 7 characters long");
+        vm.assume(bytes(password).length >= pst.s_minPasswordLength());
 
         pst.claimTransfer(transferId, password);
     }
