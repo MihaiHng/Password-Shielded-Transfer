@@ -46,44 +46,30 @@ contract TestInvariantsPST is StdInvariant, Test {
         handler = new Handler(pst);
         targetContract(address(handler));
 
-        mockERC20Token1 = new ERC20Mock("MockToken1", "MCK1", 1e24 ether);
+        mockERC20Token1 = new ERC20Mock("MockToken1", "MCK1", 1e31 ether);
         vm.prank(pst.owner());
         pst.addTokenToAllowList(address(mockERC20Token1));
 
-        mockERC20Token1.transfer(address(handler), 1000 ether);
-        mockERC20Token1.approve(address(pst), 2000 ether);
+        mockERC20Token1.transfer(address(handler), 1e30 ether);
+        mockERC20Token1.approve(address(pst), 1e30 ether);
+        console.log("Handler's token balance:", IERC20(mockERC20Token1).balanceOf(address(handler)));
 
-        address mockReceiver = address(0x1234);
-        uint256 mockAmount = 1e18;
-        string memory mockPassword = "securepass";
+        // address mockReceiver = address(0x1234);
+        // uint256 mockAmount = 1e18;
+        // string memory mockPassword = "securepass";
 
-        console.log("Sender initial balance: ", IERC20(mockERC20Token1).balanceOf(address(this)));
+        // console.log("Sender initial balance: ", IERC20(mockERC20Token1).balanceOf(address(this)));
 
-        console.log("Handler balance before transfer: ", mockERC20Token1.balanceOf(address(handler)));
+        // console.log("Handler balance before transfer: ", mockERC20Token1.balanceOf(address(handler)));
 
-        console.log("Calling createTransfer...");
-        handler.createTransfer(mockReceiver, address(mockERC20Token1), mockAmount, mockPassword);
+        // console.log("Calling createTransfer...");
+        // handler.createTransfer(mockReceiver, address(mockERC20Token1), mockAmount, mockPassword);
     }
-
-    // function setUp() public {
-    //     console.log("Starting setup...");
-
-    //     DeployPST deployer = new DeployPST();
-    //     console.log("Deploying PST contract...");
-    //     pst = deployer.run();
-    //     console.log("PST contract deployed!");
-
-    //     handler = new Handler(pst);
-    //     targetContract(address(handler));
-    //     console.log("Handler contract deployed!");
-
-    //     console.log("Setup complete!");
-    // }
 
     function invariant_TotalPendingTransfersDoesNotExceedBalance() public {
         console.log("Test started");
         uint256 pstTokenBalance = pst.getBalanceForToken(address(mockERC20Token1));
-        console.log("Balance: ", pstTokenBalance);
+        //console.log("Balance: ", pstTokenBalance);
 
         uint256 totalPendingValue;
         uint256[] memory pendingTransfers = pst.getPendingTransfers();

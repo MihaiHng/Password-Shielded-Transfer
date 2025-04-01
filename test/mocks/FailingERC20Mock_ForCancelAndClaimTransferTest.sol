@@ -13,6 +13,6 @@ contract FailingERC20Mock_ForCancelAndClaimTransferTest is ERC20, Test {
     }
 
     function transfer(address, uint256) public pure override returns (bool) {
-        return false; // **Always fails**
+        return false; // Always fails
     }
 }
