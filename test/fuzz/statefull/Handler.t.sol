@@ -9,8 +9,9 @@ import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
 
 contract Handler is Test {
     PST public pst;
-
-    ERC20Mock public mockERC20Token1;
+    address[] public tokens;
+    ERC20Mock public link;
+    ERC20Mock public usdc;
 
     uint256 MAX_AMOUNT_TO_SEND = type(uint96).max;
     uint256 MIN_AMOUNT_TO_SEND = 1e14;
@@ -20,6 +21,12 @@ contract Handler is Test {
 
     constructor(PST _pst) {
         pst = _pst;
+
+        // Deploy new mock tokens
+
+        tokens = pst.getAppprovedTokens();
+        link = ERC20Mock(tokens[1]);
+        // usdc = ERC20Mock(tokens[2]);
     }
 
     // modifier useActor(uint256 actorIndexSeed) {
@@ -29,56 +36,34 @@ contract Handler is Test {
     //     vm.stopPrank();
     // }
 
-    function createTransfer(
-        address receiver,
-        address token,
-        uint256 amount,
-        string memory password /*uint256 actorIndexSeed*/
-    ) public /*useActor(actorIndexSeed)*/ {
+    function createTransfer(address receiver, address token, uint256 amount, string memory password)
+        /*uint256 actorIndexSeed*/
+        /*uint256 tokenIndexedSeed*/
+        public /*useActor(actorIndexSeed)*/
+    {
         console.log("Handler: createTransfer called");
+        console.log("tokens length: ", tokens.length);
+        for (uint256 i = 0; i < tokens.length; i++) {
+            console.log("tokens: ", tokens[i]);
+        }
 
         vm.assume(receiver != address(0) && receiver != msg.sender);
-
-        vm.assume(token != address(0) && pst.s_allowedTokens(token));
 
         vm.assume(bytes(password).length >= 7);
 
         amount = bound(amount, MIN_AMOUNT_TO_SEND, MAX_AMOUNT_TO_SEND);
+        //tokenIndexedSeed = bound(tokenIndexedSeed, 0, tokens.length - 1);
 
-        //console.log("Handler's token balance:", IERC20(mockERC20Token1).balanceOf(address(this)));
-        //IERC20(token).approve(address(pst), 1e30 ether);
+        ERC20Mock selectedToken = link;
+        console.log("Selected token:", address(selectedToken));
 
-        pst.createTransfer(receiver, token, amount, password);
+        // selectedToken.mint(address(this), 1e30);
+        // selectedToken.approve(address(pst), 1e30);
+
+        console.log("Approved Tokens:", tokens.length);
+
+        pst.createTransfer(receiver, address(selectedToken), amount, password);
     }
-
-    // function createTransfer(address receiver, address token, uint256 amount, string memory password) public {
-    //     console.log("Handler: createTransfer called");
-
-    //     console.log("Checking receiver != address(0)");
-    //     require(receiver != address(0), "Receiver cannot be zero address");
-
-    //     console.log("Checking receiver != sender");
-    //     require(receiver != msg.sender, "Receiver cannot be sender");
-
-    //     console.log("Checking token != address(0)");
-    //     require(token != address(0), "Token cannot be zero address");
-
-    //     console.log("Checking if token is allowed");
-    //     require(pst.s_allowedTokens(token), "Token not allowed");
-
-    //     console.log("Checking password length");
-    //     require(bytes(password).length >= 7, "Password too short");
-
-    //     amount = bound(amount, MIN_AMOUNT_TO_SEND, MAX_AMOUNT_TO_SEND);
-    //     console.log("Bound amount: ", amount);
-
-    //     IERC20(token).approve(address(pst), 2000 ether);
-
-    //     console.log("Calling createTransfer on PST contract...");
-    //     pst.createTransfer(receiver, token, amount, password);
-
-    //     console.log("createTransfer completed!");
-    // }
 
     function cancelTransfer(uint256 transferId /*uint256 actorIndexSeed*/ ) public /*useActor(actorIndexSeed)*/ {
         console.log("Handler: cancelTransfer called");
@@ -108,4 +93,12 @@ contract Handler is Test {
 
         pst.claimTransfer(transferId, password);
     }
+
+    function getToken(uint256 index) public view returns (ERC20Mock) {
+        return ERC20Mock(tokens[index % tokens.length]); // Ensure valid index selection
+    }
+
+    // function setTokens(ERC20Mock[] memory _tokens) public {
+    //     tokens = _tokens;
+    // }
 }
