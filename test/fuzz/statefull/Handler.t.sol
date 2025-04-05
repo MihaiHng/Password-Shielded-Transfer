@@ -9,9 +9,8 @@ import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
 
 contract Handler is Test {
     PST public pst;
-    address[] public tokens;
-    ERC20Mock public link;
-    ERC20Mock public usdc;
+    ERC20Mock[] public tokens;
+    address public lastUsedToken;
 
     uint256 MAX_AMOUNT_TO_SEND = type(uint96).max;
     uint256 MIN_AMOUNT_TO_SEND = 1e14;
@@ -21,12 +20,6 @@ contract Handler is Test {
 
     constructor(PST _pst) {
         pst = _pst;
-
-        // Deploy new mock tokens
-
-        tokens = pst.getAppprovedTokens();
-        link = ERC20Mock(tokens[1]);
-        // usdc = ERC20Mock(tokens[2]);
     }
 
     // modifier useActor(uint256 actorIndexSeed) {
@@ -36,33 +29,33 @@ contract Handler is Test {
     //     vm.stopPrank();
     // }
 
-    function createTransfer(address receiver, address token, uint256 amount, string memory password)
+    function createTransfers(
+        address receiver,
+        uint256 amount,
+        string memory password,
         /*uint256 actorIndexSeed*/
-        /*uint256 tokenIndexedSeed*/
-        public /*useActor(actorIndexSeed)*/
-    {
+        uint256 tokenIndexedSeed
+    ) public /*useActor(actorIndexSeed)*/ {
         console.log("Handler: createTransfer called");
-        console.log("tokens length: ", tokens.length);
-        for (uint256 i = 0; i < tokens.length; i++) {
-            console.log("tokens: ", tokens[i]);
-        }
 
-        vm.assume(receiver != address(0) && receiver != msg.sender);
+        vm.assume(receiver != address(0) && receiver != address(this));
 
         vm.assume(bytes(password).length >= 7);
 
         amount = bound(amount, MIN_AMOUNT_TO_SEND, MAX_AMOUNT_TO_SEND);
-        //tokenIndexedSeed = bound(tokenIndexedSeed, 0, tokens.length - 1);
+        tokenIndexedSeed = bound(tokenIndexedSeed, 0, tokens.length - 1);
 
-        ERC20Mock selectedToken = link;
+        ERC20Mock selectedToken = getToken(tokenIndexedSeed);
         console.log("Selected token:", address(selectedToken));
 
-        // selectedToken.mint(address(this), 1e30);
-        // selectedToken.approve(address(pst), 1e30);
+        vm.startPrank(address(this));
+        selectedToken.approve(address(pst), 1e30 ether);
 
-        console.log("Approved Tokens:", tokens.length);
+        lastUsedToken = address(selectedToken);
 
         pst.createTransfer(receiver, address(selectedToken), amount, password);
+
+        vm.stopPrank();
     }
 
     function cancelTransfer(uint256 transferId /*uint256 actorIndexSeed*/ ) public /*useActor(actorIndexSeed)*/ {
@@ -94,11 +87,11 @@ contract Handler is Test {
         pst.claimTransfer(transferId, password);
     }
 
-    function getToken(uint256 index) public view returns (ERC20Mock) {
+    function getToken(uint256 index) internal view returns (ERC20Mock) {
         return ERC20Mock(tokens[index % tokens.length]); // Ensure valid index selection
     }
 
-    // function setTokens(ERC20Mock[] memory _tokens) public {
-    //     tokens = _tokens;
-    // }
+    function setTokens(ERC20Mock[] memory _tokens) external {
+        tokens = _tokens;
+    }
 }

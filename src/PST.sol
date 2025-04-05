@@ -1378,7 +1378,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         );
     }
 
-    function getAppprovedTokens() external view returns (address[] memory tokens) {
-        return s_tokenList;
-    }
+    // function getAppprovedTokens() external view returns (address[] memory tokens) {
+    //     return s_tokenList;
+    // }
 }

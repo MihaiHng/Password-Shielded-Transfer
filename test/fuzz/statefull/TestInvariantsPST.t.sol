@@ -43,8 +43,43 @@ contract TestInvariantsPST is StdInvariant, Test {
         DeployPST deployer = new DeployPST();
         pst = deployer.run();
 
+        ERC20Mock mockERC20Token1 = new ERC20Mock("MockToken1", "MCK1", 1e31 ether);
+        ERC20Mock mockERC20Token2 = new ERC20Mock("MockToken2", "MCK2", 1e31 ether);
+        ERC20Mock mockERC20Token3 = new ERC20Mock("MockToken3", "MCK3", 1e31 ether);
+
+        tokens = new ERC20Mock[](3);
+
+        tokens[0] = mockERC20Token1;
+        tokens[1] = mockERC20Token2;
+        tokens[2] = mockERC20Token3;
+
         handler = new Handler(pst);
         targetContract(address(handler));
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            ERC20Mock(tokens[i]).transfer(address(handler), 1e30 ether);
+            //ERC20Mock(tokens[i]).approve(address(handler), 1e30 ether);
+
+            vm.prank(pst.owner());
+            pst.addTokenToAllowList(address(tokens[i]));
+        }
+
+        bytes4[] memory selectors = new bytes4[](3);
+        selectors[0] = bytes4(keccak256("createTransfers(address,uint256,string,uint256)"));
+        selectors[1] = bytes4(keccak256("cancelTransfer(uint256)"));
+        selectors[2] = bytes4(keccak256("claimTransfer(uint256,string)"));
+
+        FuzzSelector memory selector = FuzzSelector({addr: address(handler), selectors: selectors});
+
+        targetSelector(selector);
+
+        // bytes4[] memory selectorsNo = new bytes4[](3);
+        // selectorsNo[0] = bytes4(keccak256("setTokens(address[])"));
+        // excludeSelector(FuzzSelector({addr: address(handler), selectors: selectorsNo}));
+
+        handler.setTokens(tokens);
+
+        console.log("Setup completed");
 
         // address mockReceiver = address(0x1234);
         // uint256 mockAmount = 1e18;
@@ -58,31 +93,67 @@ contract TestInvariantsPST is StdInvariant, Test {
         // handler.createTransfer(mockReceiver, 1, mockAmount, mockPassword);
     }
 
-    function invariant_TotalPendingTransfersDoesNotExceedBalance() public {
-        console.log("Test started");
-        //uint256 pstTokenBalance = pst.getBalanceForToken(address(mockERC20Token1));
-        //console.log("Balance: ", pstTokenBalance);
+    function invariant_TotalPendingTransfersDoesNotExceedBalances() public {
+        address tokenAddress = handler.lastUsedToken();
+        ERC20Mock selectedToken = ERC20Mock(tokenAddress);
 
         uint256 totalPendingValue;
         uint256[] memory pendingTransfers = pst.getPendingTransfers();
 
         for (uint256 i = 0; i < pendingTransfers.length; i++) {
             uint256 pendingTransferId = pendingTransfers[i];
-            (,,, uint256 amount,,,) = pst.s_transfersById(pendingTransferId);
+            (,, address token, uint256 amount,,,) = pst.s_transfersById(pendingTransferId);
+
+            // Skip if not matching selected token
+            if (token != address(selectedToken)) continue;
+
             (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
                 amount, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
             );
 
             totalPendingValue += totalTransferCost;
         }
-        console.log("Total pending value: ", totalPendingValue);
 
-        //assert(pstTokenBalance == totalPendingValue);
+        uint256 pstTokenBalance = selectedToken.balanceOf(address(pst));
 
-        // Create new mapping to store the contract pending balance for each token, separately from the fee mapping
-        // Create a getter for the pending token balance
-        // Check if the contract token balance pending token balance is equal with the pending token balance + token fee balance
+        console.log("Total pending value for token:", totalPendingValue);
+        console.log("Actual PST token balance:     ", pstTokenBalance);
+
+        assertEq(pstTokenBalance, totalPendingValue, "PST token balance should match total pending value");
     }
+
+    function invariant_gettersCanNotRevert() public view {
+        pst.getTransferFees();
+        pst.getTrackedAddresses();
+        pst.getAllowedTokens();
+        pst.getBalance();
+    }
+
+    // function invariant_TotalPendingTransfersDoesNotExceedBalance() public {
+    //     console.log("Test started");
+    //     //uint256 pstTokenBalance = pst.getBalanceForToken(address(mockERC20Token1));
+    //     //console.log("Balance: ", pstTokenBalance);
+
+    //     uint256 totalPendingValue;
+    //     uint256[] memory pendingTransfers = pst.getPendingTransfers();
+
+    //     for (uint256 i = 0; i < pendingTransfers.length; i++) {
+    //         uint256 pendingTransferId = pendingTransfers[i];
+    //         (,,, uint256 amount,,,) = pst.s_transfersById(pendingTransferId);
+    //         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
+    //             amount, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
+    //         );
+
+    //         totalPendingValue += totalTransferCost;
+    //     }
+    //     console.log("Total pending value: ", totalPendingValue);
+
+    //     //assert(pstTokenBalance == totalPendingValue);
+
+    //     // Create new mapping to store the contract pending balance for each token, separately from the fee mapping
+    //     // Create a getter for the pending token balance
+    //     // Check if the contract token balance pending token balance is equal with the pending token balance + token fee balance
+    // }
 
     // function invariant_Test() public pure {
     //     uint256 x = 1;
