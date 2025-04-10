@@ -11,6 +11,7 @@ contract Handler is Test {
     PST public pst;
     ERC20Mock[] public tokens;
     address public lastUsedToken;
+    uint256 public transferCounter;
 
     uint256 MAX_AMOUNT_TO_SEND = type(uint96).max;
     uint256 MIN_AMOUNT_TO_SEND = 1e14;
@@ -44,30 +45,33 @@ contract Handler is Test {
 
         amount = bound(amount, MIN_AMOUNT_TO_SEND, MAX_AMOUNT_TO_SEND);
         tokenIndexedSeed = bound(tokenIndexedSeed, 0, tokens.length - 1);
+        console.log("Tokens length:", tokens.length);
 
         ERC20Mock selectedToken = getToken(tokenIndexedSeed);
         console.log("Selected token:", address(selectedToken));
 
-        vm.startPrank(address(this));
+        vm.prank(address(this));
         selectedToken.approve(address(pst), 1e30 ether);
 
         lastUsedToken = address(selectedToken);
 
         pst.createTransfer(receiver, address(selectedToken), amount, password);
 
-        vm.stopPrank();
+        //vm.stopPrank();
+
+        transferCounter++;
     }
 
     function cancelTransfer(uint256 transferId /*uint256 actorIndexSeed*/ ) public /*useActor(actorIndexSeed)*/ {
         console.log("Handler: cancelTransfer called");
 
+        transferId = bound(transferId, 0, transferCounter);
+
         (address sender,,,,,,) = pst.s_transfersById(transferId);
-        vm.assume(msg.sender == sender);
 
         vm.assume(pst.s_isPending(transferId));
 
-        vm.assume(transferId < pst.s_transferCounter());
-
+        vm.prank(sender);
         pst.cancelTransfer(transferId);
     }
 
@@ -77,10 +81,10 @@ contract Handler is Test {
         uint256 lastAttempt = pst.s_lastFailedClaimAttempt(transferId);
         vm.assume(block.timestamp > lastAttempt + pst.s_claimCooldownPeriod());
 
+        vm.assume(pst.s_isPending(transferId));
+
         (, address receiver,,,,,) = pst.s_transfersById(transferId);
         vm.assume(msg.sender != receiver);
-
-        vm.assume(pst.s_isPending(transferId));
 
         vm.assume(bytes(password).length >= pst.s_minPasswordLength());
 

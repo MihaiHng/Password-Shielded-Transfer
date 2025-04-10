@@ -58,7 +58,6 @@ contract TestInvariantsPST is StdInvariant, Test {
 
         for (uint256 i = 0; i < tokens.length; i++) {
             ERC20Mock(tokens[i]).transfer(address(handler), 1e30 ether);
-            //ERC20Mock(tokens[i]).approve(address(handler), 1e30 ether);
 
             vm.prank(pst.owner());
             pst.addTokenToAllowList(address(tokens[i]));
@@ -68,6 +67,10 @@ contract TestInvariantsPST is StdInvariant, Test {
         selectors[0] = bytes4(keccak256("createTransfers(address,uint256,string,uint256)"));
         selectors[1] = bytes4(keccak256("cancelTransfer(uint256)"));
         selectors[2] = bytes4(keccak256("claimTransfer(uint256,string)"));
+
+        // bytes4[] memory selectors2 = new bytes4[](2);
+        // selectors2[0] = bytes4(keccak256("cancelTransfer(uint256)"));
+        // selectors2[1] = bytes4(keccak256("claimTransfer(uint256,string)"));
 
         FuzzSelector memory selector = FuzzSelector({addr: address(handler), selectors: selectors});
 
