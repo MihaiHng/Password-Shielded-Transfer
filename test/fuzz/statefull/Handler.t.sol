@@ -9,9 +9,14 @@ import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
 
 contract Handler is Test {
     PST public pst;
-    ERC20Mock[] public tokens;
+
     address public lastUsedToken;
-    uint256 public transferCounter;
+
+    ERC20Mock[] public tokens;
+    uint256[] public pendingTransfers;
+
+    mapping(uint256 => address) public createdBy;
+    mapping(uint256 => string) public passwords;
 
     uint256 MAX_AMOUNT_TO_SEND = type(uint96).max;
     uint256 MIN_AMOUNT_TO_SEND = 1e14;
@@ -30,13 +35,9 @@ contract Handler is Test {
     //     vm.stopPrank();
     // }
 
-    function createTransfers(
-        address receiver,
-        uint256 amount,
-        string memory password,
-        /*uint256 actorIndexSeed*/
-        uint256 tokenIndexedSeed
-    ) public /*useActor(actorIndexSeed)*/ {
+    function createTransfer(address receiver, uint256 amount, string memory password, uint256 tokenIndexedSeed)
+        public
+    {
         console.log("Handler: createTransfer called");
 
         vm.assume(receiver != address(0) && receiver != address(this));
@@ -50,43 +51,63 @@ contract Handler is Test {
         ERC20Mock selectedToken = getToken(tokenIndexedSeed);
         console.log("Selected token:", address(selectedToken));
 
-        vm.prank(address(this));
         selectedToken.approve(address(pst), 1e30 ether);
 
         lastUsedToken = address(selectedToken);
 
         pst.createTransfer(receiver, address(selectedToken), amount, password);
 
-        //vm.stopPrank();
+        uint256 transferId = pst.s_transferCounter() - 1; // Get latest ID
+        pendingTransfers.push(transferId);
+        //createdBy[transferId] = address(this);
+        console.log("Transfer Id:", transferId);
 
-        transferCounter++;
+        passwords[transferId] = password;
+        console.log("Password:", passwords[transferId]);
     }
 
-    function cancelTransfer(uint256 transferId /*uint256 actorIndexSeed*/ ) public /*useActor(actorIndexSeed)*/ {
+    function cancelTransfer(uint256 index) public {
         console.log("Handler: cancelTransfer called");
 
-        transferId = bound(transferId, 0, transferCounter);
+        if (pendingTransfers.length == 0) return;
 
-        (address sender,,,,,,) = pst.s_transfersById(transferId);
+        index = bound(index, 0, pendingTransfers.length - 1);
+        uint256 transferId = pendingTransfers[index];
 
         vm.assume(pst.s_isPending(transferId));
 
-        vm.prank(sender);
+        (address sender,,,,,,) = pst.s_transfersById(transferId);
+        if (sender != address(this)) return;
+
         pst.cancelTransfer(transferId);
+
+        pendingTransfers[index] = pendingTransfers[pendingTransfers.length - 1];
+        pendingTransfers.pop();
     }
 
-    function claimTransfer(uint256 transferId, string memory password) public {
+    function claimTransfer(uint256 index, bool useValidPassword, string memory invalidPassword) public {
         console.log("Handler: claimTransfer called");
 
+        if (pendingTransfers.length == 0) return;
+
+        index = bound(index, 0, pendingTransfers.length - 1);
+        uint256 transferId = pendingTransfers[index];
+
+        vm.assume(pst.s_isPending(transferId));
+
+        //vm.warp(block.timestamp + 1);
         uint256 lastAttempt = pst.s_lastFailedClaimAttempt(transferId);
         vm.assume(block.timestamp > lastAttempt + pst.s_claimCooldownPeriod());
 
-        vm.assume(pst.s_isPending(transferId));
+        // // (, address receiver,,,,,) = pst.s_transfersById(transferId);
+        // // vm.assume(msg.sender != receiver);
 
-        (, address receiver,,,,,) = pst.s_transfersById(transferId);
-        vm.assume(msg.sender != receiver);
+        string memory password = useValidPassword ? passwords[transferId] : invalidPassword;
+        //string memory password = passwords[transferId];
 
-        vm.assume(bytes(password).length >= pst.s_minPasswordLength());
+        // // vm.assume(bytes(password).length >= pst.s_minPasswordLength());
+
+        // //if (!pst.checkPassword(transferId, password)) return;
 
         pst.claimTransfer(transferId, password);
     }

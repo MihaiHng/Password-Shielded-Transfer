@@ -64,9 +64,9 @@ contract TestInvariantsPST is StdInvariant, Test {
         }
 
         bytes4[] memory selectors = new bytes4[](3);
-        selectors[0] = bytes4(keccak256("createTransfers(address,uint256,string,uint256)"));
+        selectors[0] = bytes4(keccak256("createTransfer(address,uint256,string,uint256)"));
         selectors[1] = bytes4(keccak256("cancelTransfer(uint256)"));
-        selectors[2] = bytes4(keccak256("claimTransfer(uint256,string)"));
+        selectors[2] = bytes4(keccak256("claimTransfer(uint256,bool,string)"));
 
         // bytes4[] memory selectors2 = new bytes4[](2);
         // selectors2[0] = bytes4(keccak256("cancelTransfer(uint256)"));
@@ -125,7 +125,7 @@ contract TestInvariantsPST is StdInvariant, Test {
         assertEq(pstTokenBalance, totalPendingValue, "PST token balance should match total pending value");
     }
 
-    function invariant_gettersCanNotRevert() public view {
+    function invariant_gettersCantRevert() public view {
         pst.getTransferFees();
         pst.getTrackedAddresses();
         pst.getAllowedTokens();
