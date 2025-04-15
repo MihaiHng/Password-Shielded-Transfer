@@ -460,9 +460,8 @@ contract TestPST_UtilityFunctions is Test {
         pst.removeAllCanceledTransfers();
 
         // Assert
-        vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__NoCanceledTransfers.selector);
-        pst.getCanceledTransfers();
+        uint256 canceledLength = pst.getCanceledTransferCount();
+        assertEq(canceledLength, 0);
     }
 
     function testRemoveAllExpiredAndRefundedTransfers() public transferCreated {
@@ -485,9 +484,8 @@ contract TestPST_UtilityFunctions is Test {
         pst.removeAllExpiredAndRefundedTransfers();
 
         // Assert
-        vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__NoExpiredTransfers.selector);
-        pst.getExpiredAndRefundedTransfers();
+        uint256 expiredAndRefundedLength = pst.getExpiredAndRefundedTransferCount();
+        assertEq(expiredAndRefundedLength, 0);
     }
 
     function testRemoveAllClaimedTransfers() public transferCreatedAndClaimed {
@@ -507,9 +505,8 @@ contract TestPST_UtilityFunctions is Test {
         pst.removeAllClaimedTransfers();
 
         // Assert
-        vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
-        pst.getClaimedTransfers();
+        uint256 claimedLength = pst.getCanceledTransferCount();
+        assertEq(claimedLength, 0);
     }
 
     function testRemoveAllCanceledTransfersByAddress() public transferCreatedAndCanceled {
@@ -529,9 +526,8 @@ contract TestPST_UtilityFunctions is Test {
         pst.removeAllCanceledTransfersByAddress(SENDER);
 
         // Assert
-        vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__NoCanceledTransfers.selector);
-        pst.getCanceledTransfersForAddress(SENDER);
+        uint256 canceledForAddressLength = pst.getCanceledTransferForAddressCount(SENDER);
+        assertEq(canceledForAddressLength, 0);
     }
 
     function testRemoveAllExpiredAndRefundedTransfersByAddress() public transferCreated {
@@ -558,9 +554,8 @@ contract TestPST_UtilityFunctions is Test {
         pst.removeAllExpiredAndRefundedTransfersByAddress(SENDER);
 
         // Assert
-        vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__NoExpiredTransfers.selector);
-        pst.getExpiredAndRefundedTransfersForAddress(SENDER);
+        uint256 expiredAndRefundedForAddressLength = pst.getExpiredAndRefundedTransfersForAddressCount(SENDER);
+        assertEq(expiredAndRefundedForAddressLength, 0);
     }
 
     function testRemoveAllClaimedTransfersByAddress() public transferCreatedAndClaimed {
@@ -583,9 +578,8 @@ contract TestPST_UtilityFunctions is Test {
         pst.removeAllClaimedTransfersByAddress(SENDER);
 
         // Assert
-        vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
-        pst.getClaimedTransfersForAddress(SENDER);
+        uint256 claimedTransfersForAddress1Length = pst.getClaimedTransfersForAddressCount(SENDER);
+        assertEq(claimedTransfersForAddress1Length, 0);
     }
 
     function testClearHistory()
@@ -614,14 +608,12 @@ contract TestPST_UtilityFunctions is Test {
 
         assertTrue(isTracked, "Address should still be tracked if more pending transfers exist");
 
-        vm.startPrank(pst.owner());
-        vm.expectRevert(PST.PST__NoCanceledTransfers.selector);
-        pst.getCanceledTransfersForAddress(SENDER);
-        vm.expectRevert(PST.PST__NoExpiredTransfers.selector);
-        pst.getExpiredAndRefundedTransfersForAddress(SENDER);
-        vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
-        pst.getClaimedTransfersForAddress(SENDER);
-        vm.stopPrank();
+        uint256 canceledForAddressLength = pst.getCanceledTransferForAddressCount(SENDER);
+        assertEq(canceledForAddressLength, 0);
+        uint256 claimedTransfersForAddress0Length = pst.getClaimedTransfersForAddressCount(SENDER);
+        assertEq(claimedTransfersForAddress0Length, 0);
+        uint256 expiredAndRefundedForAddressLength = pst.getExpiredAndRefundedTransfersForAddressCount(SENDER);
+        assertEq(expiredAndRefundedForAddressLength, 0);
     }
 
     function testRemoveInactiveAddresses() public {

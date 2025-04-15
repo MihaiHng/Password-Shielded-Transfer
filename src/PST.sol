@@ -1204,34 +1204,46 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Function to get all pending transfers in the system
     function getPendingTransfers() external view returns (uint256[] memory) {
-        if (s_pendingTransferIds.length == 0) {
-            revert PST__NoPendingTransfers();
-        }
+        // if (s_pendingTransferIds.length == 0) {
+        //     revert PST__NoPendingTransfers();
+        // }
         return s_pendingTransferIds;
     }
 
     // Function to get all canceled transfers in the system
     function getCanceledTransfers() external view returns (uint256[] memory) {
-        if (s_canceledTransferIds.length == 0) {
-            revert PST__NoCanceledTransfers();
-        }
+        // if (s_canceledTransferIds.length == 0) {
+        //     revert PST__NoCanceledTransfers();
+        // }
         return s_canceledTransferIds;
+    }
+
+    function getCanceledTransferCount() external view returns (uint256) {
+        return s_canceledTransferIds.length;
     }
 
     // Function to get all expired and refunded transfers in the system
     function getExpiredAndRefundedTransfers() external view returns (uint256[] memory) {
-        if (s_expiredAndRefundedTransferIds.length == 0) {
-            revert PST__NoExpiredTransfers();
-        }
+        // if (s_expiredAndRefundedTransferIds.length == 0) {
+        //     revert PST__NoExpiredTransfers();
+        // }
         return s_expiredAndRefundedTransferIds;
+    }
+
+    function getExpiredAndRefundedTransferCount() external view returns (uint256) {
+        return s_expiredAndRefundedTransferIds.length;
     }
 
     // Function to get all claimed transfers in the system
     function getClaimedTransfers() external view returns (uint256[] memory) {
-        if (s_claimedTransferIds.length == 0) {
-            revert PST__NoClaimedTransfers();
-        }
+        // if (s_claimedTransferIds.length == 0) {
+        //     revert PST__NoClaimedTransfers();
+        // }
         return s_claimedTransferIds;
+    }
+
+    function getClaimedTransferCount() external view returns (uint256) {
+        return s_claimedTransferIds.length;
     }
 
     // Function to get all expired transfers in the system
@@ -1267,9 +1279,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         onlyValidAddress(user)
         returns (uint256[] memory)
     {
-        if (s_pendingTransfersByAddress[user].length == 0) {
-            revert PST__NoPendingTransfers();
-        }
+        // if (s_pendingTransfersByAddress[user].length == 0) {
+        //     revert PST__NoPendingTransfers();
+        // }
 
         return s_pendingTransfersByAddress[user];
     }
@@ -1281,11 +1293,15 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         onlyValidAddress(user)
         returns (uint256[] memory)
     {
-        if (s_canceledTransfersByAddress[user].length == 0) {
-            revert PST__NoCanceledTransfers();
-        }
+        // if (s_canceledTransfersByAddress[user].length == 0) {
+        //     revert PST__NoCanceledTransfers();
+        // }
 
         return s_canceledTransfersByAddress[user];
+    }
+
+    function getCanceledTransferForAddressCount(address user) external view returns (uint256) {
+        return s_canceledTransfersByAddress[user].length;
     }
 
     // Function to get all expired transfers for an address
@@ -1295,11 +1311,15 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         onlyValidAddress(user)
         returns (uint256[] memory)
     {
-        if (s_expiredAndRefundedTransfersByAddress[user].length == 0) {
-            revert PST__NoExpiredTransfers();
-        }
+        // if (s_expiredAndRefundedTransfersByAddress[user].length == 0) {
+        //     revert PST__NoExpiredTransfers();
+        // }
 
         return s_expiredAndRefundedTransfersByAddress[user];
+    }
+
+    function getExpiredAndRefundedTransfersForAddressCount(address user) external view returns (uint256) {
+        return s_expiredAndRefundedTransfersByAddress[user].length;
     }
 
     // Function to get all claimed transfers for an address
@@ -1309,11 +1329,15 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         onlyValidAddress(user)
         returns (uint256[] memory)
     {
-        if (s_claimedTransfersByAddress[user].length == 0) {
-            revert PST__NoClaimedTransfers();
-        }
+        // if (s_claimedTransfersByAddress[user].length == 0) {
+        //     revert PST__NoClaimedTransfers();
+        // }
 
         return s_claimedTransfersByAddress[user];
+    }
+
+    function getClaimedTransfersForAddressCount(address user) external view returns (uint256) {
+        return s_claimedTransfersByAddress[user].length;
     }
 
     // Function to get all transfers for an address

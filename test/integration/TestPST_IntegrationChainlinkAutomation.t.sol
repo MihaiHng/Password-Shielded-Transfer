@@ -176,16 +176,14 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         pst.performMaintenance();
 
         // Assert
-        vm.startPrank(pst.owner());
-        vm.expectRevert(PST.PST__NoCanceledTransfers.selector);
-        pst.getCanceledTransfersForAddress(SENDER);
-        vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
-        pst.getClaimedTransfersForAddress(SENDER);
-        vm.expectRevert(PST.PST__NoExpiredTransfers.selector);
-        pst.getExpiredAndRefundedTransfersForAddress(SENDER);
-        vm.expectRevert(PST.PST__NoClaimedTransfers.selector);
-        pst.getClaimedTransfersForAddress(ANOTHER_SENDER);
-        vm.stopPrank();
+        uint256 canceledForAddressLength = pst.getCanceledTransferForAddressCount(SENDER);
+        assertEq(canceledForAddressLength, 0);
+        uint256 claimedTransfersForAddress0Length = pst.getClaimedTransfersForAddressCount(SENDER);
+        assertEq(claimedTransfersForAddress0Length, 0);
+        uint256 expiredAndRefundedForAddressLength = pst.getExpiredAndRefundedTransfersForAddressCount(SENDER);
+        assertEq(expiredAndRefundedForAddressLength, 0);
+        uint256 claimedTransfersForAddress1Length = pst.getClaimedTransfersForAddressCount(ANOTHER_SENDER);
+        assertEq(claimedTransfersForAddress1Length, 0);
 
         assertTrue(
             pst.getPendingTransfersForAddress(SENDER).length > 0, "SENDER's pending transfers should not be removed"

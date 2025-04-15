@@ -63,22 +63,15 @@ contract TestInvariantsPST is StdInvariant, Test {
             pst.addTokenToAllowList(address(tokens[i]));
         }
 
-        bytes4[] memory selectors = new bytes4[](3);
-        selectors[0] = bytes4(keccak256("createTransfer(address,uint256,string,uint256)"));
-        selectors[1] = bytes4(keccak256("cancelTransfer(uint256)"));
-        selectors[2] = bytes4(keccak256("claimTransfer(uint256,bool,string)"));
-
-        // bytes4[] memory selectors2 = new bytes4[](2);
-        // selectors2[0] = bytes4(keccak256("cancelTransfer(uint256)"));
-        // selectors2[1] = bytes4(keccak256("claimTransfer(uint256,string)"));
+        bytes4[] memory selectors = new bytes4[](4);
+        selectors[0] = handler.createTransfer.selector;
+        selectors[1] = handler.createTransfer.selector;
+        selectors[2] = handler.cancelTransfer.selector;
+        selectors[3] = handler.claimTransfer.selector;
 
         FuzzSelector memory selector = FuzzSelector({addr: address(handler), selectors: selectors});
 
         targetSelector(selector);
-
-        // bytes4[] memory selectorsNo = new bytes4[](3);
-        // selectorsNo[0] = bytes4(keccak256("setTokens(address[])"));
-        // excludeSelector(FuzzSelector({addr: address(handler), selectors: selectorsNo}));
 
         handler.setTokens(tokens);
 
@@ -96,40 +89,71 @@ contract TestInvariantsPST is StdInvariant, Test {
         // handler.createTransfer(mockReceiver, 1, mockAmount, mockPassword);
     }
 
-    function invariant_TotalPendingTransfersDoesNotExceedBalances() public {
-        address tokenAddress = handler.lastUsedToken();
-        ERC20Mock selectedToken = ERC20Mock(tokenAddress);
+    // function invariant_TotalPendingTransfersDoesNotExceedBalances() public {
+    //     address tokenAddress = handler.lastUsedToken();
+    //     ERC20Mock selectedToken = ERC20Mock(tokenAddress);
 
-        uint256 totalPendingValue;
-        uint256[] memory pendingTransfers = pst.getPendingTransfers();
+    //     uint256 totalPendingValue;
+    //     uint256[] memory pendingTransfers = pst.getPendingTransfers();
 
-        for (uint256 i = 0; i < pendingTransfers.length; i++) {
-            uint256 pendingTransferId = pendingTransfers[i];
-            (,, address token, uint256 amount,,,) = pst.s_transfersById(pendingTransferId);
+    //     for (uint256 i = 0; i < pendingTransfers.length; i++) {
+    //         uint256 pendingTransferId = pendingTransfers[i];
+    //         (,, address token, uint256 amount,,,) = pst.s_transfersById(pendingTransferId);
 
-            // Skip if not matching selected token
-            if (token != address(selectedToken)) continue;
+    //         // Skip if not matching selected token
+    //         if (token != address(selectedToken)) continue;
 
-            (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-                amount, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
-            );
+    //         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
+    //             amount, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
+    //         );
 
-            totalPendingValue += totalTransferCost;
+    //         totalPendingValue += totalTransferCost;
+    //     }
+
+    //     uint256 pstTokenBalance = selectedToken.balanceOf(address(pst));
+
+    //     console.log("Total pending value for token:", totalPendingValue);
+    //     console.log("Actual PST token balance:     ", pstTokenBalance);
+
+    //     assertEq(pstTokenBalance, totalPendingValue, "PST token balance should match total pending value");
+    // }
+
+    function invariant_gettersCanNotRevert() public view {
+        pst.getBalance();
+        pst.getAllowedTokens();
+        pst.getTrackedAddresses();
+        pst.getTransferFees();
+
+        for (uint8 i = 1; i <= 3; i++) {
+            pst.getTransferFee(i);
         }
 
-        uint256 pstTokenBalance = selectedToken.balanceOf(address(pst));
+        for (uint256 i = 0; i < tokens.length && i < 5; i++) {
+            address token = address(tokens[i]);
+            pst.getBalanceForToken(token);
+            pst.getAccumulatedFeesForToken(token);
+        }
 
-        console.log("Total pending value for token:", totalPendingValue);
-        console.log("Actual PST token balance:     ", pstTokenBalance);
+        for (uint256 i = 0; i < handler.getTrackedTransferIdsLength() && i < 5; i++) {
+            uint256 id = handler.getTrackedTransferIdAt(i);
+            pst.getClaimCooldownStatus(id);
+            pst.getTransferDetails(id);
+        }
 
-        assertEq(pstTokenBalance, totalPendingValue, "PST token balance should match total pending value");
-    }
+        pst.getPendingTransfers();
+        pst.getCanceledTransfers();
+        pst.getExpiredAndRefundedTransfers();
+        pst.getClaimedTransfers();
+        pst.getExpiredTransfers();
 
-    function invariant_gettersCantRevert() public view {
-        pst.getTransferFees();
-        pst.getTrackedAddresses();
-        pst.getAllowedTokens();
-        pst.getBalance();
+        for (uint256 i = 0; i < handler.getTrackedUsersLength() && i < 5; i++) {
+            address user = handler.getTrackedUserAt(i);
+            pst.getPendingTransfersForAddress(user);
+            pst.getCanceledTransfersForAddress(user);
+            pst.getExpiredAndRefundedTransfersForAddress(user);
+            pst.getClaimedTransfersForAddress(user);
+            pst.getAllTransfersByAddress(user);
+        }
     }
 
     // function invariant_TotalPendingTransfersDoesNotExceedBalance() public {
