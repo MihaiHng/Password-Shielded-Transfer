@@ -5,9 +5,9 @@ pragma solidity ^0.8.28;
 import {Test, console, console2} from "forge-std/Test.sol";
 import {PST} from "src/PST.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
+import {ERC20Mock} from "../../../mocks/ERC20Mock.sol";
 
-contract Handler is Test {
+contract StopOnRevertHandler is Test {
     PST public pst;
 
     address public lastUsedToken;
@@ -136,6 +136,32 @@ contract Handler is Test {
         vm.startPrank(receiver);
         pst.claimTransfer(transferId, password);
         vm.stopPrank();
+    }
+
+    function refundExpiredTransfer(uint256 index) public {
+        console.log("Handler: refundExpiredTransfer called");
+
+        if (pendingTransfers.length == 0) return;
+
+        vm.warp(block.timestamp + pst.s_availabilityPeriod() + 1);
+
+        index = bound(index, 0, pendingTransfers.length - 1);
+        uint256 transferId = pendingTransfers[index];
+
+        if (!pst.s_isPending(transferId)) {
+            // Instead of discarding, check for a valid transfer id
+            for (uint256 i = 0; i < pendingTransfers.length; i++) {
+                transferId = pendingTransfers[i];
+                if (pst.s_isPending(transferId)) {
+                    index = i;
+                    break;
+                }
+            }
+            // If still no valid transfer id was found, return without discarding the test
+            if (!pst.s_isPending(transferId)) return;
+        }
+
+        pst.refundExpiredTransfer(transferId);
     }
 
     function getToken(uint256 index) internal view returns (ERC20Mock) {

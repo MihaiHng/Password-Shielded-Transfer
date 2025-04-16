@@ -1,0 +1,215 @@
+// SPDX-License-Identifier: MIT
+
+// Continue on Revert
+// 1. Pst balance is always equal to the sum of the total pending transfers value + fees value
+// 2. A pending transfer always expires after the availability period has elapsed
+
+// Stop on Revert
+// 1. A pending transfer can only be claimed with the correct password
+// 2. A pending transfer can only be canceled by its sender/creator
+// 3. Getter view functions should never revert
+
+pragma solidity ^0.8.28;
+
+import {PST} from "src/PST.sol";
+import {StdInvariant} from "forge-std/StdInvariant.sol";
+import {Test, console, console2} from "forge-std/Test.sol";
+import {DeployPST} from "../../../../script/DeployPST.s.sol";
+import {TransferFeeLibrary} from "src/libraries/TransferFeeLib.sol";
+import {ERC20Mock} from "../../../mocks/ERC20Mock.sol";
+import {ContinueOnRevertHandler} from "./ContinueOnRevertHandler.t.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+contract TestInvariantsPST is StdInvariant, Test {
+    PST public pst;
+    ContinueOnRevertHandler public handler;
+    ERC20Mock[] public tokens;
+
+    uint256 public totalTransferCost;
+    uint256 public transferFeeCost;
+    uint256 public transferId;
+
+    // Mapping from token address to total pending amount
+    mapping(address => uint256) public totalPendingPerToken;
+
+    // Constants for fee levels
+    uint8 private constant LVL1 = 1;
+    uint8 private constant LVL2 = 2;
+    uint8 private constant LVL3 = 3;
+    uint256 private constant TRANSFER_FEE_LVL_ONE = 1000; // 0.01% for <= LIMIT_LEVEL_ONE
+    uint256 private constant TRANSFER_FEE_LVL_TWO = 100; // 0.001% for > LIMIT_LEVEL_ONE and <= LIMIT_LEVEL_TWO
+    uint256 private constant TRANSFER_FEE_LVL_THREE = 10; // 0.0001% for > LIMIT_LEVEL_TWO
+    uint256 private constant LIMIT_LEVEL_ONE = 10e18;
+    uint256 private constant LIMIT_LEVEL_TWO = 100e18;
+    uint256 private constant FEE_SCALING_FACTOR = 10e6;
+
+    function setUp() external {
+        DeployPST deployer = new DeployPST();
+        pst = deployer.run();
+
+        ERC20Mock mockERC20Token1 = new ERC20Mock("MockToken1", "MCK1", 1e31 ether);
+        ERC20Mock mockERC20Token2 = new ERC20Mock("MockToken2", "MCK2", 1e31 ether);
+        ERC20Mock mockERC20Token3 = new ERC20Mock("MockToken3", "MCK3", 1e31 ether);
+
+        tokens = new ERC20Mock[](3);
+
+        tokens[0] = mockERC20Token1;
+        tokens[1] = mockERC20Token2;
+        tokens[2] = mockERC20Token3;
+
+        handler = new ContinueOnRevertHandler(pst);
+        targetContract(address(handler));
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            ERC20Mock(tokens[i]).transfer(address(handler), 1e30 ether);
+
+            vm.prank(pst.owner());
+            pst.addTokenToAllowList(address(tokens[i]));
+        }
+
+        bytes4[] memory selectors = new bytes4[](5);
+        selectors[0] = handler.createTransfer.selector;
+        selectors[1] = handler.createTransfer.selector;
+        selectors[2] = handler.cancelTransfer.selector;
+        selectors[3] = handler.claimTransfer.selector;
+        selectors[4] = handler.refundExpiredTransfer.selector;
+
+        FuzzSelector memory selector = FuzzSelector({addr: address(handler), selectors: selectors});
+
+        targetSelector(selector);
+
+        handler.setTokens(tokens);
+
+        console.log("Setup completed");
+
+        // address mockReceiver = address(0x1234);
+        // uint256 mockAmount = 1e18;
+        // string memory mockPassword = "securepass";
+
+        // console.log("Sender initial balance: ", IERC20(tokens[0]).balanceOf(address(this)));
+
+        // console.log("Handler balance before transfer: ", tokens[0].balanceOf(address(handler)));
+
+        // console.log("Calling createTransfer...");
+        // handler.createTransfer(mockReceiver, 1, mockAmount, mockPassword);
+    }
+
+    function invariant_pendingTransfersDoNotExceedTokenBalance() public {
+        uint256 numTransfers = handler.getTrackedTransferIdsLength();
+
+        for (uint256 i = 0; i < numTransfers; i++) {
+            transferId = handler.getTrackedTransferIdAt(i);
+            if (pst.s_isPending(transferId)) {
+                (,, address token, uint256 amount,,,) = pst.s_transfersById(transferId);
+                totalPendingPerToken[token] += amount;
+            }
+        }
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            address tokenAddr = address(tokens[i]);
+            uint256 contractBalance = IERC20(tokenAddr).balanceOf(address(pst));
+            uint256 accumulatedFeesForToken = pst.getAccumulatedFeesForToken(tokenAddr);
+            assertLe(totalPendingPerToken[tokenAddr] + accumulatedFeesForToken, contractBalance);
+        }
+    }
+
+    // function invariant_TotalPendingTransfersDoesNotExceedBalances() public {
+    //     address tokenAddress = handler.lastUsedToken();
+    //     ERC20Mock selectedToken = ERC20Mock(tokenAddress);
+
+    //     uint256 totalPendingValue;
+    //     uint256[] memory pendingTransfers = pst.getPendingTransfers();
+
+    //     for (uint256 i = 0; i < pendingTransfers.length; i++) {
+    //         uint256 pendingTransferId = pendingTransfers[i];
+    //         (,, address token, uint256 amount,,,) = pst.s_transfersById(pendingTransferId);
+
+    //         // Skip if not matching selected token
+    //         if (token != address(selectedToken)) continue;
+
+    //         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
+    //             amount, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
+    //         );
+
+    //         totalPendingValue += totalTransferCost;
+    //     }
+
+    //     uint256 pstTokenBalance = selectedToken.balanceOf(address(pst));
+
+    //     console.log("Total pending value for token:", totalPendingValue);
+    //     console.log("Actual PST token balance:     ", pstTokenBalance);
+
+    //     assertEq(pstTokenBalance, totalPendingValue, "PST token balance should match total pending value");
+    // }
+
+    function invariant_gettersCanNotRevert() public view {
+        pst.getBalance();
+        pst.getAllowedTokens();
+        pst.getTrackedAddresses();
+        pst.getTransferFees();
+
+        for (uint8 i = 1; i <= 3; i++) {
+            pst.getTransferFee(i);
+        }
+
+        for (uint256 i = 0; i < tokens.length && i < 5; i++) {
+            address token = address(tokens[i]);
+            pst.getBalanceForToken(token);
+            pst.getAccumulatedFeesForToken(token);
+        }
+
+        for (uint256 i = 0; i < handler.getTrackedTransferIdsLength() && i < 5; i++) {
+            uint256 id = handler.getTrackedTransferIdAt(i);
+            pst.getClaimCooldownStatus(id);
+            pst.getTransferDetails(id);
+        }
+
+        pst.getPendingTransfers();
+        pst.getCanceledTransfers();
+        pst.getExpiredAndRefundedTransfers();
+        pst.getClaimedTransfers();
+        pst.getExpiredTransfers();
+
+        for (uint256 i = 0; i < handler.getTrackedUsersLength() && i < 5; i++) {
+            address user = handler.getTrackedUserAt(i);
+            pst.getPendingTransfersForAddress(user);
+            pst.getCanceledTransfersForAddress(user);
+            pst.getExpiredAndRefundedTransfersForAddress(user);
+            pst.getClaimedTransfersForAddress(user);
+            pst.getAllTransfersByAddress(user);
+        }
+    }
+
+    // function invariant_TotalPendingTransfersDoesNotExceedBalance() public {
+    //     console.log("Test started");
+    //     //uint256 pstTokenBalance = pst.getBalanceForToken(address(mockERC20Token1));
+    //     //console.log("Balance: ", pstTokenBalance);
+
+    //     uint256 totalPendingValue;
+    //     uint256[] memory pendingTransfers = pst.getPendingTransfers();
+
+    //     for (uint256 i = 0; i < pendingTransfers.length; i++) {
+    //         uint256 pendingTransferId = pendingTransfers[i];
+    //         (,,, uint256 amount,,,) = pst.s_transfersById(pendingTransferId);
+    //         (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
+    //             amount, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
+    //         );
+
+    //         totalPendingValue += totalTransferCost;
+    //     }
+    //     console.log("Total pending value: ", totalPendingValue);
+
+    //     //assert(pstTokenBalance == totalPendingValue);
+
+    //     // Create new mapping to store the contract pending balance for each token, separately from the fee mapping
+    //     // Create a getter for the pending token balance
+    //     // Check if the contract token balance pending token balance is equal with the pending token balance + token fee balance
+    // }
+
+    // function invariant_Test() public pure {
+    //     uint256 x = 1;
+    //     uint256 y = 2;
+
+    //     assert(x < y);
+    // }
+}
