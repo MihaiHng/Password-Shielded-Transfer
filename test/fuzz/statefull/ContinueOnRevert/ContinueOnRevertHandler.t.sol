@@ -136,32 +136,31 @@ contract ContinueOnRevertHandler is Test {
         vm.startPrank(receiver);
         pst.claimTransfer(transferId, password);
         vm.stopPrank();
+
+        pendingTransfers[index] = pendingTransfers[pendingTransfers.length - 1];
+        pendingTransfers.pop();
     }
 
-    function refundExpiredTransfer(uint256 index) public {
-        console.log("Handler: refundExpiredTransfer called");
+    function refundExpiredTransfers() public {
+        console.log("Handler: refundExpiredTransfers called");
 
-        if (pendingTransfers.length == 0) return;
-
+        // Warp time forward — enough to ensure some transfers may be expired
         vm.warp(block.timestamp + pst.s_availabilityPeriod() + 1);
 
-        index = bound(index, 0, pendingTransfers.length - 1);
-        uint256 transferId = pendingTransfers[index];
+        uint256 numTransfers = pendingTransfers.length;
 
-        if (!pst.s_isPending(transferId)) {
-            // Instead of discarding, check for a valid transfer id
-            for (uint256 i = 0; i < pendingTransfers.length; i++) {
-                transferId = pendingTransfers[i];
-                if (pst.s_isPending(transferId)) {
-                    index = i;
-                    break;
+        for (uint256 i = 0; i < numTransfers; i++) {
+            uint256 transferId = pendingTransfers[i];
+            (,,,,, uint256 expiringTime,) = pst.s_transfersById(transferId);
+
+            if (block.timestamp > expiringTime) {
+                try pst.refundExpiredTransfer(transferId) {
+                    console.log("Refunded transfer: ", transferId);
+                } catch {
+                    console.log("Refund failed for transfer: ", transferId);
                 }
             }
-            // If still no valid transfer id was found, return without discarding the test
-            if (!pst.s_isPending(transferId)) return;
         }
-
-        pst.refundExpiredTransfer(transferId);
     }
 
     function getToken(uint256 index) internal view returns (ERC20Mock) {
