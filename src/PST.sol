@@ -26,8 +26,7 @@ pragma solidity ^0.8.28;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {AutomationCompatibleInterface} from
-    "@chainlink/contracts/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
+import {AutomationCompatibleInterface} from "@chainlink/contracts/v0.8/automation/interfaces/AutomationCompatibleInterface.sol";
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 
@@ -41,7 +40,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Invariant testing
 // Differential Testing ?
 // Gas Tracking/Optimization
-// Security checklist
+// Security checklist [Notion]
 // Comments on functions
 // Frontend
 // Finalize Readme
@@ -175,24 +174,31 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     mapping(uint256 transferId => bool) public s_isClaimed;
 
     // Mapping to track all the pending transfers for an address
-    mapping(address user => uint256[] transferIds) private s_pendingTransfersByAddress;
+    mapping(address user => uint256[] transferIds)
+        private s_pendingTransfersByAddress;
     // Mapping to track all canceled transfers for an address
-    mapping(address user => uint256[] transferIds) private s_canceledTransfersByAddress;
+    mapping(address user => uint256[] transferIds)
+        private s_canceledTransfersByAddress;
     // Mapping to track all expired and refunded transfers for an address
-    mapping(address user => uint256[] transferIds) private s_expiredAndRefundedTransfersByAddress;
+    mapping(address user => uint256[] transferIds)
+        private s_expiredAndRefundedTransfersByAddress;
     // Mapping to track all claimed transfers for an address
-    mapping(address user => uint256[] transferIds) private s_claimedTransfersByAddress;
+    mapping(address user => uint256[] transferIds)
+        private s_claimedTransfersByAddress;
 
     // Mapping of transfer Id to Transfer info struct
     mapping(uint256 transferId => Transfer transfer) public s_transfersById;
     // Mapping of transfer Id to last failed claim attempt time
-    mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime) public s_lastFailedClaimAttempt;
+    mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime)
+        public s_lastFailedClaimAttempt;
     // Mapping to track active addresses
     mapping(address user => bool) public s_trackedAddresses;
     // Mapping to track an address to its last cleanup time
-    mapping(address user => uint256 lastCleanupTime) public s_lastCleanupTimeByAddress;
+    mapping(address user => uint256 lastCleanupTime)
+        public s_lastCleanupTimeByAddress;
     // Mapping to track an address to its last active time
-    mapping(address user => uint256 lastActiveTime) public s_lastInteractionTime;
+    mapping(address user => uint256 lastActiveTime)
+        public s_lastInteractionTime;
 
     // Mapping to track if a token address is whitelisted
     mapping(address token => bool isAllowed) public s_allowedTokens;
@@ -212,14 +218,25 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         uint256 transferFeeCost
     );
     // Event to log when the last interaction time changes for an address
-    event LastInteractionTimeUpdated(address indexed user, uint256 indexed lastInteractionTime);
+    event LastInteractionTimeUpdated(
+        address indexed user,
+        uint256 indexed lastInteractionTime
+    );
     // Event to log a canceled transfer
     event TransferCanceled(
-        address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
+        address indexed sender,
+        address indexed receiver,
+        uint256 indexed transferIndex,
+        address token,
+        uint256 amount
     );
     // Event to log a completed transfer
     event TransferCompleted(
-        address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
+        address indexed sender,
+        address indexed receiver,
+        uint256 indexed transferIndex,
+        address token,
+        uint256 amount
     );
 
     // Event to log an expired transfer
@@ -233,7 +250,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     );
 
     // Event to log a successful fee withdrawal
-    event SuccessfulFeeWithdrawal(address indexed token, uint256 indexed amount);
+    event SuccessfulFeeWithdrawal(
+        address indexed token,
+        uint256 indexed amount
+    );
 
     // Event to log a token being whitelisted
     event TokenAddedToAllowList(address indexed token);
@@ -344,7 +364,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     modifier onlyKeepers() {
-        require(msg.sender == i_automationRegistry, "Only Keepers can call this function");
+        require(
+            msg.sender == i_automationRegistry,
+            "Only Keepers can call this function"
+        );
         _;
     }
 
@@ -372,7 +395,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         /**
          * @dev Initializing an ERC20 list of preapproved tokens
          */
-        address[] memory tokens = PreApprovedTokensLibrary.getPreApprovedTokens();
+        address[] memory tokens = PreApprovedTokensLibrary
+            .getPreApprovedTokens();
 
         for (uint256 i = 0; i < tokens.length; i++) {
             address token = tokens[i];
@@ -392,7 +416,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
      * @dev
      *
      */
-    function createTransfer(address receiver, address token, uint256 amount, string memory password)
+    function createTransfer(
+        address receiver,
+        address token,
+        uint256 amount,
+        string memory password
+    )
         external
         payable
         nonReentrant
@@ -405,7 +434,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
 
         if (amount < MIN_AMOUNT_TO_SEND) {
-            revert PST__AmountToSendShouldBeHigher({minAmount: MIN_AMOUNT_TO_SEND});
+            revert PST__AmountToSendShouldBeHigher({
+                minAmount: MIN_AMOUNT_TO_SEND
+            });
         }
 
         if (bytes(password).length == 0) {
@@ -413,16 +444,25 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
 
         if (bytes(password).length < s_minPasswordLength) {
-            revert PST__PasswordTooShort({minCharactersRequired: s_minPasswordLength});
+            revert PST__PasswordTooShort({
+                minCharactersRequired: s_minPasswordLength
+            });
         }
 
         uint256 transferId = s_transferCounter++;
 
         TransferFeeLibrary.TransferFee memory currentFee = transferFee;
 
-        (uint256 totalTransferCost, uint256 transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-            amount, s_limitLevelOne, s_limitLevelTwo, s_feeScalingFactor, currentFee
-        );
+        (
+            uint256 totalTransferCost,
+            uint256 transferFeeCost
+        ) = TransferFeeLibrary.calculateTotalTransferCost(
+                amount,
+                s_limitLevelOne,
+                s_limitLevelTwo,
+                s_feeScalingFactor,
+                currentFee
+            );
 
         s_transfersById[transferId].sender = msg.sender;
         s_transfersById[transferId].receiver = receiver;
@@ -448,21 +488,33 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         addAddressToTracking(msg.sender);
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
-        emit TransferInitiated(msg.sender, receiver, transferId, token, amount, transferFeeCost);
+        emit TransferInitiated(
+            msg.sender,
+            receiver,
+            transferId,
+            token,
+            amount,
+            transferFeeCost
+        );
         emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
 
         if (token == address(0)) {
             if (msg.value < totalTransferCost) {
-                revert PST__NotEnoughFunds({required: totalTransferCost, provided: msg.value});
+                revert PST__NotEnoughFunds({
+                    required: totalTransferCost,
+                    provided: msg.value
+                });
             }
 
-            (bool success,) = address(this).call{value: totalTransferCost}("");
+            (bool success, ) = address(this).call{value: totalTransferCost}("");
             if (!success) {
                 revert PST__TransferFailed();
             }
 
             if (msg.value > totalTransferCost) {
-                (bool refundSuccess,) = msg.sender.call{value: msg.value - totalTransferCost}("");
+                (bool refundSuccess, ) = msg.sender.call{
+                    value: msg.value - totalTransferCost
+                }("");
                 if (!refundSuccess) {
                     revert PST__RefundFailed();
                 }
@@ -470,10 +522,17 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         } else {
             IERC20 erc20 = IERC20(token);
             if (erc20.balanceOf(msg.sender) < totalTransferCost) {
-                revert PST__NotEnoughFunds({required: totalTransferCost, provided: erc20.balanceOf(msg.sender)});
+                revert PST__NotEnoughFunds({
+                    required: totalTransferCost,
+                    provided: erc20.balanceOf(msg.sender)
+                });
             }
 
-            bool success = erc20.transferFrom(msg.sender, address(this), totalTransferCost);
+            bool success = erc20.transferFrom(
+                msg.sender,
+                address(this),
+                totalTransferCost
+            );
             if (!success) {
                 revert PST__TransferFailed();
             }
@@ -483,7 +542,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     /**
      * @dev
      */
-    function cancelTransfer(uint256 transferId)
+    function cancelTransfer(
+        uint256 transferId
+    )
         external
         nonReentrant
         onlySender(transferId)
@@ -509,11 +570,17 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
-        emit TransferCanceled(msg.sender, receiver, transferId, tokenToCancel, amountToCancel);
+        emit TransferCanceled(
+            msg.sender,
+            receiver,
+            transferId,
+            tokenToCancel,
+            amountToCancel
+        );
         emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
 
         if (tokenToCancel == address(0)) {
-            (bool success,) = msg.sender.call{value: amountToCancel}("");
+            (bool success, ) = msg.sender.call{value: amountToCancel}("");
             if (!success) {
                 revert PST__TransferFailed();
             }
@@ -529,7 +596,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     /**
      * @dev
      */
-    function claimTransfer(uint256 transferId, string memory password)
+    function claimTransfer(
+        uint256 transferId,
+        string memory password
+    )
         external
         nonReentrant
         claimCooldownElapsed(transferId)
@@ -550,7 +620,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
 
         if (bytes(password).length < s_minPasswordLength) {
-            revert PST__PasswordTooShort({minCharactersRequired: s_minPasswordLength});
+            revert PST__PasswordTooShort({
+                minCharactersRequired: s_minPasswordLength
+            });
         }
 
         if (!checkPassword(transferId, password)) {
@@ -574,11 +646,17 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
         s_lastInteractionTime[msg.sender] = block.timestamp;
 
-        emit TransferCompleted(sender, msg.sender, transferId, tokenToClaim, amountToClaim);
+        emit TransferCompleted(
+            sender,
+            msg.sender,
+            transferId,
+            tokenToClaim,
+            amountToClaim
+        );
         emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
 
         if (tokenToClaim == address(0)) {
-            (bool success,) = msg.sender.call{value: amountToClaim}("");
+            (bool success, ) = msg.sender.call{value: amountToClaim}("");
             if (!success) {
                 revert PST__TransferFailed();
             }
@@ -605,7 +683,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
      * 3.
      * 4. Implicity, your subscription is funded with LINK.
      */
-    function checkUpkeep(bytes calldata /* checkData */ )
+    function checkUpkeep(
+        bytes calldata /* checkData */
+    )
         external
         view
         override
@@ -625,14 +705,19 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
             upkeepNeeded = true;
 
             uint256[] memory batchExpiredTransfers = new uint256[](batchLimit);
-            uint256 batchExpiredCount = expiredCount > batchLimit ? batchLimit : expiredCount;
+            uint256 batchExpiredCount = expiredCount > batchLimit
+                ? batchLimit
+                : expiredCount;
 
             if (expiredCount > 0) {
                 for (uint256 i = 0; i < batchExpiredCount; i++) {
                     batchExpiredTransfers[i] = expiredTransfers[i];
                 }
 
-                performData = abi.encode(batchExpiredTransfers, batchExpiredCount);
+                performData = abi.encode(
+                    batchExpiredTransfers,
+                    batchExpiredCount
+                );
             }
         } else {
             upkeepNeeded = false;
@@ -640,9 +725,13 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
-    function performUpkeep(bytes calldata performData) external override onlyKeepers {
-        (uint256[] memory batchExpiredTransfers, uint256 batchExpiredCount) =
-            abi.decode(performData, (uint256[], uint256));
+    function performUpkeep(
+        bytes calldata performData
+    ) external override onlyKeepers {
+        (
+            uint256[] memory batchExpiredTransfers,
+            uint256 batchExpiredCount
+        ) = abi.decode(performData, (uint256[], uint256));
 
         for (uint256 i = 0; i < batchExpiredCount; i++) {
             refundExpiredTransfer(batchExpiredTransfers[i]);
@@ -675,7 +764,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         _removeInactiveAddresses();
     }
 
-    function setTransferFee(uint8 level, uint256 newTransferFee) external onlyOwner moreThanZero(newTransferFee) {
+    function setTransferFee(
+        uint8 level,
+        uint256 newTransferFee
+    ) external onlyOwner moreThanZero(newTransferFee) {
         if (level == 1) {
             transferFee.lvlOne = newTransferFee;
         } else if (level == 2) {
@@ -689,13 +781,17 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit TransferFeeChanged(level, newTransferFee);
     }
 
-    function setNewLimitLevelOne(uint256 newLimitLevelOne) external onlyOwner moreThanZero(newLimitLevelOne) {
+    function setNewLimitLevelOne(
+        uint256 newLimitLevelOne
+    ) external onlyOwner moreThanZero(newLimitLevelOne) {
         s_limitLevelOne = newLimitLevelOne;
 
         emit LimitLevelOneChanged(newLimitLevelOne);
     }
 
-    function setNewLimitLevelTwo(uint256 newLimitLevelTwo) external onlyOwner moreThanZero(newLimitLevelTwo) {
+    function setNewLimitLevelTwo(
+        uint256 newLimitLevelTwo
+    ) external onlyOwner moreThanZero(newLimitLevelTwo) {
         if (newLimitLevelTwo <= s_limitLevelOne) {
             revert PST__LimitLevelTwoMustBeGreaterThanLimitLevelOne();
         }
@@ -705,13 +801,18 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit LimitLevelTwoChanged(newLimitLevelTwo);
     }
 
-    function setNewFeeScalingFactor(uint256 newFeeScalingFactor) external onlyOwner moreThanZero(newFeeScalingFactor) {
+    function setNewFeeScalingFactor(
+        uint256 newFeeScalingFactor
+    ) external onlyOwner moreThanZero(newFeeScalingFactor) {
         s_feeScalingFactor = newFeeScalingFactor;
 
         emit FeeScalingFactorChanged(newFeeScalingFactor);
     }
 
-    function withdrawFeesForToken(address token, uint256 amount)
+    function withdrawFeesForToken(
+        address token,
+        uint256 amount
+    )
         external
         onlyOwner
         onlyValidToken(token)
@@ -727,7 +828,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit SuccessfulFeeWithdrawal(token, amount);
 
         if (token == address(0)) {
-            (bool success,) = msg.sender.call{value: amount}("");
+            (bool success, ) = msg.sender.call{value: amount}("");
             if (!success) {
                 revert PST__FeeWIthdrawalFailed();
             }
@@ -740,11 +841,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
-    function setNewMinPasswordLength(uint256 newMinPasswordLength)
-        external
-        onlyOwner
-        moreThanZero(newMinPasswordLength)
-    {
+    function setNewMinPasswordLength(
+        uint256 newMinPasswordLength
+    ) external onlyOwner moreThanZero(newMinPasswordLength) {
         if (newMinPasswordLength < REQ_MIN_PASSWORD_LENGTH) {
             revert PST__MinPasswordLengthIsSeven();
         }
@@ -754,13 +853,13 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit MinPasswordLengthChanged(newMinPasswordLength);
     }
 
-    function setNewClaimCooldownPeriod(uint256 newClaimCooldownPeriod)
-        external
-        onlyOwner
-        moreThanZero(newClaimCooldownPeriod)
-    {
+    function setNewClaimCooldownPeriod(
+        uint256 newClaimCooldownPeriod
+    ) external onlyOwner moreThanZero(newClaimCooldownPeriod) {
         if (newClaimCooldownPeriod < MIN_CLAIM_COOLDOWN_PERIOD) {
-            revert PST__InvalidClaimCooldownPeriod({minRequired: MIN_CLAIM_COOLDOWN_PERIOD});
+            revert PST__InvalidClaimCooldownPeriod({
+                minRequired: MIN_CLAIM_COOLDOWN_PERIOD
+            });
         }
 
         s_claimCooldownPeriod = newClaimCooldownPeriod;
@@ -768,13 +867,13 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit ClaimCooldownPeriodChanged(newClaimCooldownPeriod);
     }
 
-    function setNewAvailabilityPeriod(uint256 newAvailabilityPeriod)
-        external
-        onlyOwner
-        moreThanZero(newAvailabilityPeriod)
-    {
+    function setNewAvailabilityPeriod(
+        uint256 newAvailabilityPeriod
+    ) external onlyOwner moreThanZero(newAvailabilityPeriod) {
         if (newAvailabilityPeriod < MIN_AVAILABILITY_PERIOD) {
-            revert PST__InvalidAvailabilityPeriod({minRequired: MIN_AVAILABILITY_PERIOD});
+            revert PST__InvalidAvailabilityPeriod({
+                minRequired: MIN_AVAILABILITY_PERIOD
+            });
         }
 
         s_availabilityPeriod = newAvailabilityPeriod;
@@ -782,9 +881,13 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit AvailabilityPeriodChanged(newAvailabilityPeriod);
     }
 
-    function setNewCleanupInterval(uint256 newCleanupInterval) external onlyOwner moreThanZero(newCleanupInterval) {
+    function setNewCleanupInterval(
+        uint256 newCleanupInterval
+    ) external onlyOwner moreThanZero(newCleanupInterval) {
         if (newCleanupInterval < MIN_CLEANUP_INTERVAL) {
-            revert PST__InvalidCleanupInterval({minRequired: MIN_CLEANUP_INTERVAL});
+            revert PST__InvalidCleanupInterval({
+                minRequired: MIN_CLEANUP_INTERVAL
+            });
         }
 
         s_cleanupInterval = newCleanupInterval;
@@ -792,13 +895,13 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit CleanupIntervalChanged(newCleanupInterval);
     }
 
-    function setNewInactivityThreshold(uint256 newInactivityThreshold)
-        external
-        onlyOwner
-        moreThanZero(newInactivityThreshold)
-    {
+    function setNewInactivityThreshold(
+        uint256 newInactivityThreshold
+    ) external onlyOwner moreThanZero(newInactivityThreshold) {
         if (newInactivityThreshold < MIN_INACTIVITY_THRESHOLD) {
-            revert PST__InvalidInactivityThreshhold({minRequired: MIN_INACTIVITY_THRESHOLD});
+            revert PST__InvalidInactivityThreshhold({
+                minRequired: MIN_INACTIVITY_THRESHOLD
+            });
         }
 
         s_inactivityThreshold = newInactivityThreshold;
@@ -822,7 +925,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     /**
      *  @dev
      */
-    function refundExpiredTransfer(uint256 transferId) public onlyValidTransferIds(transferId) {
+    function refundExpiredTransfer(
+        uint256 transferId
+    ) public onlyValidTransferIds(transferId) {
         Transfer storage transferToRefund = s_transfersById[transferId];
         address sender = transferToRefund.sender;
         address receiver = transferToRefund.receiver;
@@ -846,11 +951,16 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         removeFromPendingTransfersByAddress(receiver, transferId);
 
         emit TransferExpiredAndRefunded(
-            sender, receiver, transferId, tokenToRefund, amountToRefund, transferToRefund.expiringTime
+            sender,
+            receiver,
+            transferId,
+            tokenToRefund,
+            amountToRefund,
+            transferToRefund.expiringTime
         );
 
         if (tokenToRefund == address(0)) {
-            (bool success,) = sender.call{value: amountToRefund}("");
+            (bool success, ) = sender.call{value: amountToRefund}("");
             if (!success) {
                 revert PST__RefundFailed();
             }
@@ -890,34 +1000,48 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
-    function addFee(address token, uint256 _transferFeeCost) public onlyValidToken(token) {
+    function addFee(
+        address token,
+        uint256 _transferFeeCost
+    ) public onlyValidToken(token) {
         s_feeBalances[token] += _transferFeeCost;
     }
 
-    function encodePassword(uint256 transferId, string memory _password) public view returns (bytes32) {
+    function encodePassword(
+        uint256 transferId,
+        string memory _password
+    ) public view returns (bytes32) {
         address sender = s_transfersById[transferId].sender;
         address receiver = s_transfersById[transferId].receiver;
-        bytes32 salt = keccak256(abi.encodePacked(transferId, sender, receiver));
+        bytes32 salt = keccak256(
+            abi.encodePacked(transferId, sender, receiver)
+        );
         bytes32 encodedPassword = keccak256(abi.encodePacked(_password, salt));
 
         return (encodedPassword);
     }
 
-    function checkPassword(uint256 transferId, string memory password) public view returns (bool) {
+    function checkPassword(
+        uint256 transferId,
+        string memory password
+    ) public view returns (bool) {
         bytes32 receiverPassword = encodePassword(transferId, password);
         bytes32 senderPassword = s_transfersById[transferId].encodedPassword;
 
         return senderPassword == receiverPassword;
     }
 
-    function calculateTotalTransferCostPublic(uint256 amount)
-        public
-        view
-        returns (uint256 totalTransferCost, uint256 transferFeeCost)
-    {
-        return TransferFeeLibrary.calculateTotalTransferCost(
-            amount, s_limitLevelOne, s_limitLevelTwo, s_feeScalingFactor, transferFee
-        );
+    function calculateTotalTransferCostPublic(
+        uint256 amount
+    ) public view returns (uint256 totalTransferCost, uint256 transferFeeCost) {
+        return
+            TransferFeeLibrary.calculateTotalTransferCost(
+                amount,
+                s_limitLevelOne,
+                s_limitLevelTwo,
+                s_feeScalingFactor,
+                transferFee
+            );
     }
 
     function removeFromPendingTransfers(uint256 transferId) public {
@@ -942,7 +1066,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
-    function removeFromPendingTransfersByAddress(address user, uint256 transferId) public {
+    function removeFromPendingTransfersByAddress(
+        address user,
+        uint256 transferId
+    ) public {
         uint256 length = s_pendingTransfersByAddress[user].length;
         if (length == 0) {
             revert PST__NoPendingTransfers();
@@ -950,7 +1077,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
         for (uint256 i = 0; i < length; i++) {
             if (s_pendingTransfersByAddress[user][i] == transferId) {
-                s_pendingTransfersByAddress[user][i] = s_pendingTransfersByAddress[user][length - 1];
+                s_pendingTransfersByAddress[user][
+                    i
+                ] = s_pendingTransfersByAddress[user][length - 1];
                 s_pendingTransfersByAddress[user].pop();
                 break;
             }
@@ -1014,19 +1143,25 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit ClaimedTransfersHistoryCleared();
     }
 
-    function removeAllCanceledTransfersByAddress(address user) public onlyValidAddress(user) {
+    function removeAllCanceledTransfersByAddress(
+        address user
+    ) public onlyValidAddress(user) {
         delete s_canceledTransfersByAddress[user];
 
         emit CanceledTransfersForAddressHistoryCleared(user);
     }
 
-    function removeAllExpiredAndRefundedTransfersByAddress(address user) public onlyValidAddress(user) {
+    function removeAllExpiredAndRefundedTransfersByAddress(
+        address user
+    ) public onlyValidAddress(user) {
         delete s_expiredAndRefundedTransfersByAddress[user];
 
         emit ExpiredAndRefundedTransfersForAddressHistoryCleared(user);
     }
 
-    function removeAllClaimedTransfersByAddress(address user) public onlyValidAddress(user) {
+    function removeAllClaimedTransfersByAddress(
+        address user
+    ) public onlyValidAddress(user) {
         delete s_claimedTransfersByAddress[user];
 
         emit ClaimedTransfersForAddressHistoryCleared(user);
@@ -1070,10 +1205,17 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         address[] memory addressList = s_addressList;
         uint256 countCleanedAddresses;
 
-        for (uint256 i = 0; i < addressList.length && countCleanedAddresses < batchLimit / 2; i++) {
+        for (
+            uint256 i = 0;
+            i < addressList.length && countCleanedAddresses < batchLimit / 2;
+            i++
+        ) {
             address user = addressList[i];
 
-            if ((block.timestamp - s_lastCleanupTimeByAddress[user]) >= s_cleanupInterval) {
+            if (
+                (block.timestamp - s_lastCleanupTimeByAddress[user]) >=
+                s_cleanupInterval
+            ) {
                 removeAllCanceledTransfersByAddress(user);
                 removeAllExpiredAndRefundedTransfersByAddress(user);
                 removeAllClaimedTransfersByAddress(user);
@@ -1095,10 +1237,17 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         address[] memory addressList = s_addressList;
         uint256 countRemovedAddresses;
 
-        for (uint256 i = 0; i < addressList.length && countRemovedAddresses < batchLimit; i++) {
+        for (
+            uint256 i = 0;
+            i < addressList.length && countRemovedAddresses < batchLimit;
+            i++
+        ) {
             address user = addressList[i];
 
-            if ((block.timestamp - s_lastInteractionTime[user]) >= s_inactivityThreshold) {
+            if (
+                (block.timestamp - s_lastInteractionTime[user]) >=
+                s_inactivityThreshold
+            ) {
                 removeAddressFromTracking(user);
                 countRemovedAddresses++;
             }
@@ -1138,7 +1287,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Function to check if a specific transfer is expired and refunded
-    function isExpiredAndRefundedTransfer(uint256 transferId) public view returns (bool) {
+    function isExpiredAndRefundedTransfer(
+        uint256 transferId
+    ) public view returns (bool) {
         return s_isExpiredAndRefunded[transferId];
     }
 
@@ -1165,16 +1316,24 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Function to get contract balance for a token
-    function getBalanceForToken(address token) external view onlyValidToken(token) returns (uint256) {
+    function getBalanceForToken(
+        address token
+    ) external view onlyValidToken(token) returns (uint256) {
         return IERC20(token).balanceOf(address(this));
     }
 
     // Function to get all accumulated fees for a token
-    function getAccumulatedFeesForToken(address token) external view onlyValidToken(token) returns (uint256) {
+    function getAccumulatedFeesForToken(
+        address token
+    ) external view onlyValidToken(token) returns (uint256) {
         return s_feeBalances[token];
     }
 
-    function getTransferFees() external view returns (TransferFeeLibrary.TransferFee memory) {
+    function getTransferFees()
+        external
+        view
+        returns (TransferFeeLibrary.TransferFee memory)
+    {
         return transferFee;
     }
 
@@ -1190,14 +1349,15 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
-    function getClaimCooldownStatus(uint256 transferId)
-        external
-        view
-        returns (bool isCoolDownActive, uint256 timeRemaining)
-    {
+    function getClaimCooldownStatus(
+        uint256 transferId
+    ) external view returns (bool isCoolDownActive, uint256 timeRemaining) {
         uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
         if (lastAttempt + s_claimCooldownPeriod >= block.timestamp) {
-            return (true, (lastAttempt + s_claimCooldownPeriod) - block.timestamp);
+            return (
+                true,
+                (lastAttempt + s_claimCooldownPeriod) - block.timestamp
+            );
         }
         return (false, 0);
     }
@@ -1223,14 +1383,22 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Function to get all expired and refunded transfers in the system
-    function getExpiredAndRefundedTransfers() external view returns (uint256[] memory) {
+    function getExpiredAndRefundedTransfers()
+        external
+        view
+        returns (uint256[] memory)
+    {
         // if (s_expiredAndRefundedTransferIds.length == 0) {
         //     revert PST__NoExpiredTransfers();
         // }
         return s_expiredAndRefundedTransferIds;
     }
 
-    function getExpiredAndRefundedTransferCount() external view returns (uint256) {
+    function getExpiredAndRefundedTransferCount()
+        external
+        view
+        returns (uint256)
+    {
         return s_expiredAndRefundedTransferIds.length;
     }
 
@@ -1273,12 +1441,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Function to get all pending transfers for an address
-    function getPendingTransfersForAddress(address user)
-        external
-        view
-        onlyValidAddress(user)
-        returns (uint256[] memory)
-    {
+    function getPendingTransfersForAddress(
+        address user
+    ) external view onlyValidAddress(user) returns (uint256[] memory) {
         // if (s_pendingTransfersByAddress[user].length == 0) {
         //     revert PST__NoPendingTransfers();
         // }
@@ -1287,12 +1452,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Function to get all canceled transfers for an address
-    function getCanceledTransfersForAddress(address user)
-        external
-        view
-        onlyValidAddress(user)
-        returns (uint256[] memory)
-    {
+    function getCanceledTransfersForAddress(
+        address user
+    ) external view onlyValidAddress(user) returns (uint256[] memory) {
         // if (s_canceledTransfersByAddress[user].length == 0) {
         //     revert PST__NoCanceledTransfers();
         // }
@@ -1300,17 +1462,16 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_canceledTransfersByAddress[user];
     }
 
-    function getCanceledTransferForAddressCount(address user) external view returns (uint256) {
+    function getCanceledTransferForAddressCount(
+        address user
+    ) external view returns (uint256) {
         return s_canceledTransfersByAddress[user].length;
     }
 
     // Function to get all expired transfers for an address
-    function getExpiredAndRefundedTransfersForAddress(address user)
-        external
-        view
-        onlyValidAddress(user)
-        returns (uint256[] memory)
-    {
+    function getExpiredAndRefundedTransfersForAddress(
+        address user
+    ) external view onlyValidAddress(user) returns (uint256[] memory) {
         // if (s_expiredAndRefundedTransfersByAddress[user].length == 0) {
         //     revert PST__NoExpiredTransfers();
         // }
@@ -1318,17 +1479,16 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_expiredAndRefundedTransfersByAddress[user];
     }
 
-    function getExpiredAndRefundedTransfersForAddressCount(address user) external view returns (uint256) {
+    function getExpiredAndRefundedTransfersForAddressCount(
+        address user
+    ) external view returns (uint256) {
         return s_expiredAndRefundedTransfersByAddress[user].length;
     }
 
     // Function to get all claimed transfers for an address
-    function getClaimedTransfersForAddress(address user)
-        external
-        view
-        onlyValidAddress(user)
-        returns (uint256[] memory)
-    {
+    function getClaimedTransfersForAddress(
+        address user
+    ) external view onlyValidAddress(user) returns (uint256[] memory) {
         // if (s_claimedTransfersByAddress[user].length == 0) {
         //     revert PST__NoClaimedTransfers();
         // }
@@ -1336,12 +1496,16 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_claimedTransfersByAddress[user];
     }
 
-    function getClaimedTransfersForAddressCount(address user) external view returns (uint256) {
+    function getClaimedTransfersForAddressCount(
+        address user
+    ) external view returns (uint256) {
         return s_claimedTransfersByAddress[user].length;
     }
 
     // Function to get all transfers for an address
-    function getAllTransfersByAddress(address user)
+    function getAllTransfersByAddress(
+        address user
+    )
         external
         view
         onlyValidAddress(user)
@@ -1359,7 +1523,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     // Function to get transfer details for a specific transfer Id
-    function getTransferDetails(uint256 transferId)
+    function getTransferDetails(
+        uint256 transferId
+    )
         external
         view
         onlyValidTransferIds(transferId)

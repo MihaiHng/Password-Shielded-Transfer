@@ -26,9 +26,21 @@ contract TestInvariantsPST is StdInvariant, Test {
         DeployPST deployer = new DeployPST();
         pst = deployer.run();
 
-        ERC20Mock mockERC20Token1 = new ERC20Mock("MockToken1", "MCK1", 1e31 ether);
-        ERC20Mock mockERC20Token2 = new ERC20Mock("MockToken2", "MCK2", 1e31 ether);
-        ERC20Mock mockERC20Token3 = new ERC20Mock("MockToken3", "MCK3", 1e31 ether);
+        ERC20Mock mockERC20Token1 = new ERC20Mock(
+            "MockToken1",
+            "MCK1",
+            1e31 ether
+        );
+        ERC20Mock mockERC20Token2 = new ERC20Mock(
+            "MockToken2",
+            "MCK2",
+            1e31 ether
+        );
+        ERC20Mock mockERC20Token3 = new ERC20Mock(
+            "MockToken3",
+            "MCK3",
+            1e31 ether
+        );
 
         tokens = new ERC20Mock[](3);
 
@@ -53,7 +65,10 @@ contract TestInvariantsPST is StdInvariant, Test {
         selectors[3] = handler.claimTransfer.selector;
         selectors[4] = handler.refundExpiredTransfers.selector;
 
-        FuzzSelector memory selector = FuzzSelector({addr: address(handler), selectors: selectors});
+        FuzzSelector memory selector = FuzzSelector({
+            addr: address(handler),
+            selectors: selectors
+        });
 
         targetSelector(selector);
 
@@ -68,7 +83,9 @@ contract TestInvariantsPST is StdInvariant, Test {
         for (uint256 i = 0; i < numTransfers; i++) {
             uint256 transferId = handler.getTrackedTransferIdAt(i);
             if (pst.s_isPending(transferId)) {
-                (,, address token, uint256 amount,,,) = pst.s_transfersById(transferId);
+                (, , address token, uint256 amount, , , ) = pst.s_transfersById(
+                    transferId
+                );
                 totalPendingPerToken[token] += amount;
             }
         }
@@ -76,28 +93,50 @@ contract TestInvariantsPST is StdInvariant, Test {
         for (uint256 i = 0; i < tokens.length; i++) {
             address tokenAddr = address(tokens[i]);
             uint256 contractBalance = IERC20(tokenAddr).balanceOf(address(pst));
-            uint256 accumulatedFeesForToken = pst.getAccumulatedFeesForToken(tokenAddr);
-            assertLe(totalPendingPerToken[tokenAddr] + accumulatedFeesForToken, contractBalance);
+            uint256 accumulatedFeesForToken = pst.getAccumulatedFeesForToken(
+                tokenAddr
+            );
+            assertLe(
+                totalPendingPerToken[tokenAddr] + accumulatedFeesForToken,
+                contractBalance
+            );
         }
     }
 
-    function invariant_pendingTransfersAlwaysExpireAndGetRefundedWhenAvailabilityElapses() public view {
+    function invariant_pendingTransfersAlwaysExpireAndGetRefundedWhenAvailabilityElapses()
+        public
+        view
+    {
         uint256 numTransfers = handler.getTrackedTransferIdsLength();
 
         for (uint256 i = 0; i < numTransfers; i++) {
             uint256 transferId = handler.getTrackedTransferIdAt(i);
-            (,,,,, uint256 expiringTime,) = pst.s_transfersById(transferId);
+            (, , , , , uint256 expiringTime, ) = pst.s_transfersById(
+                transferId
+            );
 
             if (pst.s_isCanceled(transferId) || pst.s_isClaimed(transferId)) {
                 continue;
             }
 
-            (,,, uint256 currentAmount,,, string memory state) = pst.getTransferDetails(transferId);
+            (, , , uint256 currentAmount, , , string memory state) = pst
+                .getTransferDetails(transferId);
 
             if (block.timestamp > expiringTime) {
-                assertTrue(pst.s_isExpiredAndRefunded(transferId), "Transfer should be marked as expired and refunded");
-                assertEq(currentAmount, 0, "Expired transfer amount should be 0");
-                assertEq(state, "ExpiredAndRefunded", "Expired transfer should be marked ExpiredAndRefunded");
+                assertTrue(
+                    pst.s_isExpiredAndRefunded(transferId),
+                    "Transfer should be marked as expired and refunded"
+                );
+                assertEq(
+                    currentAmount,
+                    0,
+                    "Expired transfer amount should be 0"
+                );
+                assertEq(
+                    state,
+                    "ExpiredAndRefunded",
+                    "Expired transfer should be marked ExpiredAndRefunded"
+                );
             }
         }
     }

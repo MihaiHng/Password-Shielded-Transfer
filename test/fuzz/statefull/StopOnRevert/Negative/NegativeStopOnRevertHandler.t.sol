@@ -5,9 +5,9 @@ pragma solidity ^0.8.28;
 import {Test, console, console2} from "forge-std/Test.sol";
 import {PST} from "src/PST.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "../../../mocks/ERC20Mock.sol";
+import {ERC20Mock} from "../../../../mocks/ERC20Mock.sol";
 
-contract StopOnRevertHandler is Test {
+contract NegativeStopOnRevertHandler is Test {
     PST public pst;
 
     address public lastUsedToken;
@@ -36,9 +36,12 @@ contract StopOnRevertHandler is Test {
     //     vm.stopPrank();
     // }
 
-    function createTransfer(address receiver, uint256 amount, string memory passwordData, uint256 tokenIndexedSeed)
-        public
-    {
+    function createTransfer(
+        address receiver,
+        uint256 amount,
+        string memory passwordData,
+        uint256 tokenIndexedSeed
+    ) public {
         console.log("Handler: createTransfer called");
 
         vm.assume(receiver != address(0) && receiver != address(this));
@@ -82,12 +85,12 @@ contract StopOnRevertHandler is Test {
         index = bound(index, 0, pendingTransfers.length - 1);
         uint256 transferId = pendingTransfers[index];
 
-        (address sender,,,,,,) = pst.s_transfersById(transferId);
+        (address sender, , , , , , ) = pst.s_transfersById(transferId);
         if (sender != address(this) || !pst.s_isPending(transferId)) {
             // Instead of discarding, check for a valid transfer id
             for (uint256 i = 0; i < pendingTransfers.length; i++) {
                 transferId = pendingTransfers[i];
-                (sender,,,,,,) = pst.s_transfersById(transferId);
+                (sender, , , , , , ) = pst.s_transfersById(transferId);
                 if (sender == address(this) && pst.s_isPending(transferId)) {
                     index = i;
                     break;
@@ -103,7 +106,11 @@ contract StopOnRevertHandler is Test {
         pendingTransfers.pop();
     }
 
-    function claimTransfer(uint256 index /*, bool useValidPassword, string memory invalidPassword*/ ) public {
+    function cancelTransferAsNonSender(uint256 index) public {}
+
+    function claimTransfer(
+        uint256 index /*, bool useValidPassword, string memory invalidPassword*/
+    ) public {
         console.log("Handler: claimTransfer called");
 
         if (pendingTransfers.length == 0) return;
@@ -127,7 +134,7 @@ contract StopOnRevertHandler is Test {
             if (!pst.s_isPending(transferId)) return;
         }
 
-        (, address receiver,,,,,) = pst.s_transfersById(transferId);
+        (, address receiver, , , , , ) = pst.s_transfersById(transferId);
 
         //string memory password = useValidPassword ? passwords[transferId] : invalidPassword;
         string memory password = passwords[transferId];
@@ -137,6 +144,8 @@ contract StopOnRevertHandler is Test {
         pst.claimTransfer(transferId, password);
         vm.stopPrank();
     }
+
+    function claimWithIncorrectPassword(uint256 index) public {}
 
     function refundExpiredTransfer(uint256 index) public {
         console.log("Handler: refundExpiredTransfer called");
