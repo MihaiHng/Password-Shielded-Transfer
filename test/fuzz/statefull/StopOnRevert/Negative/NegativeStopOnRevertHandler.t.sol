@@ -102,11 +102,37 @@ contract NegativeStopOnRevertHandler is Test {
 
         pst.cancelTransfer(transferId);
 
-        pendingTransfers[index] = pendingTransfers[pendingTransfers.length - 1];
-        pendingTransfers.pop();
+        removeFromPendingTransfers(transferId);
     }
 
-    function cancelTransferAsNonSender(uint256 index) public {}
+    function cancelTransferAsNonSender(uint256 index) public {
+        console.log("Handler: cancelTransferAsNonSender called");
+
+        if (pendingTransfers.length == 0) return;
+
+        index = bound(index, 0, pendingTransfers.length - 1);
+        uint256 transferId = pendingTransfers[index];
+
+        if (!pst.s_isPending(transferId)) {
+            // Instead of discarding, check for a valid transfer id
+            for (uint256 i = 0; i < pendingTransfers.length; i++) {
+                transferId = pendingTransfers[i];
+
+                if (pst.s_isPending(transferId)) {
+                    index = i;
+                    break;
+                }
+            }
+            // If still no valid transfer id was found, return without discarding the test
+            if (!pst.s_isPending(transferId)) return;
+        }
+
+        address notSender = makeAddr("Not Sender");
+
+        vm.prank(notSender);
+        // This should revert — if it doesn't, the invariant test will fail
+        pst.cancelTransfer(transferId);
+    }
 
     function claimTransfer(
         uint256 index /*, bool useValidPassword, string memory invalidPassword*/
@@ -143,6 +169,8 @@ contract NegativeStopOnRevertHandler is Test {
         vm.startPrank(receiver);
         pst.claimTransfer(transferId, password);
         vm.stopPrank();
+
+        removeFromPendingTransfers(transferId);
     }
 
     function claimWithIncorrectPassword(uint256 index) public {}
@@ -171,6 +199,20 @@ contract NegativeStopOnRevertHandler is Test {
         }
 
         pst.refundExpiredTransfer(transferId);
+
+        removeFromPendingTransfers(transferId);
+    }
+
+    function removeFromPendingTransfers(uint256 transferId) internal {
+        for (uint256 i = 0; i < pendingTransfers.length; i++) {
+            if (pendingTransfers[i] == transferId) {
+                pendingTransfers[i] = pendingTransfers[
+                    pendingTransfers.length - 1
+                ];
+                pendingTransfers.pop();
+                break;
+            }
+        }
     }
 
     function getToken(uint256 index) internal view returns (ERC20Mock) {

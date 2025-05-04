@@ -36,9 +36,12 @@ contract ContinueOnRevertHandler is Test {
     //     vm.stopPrank();
     // }
 
-    function createTransfer(address receiver, uint256 amount, string memory passwordData, uint256 tokenIndexedSeed)
-        public
-    {
+    function createTransfer(
+        address receiver,
+        uint256 amount,
+        string memory passwordData,
+        uint256 tokenIndexedSeed
+    ) public {
         console.log("Handler: createTransfer called");
 
         vm.assume(receiver != address(0) && receiver != address(this));
@@ -82,12 +85,12 @@ contract ContinueOnRevertHandler is Test {
         index = bound(index, 0, pendingTransfers.length - 1);
         uint256 transferId = pendingTransfers[index];
 
-        (address sender,,,,,,) = pst.s_transfersById(transferId);
+        (address sender, , , , , , ) = pst.s_transfersById(transferId);
         if (sender != address(this) || !pst.s_isPending(transferId)) {
             // Instead of discarding, check for a valid transfer id
             for (uint256 i = 0; i < pendingTransfers.length; i++) {
                 transferId = pendingTransfers[i];
-                (sender,,,,,,) = pst.s_transfersById(transferId);
+                (sender, , , , , , ) = pst.s_transfersById(transferId);
                 if (sender == address(this) && pst.s_isPending(transferId)) {
                     index = i;
                     break;
@@ -99,11 +102,12 @@ contract ContinueOnRevertHandler is Test {
 
         pst.cancelTransfer(transferId);
 
-        pendingTransfers[index] = pendingTransfers[pendingTransfers.length - 1];
-        pendingTransfers.pop();
+        removeFromPendingTransfers(transferId);
     }
 
-    function claimTransfer(uint256 index /*, bool useValidPassword, string memory invalidPassword*/ ) public {
+    function claimTransfer(
+        uint256 index /*, bool useValidPassword, string memory invalidPassword*/
+    ) public {
         console.log("Handler: claimTransfer called");
 
         if (pendingTransfers.length == 0) return;
@@ -127,7 +131,7 @@ contract ContinueOnRevertHandler is Test {
             if (!pst.s_isPending(transferId)) return;
         }
 
-        (, address receiver,,,,,) = pst.s_transfersById(transferId);
+        (, address receiver, , , , , ) = pst.s_transfersById(transferId);
 
         //string memory password = useValidPassword ? passwords[transferId] : invalidPassword;
         string memory password = passwords[transferId];
@@ -137,8 +141,7 @@ contract ContinueOnRevertHandler is Test {
         pst.claimTransfer(transferId, password);
         vm.stopPrank();
 
-        pendingTransfers[index] = pendingTransfers[pendingTransfers.length - 1];
-        pendingTransfers.pop();
+        removeFromPendingTransfers(transferId);
     }
 
     function refundExpiredTransfers() public {
@@ -151,14 +154,28 @@ contract ContinueOnRevertHandler is Test {
 
         for (uint256 i = 0; i < numTransfers; i++) {
             uint256 transferId = pendingTransfers[i];
-            (,,,,, uint256 expiringTime,) = pst.s_transfersById(transferId);
+            (, , , , , uint256 expiringTime, ) = pst.s_transfersById(
+                transferId
+            );
 
-            if (block.timestamp > expiringTime) {
+            if (block.timestamp > expiringTime && pst.s_isPending(transferId)) {
                 try pst.refundExpiredTransfer(transferId) {
                     console.log("Refunded transfer: ", transferId);
                 } catch {
                     console.log("Refund failed for transfer: ", transferId);
                 }
+            }
+        }
+    }
+
+    function removeFromPendingTransfers(uint256 transferId) internal {
+        for (uint256 i = 0; i < pendingTransfers.length; i++) {
+            if (pendingTransfers[i] == transferId) {
+                pendingTransfers[i] = pendingTransfers[
+                    pendingTransfers.length - 1
+                ];
+                pendingTransfers.pop();
+                break;
             }
         }
     }
@@ -185,5 +202,9 @@ contract ContinueOnRevertHandler is Test {
 
     function getTrackedTransferIdAt(uint256 i) public view returns (uint256) {
         return trackedTransferIds[i];
+    }
+
+    function getPendingTransfers() public view returns (uint256[] memory) {
+        return pendingTransfers;
     }
 }

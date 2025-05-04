@@ -14,7 +14,7 @@ import {ERC20Mock} from "../../../mocks/ERC20Mock.sol";
 import {ContinueOnRevertHandler} from "./ContinueOnRevertHandler.t.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract TestInvariantsPST is StdInvariant, Test {
+contract ContinueOnRevertInvariantsPST is StdInvariant, Test {
     PST public pst;
     ContinueOnRevertHandler public handler;
     ERC20Mock[] public tokens;
@@ -108,6 +108,8 @@ contract TestInvariantsPST is StdInvariant, Test {
         view
     {
         uint256 numTransfers = handler.getTrackedTransferIdsLength();
+
+        //uint256 pendingTransfers = handler.getPendingTransfers();
 
         for (uint256 i = 0; i < numTransfers; i++) {
             uint256 transferId = handler.getTrackedTransferIdAt(i);

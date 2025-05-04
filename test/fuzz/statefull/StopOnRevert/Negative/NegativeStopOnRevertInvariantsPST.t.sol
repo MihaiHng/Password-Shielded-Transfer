@@ -58,12 +58,14 @@ contract NegativeStopOnRevertInvariantsPST is StdInvariant, Test {
             pst.addTokenToAllowList(address(tokens[i]));
         }
 
-        bytes4[] memory selectors = new bytes4[](5);
+        bytes4[] memory selectors = new bytes4[](7);
         selectors[0] = handler.createTransfer.selector;
         selectors[1] = handler.createTransfer.selector;
-        selectors[2] = handler.cancelTransfer.selector;
-        selectors[3] = handler.claimTransfer.selector;
-        selectors[4] = handler.refundExpiredTransfer.selector;
+        selectors[2] = handler.createTransfer.selector;
+        selectors[3] = handler.cancelTransfer.selector;
+        selectors[4] = handler.cancelTransferAsNonSender.selector;
+        selectors[5] = handler.claimTransfer.selector;
+        selectors[6] = handler.refundExpiredTransfer.selector;
 
         FuzzSelector memory selector = FuzzSelector({
             addr: address(handler),
@@ -77,6 +79,9 @@ contract NegativeStopOnRevertInvariantsPST is StdInvariant, Test {
         console.log("Setup completed");
     }
 
+    /**
+    @dev fail_on_revert must be set to true for this test 
+     */
     function invariant_PendingTransfersCanOnlyBeClaimedWithCorrectPassword()
         public
     {}

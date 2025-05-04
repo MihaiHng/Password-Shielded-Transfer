@@ -102,13 +102,10 @@ contract PositiveStopOnRevertHandler is Test {
 
         pst.cancelTransfer(transferId);
 
-        pendingTransfers[index] = pendingTransfers[pendingTransfers.length - 1];
-        pendingTransfers.pop();
+        removeFromPendingTransfers(transferId);
     }
 
-    function claimTransfer(
-        uint256 index /*, bool useValidPassword, string memory invalidPassword*/
-    ) public {
+    function claimTransfer(uint256 index) public {
         console.log("Handler: claimTransfer called");
 
         if (pendingTransfers.length == 0) return;
@@ -134,13 +131,14 @@ contract PositiveStopOnRevertHandler is Test {
 
         (, address receiver, , , , , ) = pst.s_transfersById(transferId);
 
-        //string memory password = useValidPassword ? passwords[transferId] : invalidPassword;
         string memory password = passwords[transferId];
         console.log("Password: ", password);
 
         vm.startPrank(receiver);
         pst.claimTransfer(transferId, password);
         vm.stopPrank();
+
+        removeFromPendingTransfers(transferId);
     }
 
     function refundExpiredTransfer(uint256 index) public {
@@ -167,6 +165,20 @@ contract PositiveStopOnRevertHandler is Test {
         }
 
         pst.refundExpiredTransfer(transferId);
+
+        removeFromPendingTransfers(transferId);
+    }
+
+    function removeFromPendingTransfers(uint256 transferId) internal {
+        for (uint256 i = 0; i < pendingTransfers.length; i++) {
+            if (pendingTransfers[i] == transferId) {
+                pendingTransfers[i] = pendingTransfers[
+                    pendingTransfers.length - 1
+                ];
+                pendingTransfers.pop();
+                break;
+            }
+        }
     }
 
     function getToken(uint256 index) internal view returns (ERC20Mock) {
