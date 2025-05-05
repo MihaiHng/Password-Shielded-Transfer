@@ -1,22 +1,21 @@
 // SPDX-License-Identifier: MIT
 
-// Positive Stop on Revert
+// Negative Stop on Revert
 // 1. A pending transfer can only be claimed with the correct password
-// 2. A pending transfer can only be canceled by its sender/creator
 
 pragma solidity ^0.8.28;
 
 import {PST} from "src/PST.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {Test, console, console2} from "forge-std/Test.sol";
-import {DeployPST} from "../../../../../script/DeployPST.s.sol";
-import {NegativeStopOnRevertHandler} from "./NegativeStopOnRevertHandler.t.sol";
+import {DeployPST} from "../../../../../../script/DeployPST.s.sol";
+import {Negative_IncorrectPassword_StopOnRevertHandler} from "./Negative_IncorrectPassword_StopOnRevertHandler.t.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "../../../../mocks/ERC20Mock.sol";
+import {ERC20Mock} from "../../../../../mocks/ERC20Mock.sol";
 
-contract NegativeStopOnRevertInvariantsPST is StdInvariant, Test {
+contract Negative_IncorrectPassword_StopOnRevertInvariantsPST is StdInvariant, Test {
     PST public pst;
-    NegativeStopOnRevertHandler public handler;
+    Negative_IncorrectPassword_StopOnRevertHandler public handler;
     ERC20Mock[] public tokens;
 
     // Mapping from token address to total pending amount
@@ -48,7 +47,7 @@ contract NegativeStopOnRevertInvariantsPST is StdInvariant, Test {
         tokens[1] = mockERC20Token2;
         tokens[2] = mockERC20Token3;
 
-        handler = new NegativeStopOnRevertHandler(pst);
+        handler = new Negative_IncorrectPassword_StopOnRevertHandler(pst);
         targetContract(address(handler));
 
         for (uint256 i = 0; i < tokens.length; i++) {
@@ -63,9 +62,9 @@ contract NegativeStopOnRevertInvariantsPST is StdInvariant, Test {
         selectors[1] = handler.createTransfer.selector;
         selectors[2] = handler.createTransfer.selector;
         selectors[3] = handler.cancelTransfer.selector;
-        selectors[4] = handler.cancelTransferAsNonSender.selector;
-        selectors[5] = handler.claimTransfer.selector;
-        selectors[6] = handler.refundExpiredTransfer.selector;
+        selectors[4] = handler.claimTransfer.selector;
+        selectors[5] = handler.refundExpiredTransfer.selector;
+        selectors[6] = handler.claimWithIncorrectPassword.selector;
 
         FuzzSelector memory selector = FuzzSelector({
             addr: address(handler),
@@ -80,11 +79,12 @@ contract NegativeStopOnRevertInvariantsPST is StdInvariant, Test {
     }
 
     /**
-    @dev fail_on_revert must be set to true for this test 
+    @dev fail_on_revert must be set to true for this test
+    @notice Body of the function is empty because it only checks if the protocol reverts when claiming with incorrect password
+    @notice Test is ok when it reverts because of claiming with incorrect password 
      */
     function invariant_PendingTransfersCanOnlyBeClaimedWithCorrectPassword()
         public
     {}
 
-    function invariant_PendingTransfersCanOnlyBeCanceledBySender() public {}
 }

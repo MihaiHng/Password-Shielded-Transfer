@@ -5,9 +5,9 @@ pragma solidity ^0.8.28;
 import {Test, console, console2} from "forge-std/Test.sol";
 import {PST} from "src/PST.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "../../../../mocks/ERC20Mock.sol";
+import {ERC20Mock} from "../../../../../mocks/ERC20Mock.sol";
 
-contract NegativeStopOnRevertHandler is Test {
+contract Negative_NotSender_StopOnRevertHandler is Test {
     PST public pst;
 
     address public lastUsedToken;
@@ -162,7 +162,6 @@ contract NegativeStopOnRevertHandler is Test {
 
         (, address receiver, , , , , ) = pst.s_transfersById(transferId);
 
-        //string memory password = useValidPassword ? passwords[transferId] : invalidPassword;
         string memory password = passwords[transferId];
         console.log("Password: ", password);
 
@@ -172,8 +171,6 @@ contract NegativeStopOnRevertHandler is Test {
 
         removeFromPendingTransfers(transferId);
     }
-
-    function claimWithIncorrectPassword(uint256 index) public {}
 
     function refundExpiredTransfer(uint256 index) public {
         console.log("Handler: refundExpiredTransfer called");

@@ -77,6 +77,10 @@ contract ContinueOnRevertInvariantsPST is StdInvariant, Test {
         console.log("Setup completed");
     }
 
+    /**
+    @dev fail_on_revert must be set to false for this test
+    @notice Test is ok when the conditions are verified 
+     */
     function invariant_pendingTransfersDoNotExceedTokenBalance() public {
         uint256 numTransfers = handler.getTrackedTransferIdsLength();
 
@@ -103,6 +107,10 @@ contract ContinueOnRevertInvariantsPST is StdInvariant, Test {
         }
     }
 
+    /**
+    @dev fail_on_revert must be set to false for this test
+    @notice Test is ok when the conditions are verified 
+     */
     function invariant_pendingTransfersAlwaysExpireAndGetRefundedWhenAvailabilityElapses()
         public
         view

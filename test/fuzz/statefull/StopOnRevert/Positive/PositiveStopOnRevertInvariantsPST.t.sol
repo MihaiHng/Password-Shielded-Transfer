@@ -76,6 +76,10 @@ contract PositiveStopOnRevertInvariantsPST is StdInvariant, Test {
         console.log("Setup completed");
     }
 
+    /**
+    @dev fail_on_revert must be set to true for this test
+    @notice Test is ok when no getter function reverts 
+     */
     function invariant_gettersCanNotRevert() public view {
         pst.getBalance();
         pst.getAllowedTokens();
