@@ -109,7 +109,7 @@ contract ContinueOnRevertInvariantsPST is StdInvariant, Test {
     {
         uint256 numTransfers = handler.getTrackedTransferIdsLength();
 
-        //uint256 pendingTransfers = handler.getPendingTransfers();
+        //uint256 pendingTransfersLength = handler.getPendingTransfersLength();
 
         for (uint256 i = 0; i < numTransfers; i++) {
             uint256 transferId = handler.getTrackedTransferIdAt(i);

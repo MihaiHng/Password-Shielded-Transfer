@@ -192,19 +192,23 @@ contract ContinueOnRevertHandler is Test {
         return trackedUsers.length;
     }
 
-    function getTrackedTransferIdsLength() public view returns (uint256) {
-        return trackedTransferIds.length;
-    }
-
     function getTrackedUserAt(uint256 i) public view returns (address) {
         return trackedUsers[i];
+    }
+
+    function getTrackedTransferIdsLength() public view returns (uint256) {
+        return trackedTransferIds.length;
     }
 
     function getTrackedTransferIdAt(uint256 i) public view returns (uint256) {
         return trackedTransferIds[i];
     }
 
-    function getPendingTransfers() public view returns (uint256[] memory) {
-        return pendingTransfers;
+    function getPendingTransfersLength() public view returns (uint256) {
+        return pendingTransfers.length;
+    }
+
+    function getPendingTransfersAt(uint256 i) public view returns (uint256) {
+        return pendingTransfers[i];
     }
 }
