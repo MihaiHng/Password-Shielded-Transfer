@@ -37,7 +37,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Setter funtions for important parameters ✅
 // Unit testing ✅
 // Fuzz testing ✅
-// Invariant testing
+// Invariant testing ✅
 // Gas Tracking/Optimization
 // Security checklist [Notion]
 // Comments on functions
@@ -61,7 +61,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
  * @author Mihai Hanga
  *
  * @dev This smart contract is the core of the Password Shielded Transfer(PST)
- * The main functionality of this system is the use of passwords to increase the security of transfers between two parties
+ * The main functionality of this system is the use of passwords to increase the security of transfers between accounts
  *
  * @notice The system will charge a fee per transfer. The fee is calculated as a percentage.
  * @notice The fee is determined based on the amount transfered. There will be 3 fee levels, for example:
