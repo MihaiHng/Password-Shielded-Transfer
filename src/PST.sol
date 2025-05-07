@@ -41,7 +41,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Gas Tracking/Optimization
 // Security checklist [Notion]
 // Comments on functions
-// Frontend
+// Frontend/UI
 // Finalize Readme
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
