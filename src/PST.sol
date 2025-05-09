@@ -38,7 +38,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Unit testing ✅
 // Fuzz testing ✅
 // Invariant testing ✅
-// Gas Tracking/Optimization
+// Gas Tracking/Optimization ✅
 // Security checklist [Notion]
 // Comments on functions
 // Frontend/UI
