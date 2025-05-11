@@ -40,6 +40,8 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Invariant testing ✅
 // Gas Tracking/Optimization ✅
 // Security checklist [Notion]
+// Private constants and setting new values
+// Remove length = 0 checks in getters
 // Comments on functions
 // Frontend/UI
 // Finalize Readme
@@ -1168,10 +1170,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /*//////////////////////////////////////////////////////////////
-                        INTERNAL FUNCTIONS
-    //////////////////////////////////////////////////////////////*/
-
-    /*//////////////////////////////////////////////////////////////
                         PRIVATE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
@@ -1567,8 +1565,4 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
             state
         );
     }
-
-    // function getAppprovedTokens() external view returns (address[] memory tokens) {
-    //     return s_tokenList;
-    // }
 }
