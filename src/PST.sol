@@ -40,8 +40,8 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Invariant testing ✅
 // Gas Tracking/Optimization ✅
 // Security checklist [Notion]
-// Private constants and setting new values
-// Remove length = 0 checks in getters
+// Private constants and setting new values ✅
+// Remove length = 0 checks in getters ✅
 // Comments on functions
 // Frontend/UI
 // Finalize Readme
@@ -1362,17 +1362,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Function to get all pending transfers in the system
     function getPendingTransfers() external view returns (uint256[] memory) {
-        // if (s_pendingTransferIds.length == 0) {
-        //     revert PST__NoPendingTransfers();
-        // }
         return s_pendingTransferIds;
     }
 
     // Function to get all canceled transfers in the system
     function getCanceledTransfers() external view returns (uint256[] memory) {
-        // if (s_canceledTransferIds.length == 0) {
-        //     revert PST__NoCanceledTransfers();
-        // }
         return s_canceledTransferIds;
     }
 
@@ -1386,9 +1380,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         view
         returns (uint256[] memory)
     {
-        // if (s_expiredAndRefundedTransferIds.length == 0) {
-        //     revert PST__NoExpiredTransfers();
-        // }
         return s_expiredAndRefundedTransferIds;
     }
 
@@ -1402,9 +1393,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Function to get all claimed transfers in the system
     function getClaimedTransfers() external view returns (uint256[] memory) {
-        // if (s_claimedTransferIds.length == 0) {
-        //     revert PST__NoClaimedTransfers();
-        // }
         return s_claimedTransferIds;
     }
 
@@ -1442,10 +1430,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     function getPendingTransfersForAddress(
         address user
     ) external view onlyValidAddress(user) returns (uint256[] memory) {
-        // if (s_pendingTransfersByAddress[user].length == 0) {
-        //     revert PST__NoPendingTransfers();
-        // }
-
         return s_pendingTransfersByAddress[user];
     }
 
@@ -1453,10 +1437,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     function getCanceledTransfersForAddress(
         address user
     ) external view onlyValidAddress(user) returns (uint256[] memory) {
-        // if (s_canceledTransfersByAddress[user].length == 0) {
-        //     revert PST__NoCanceledTransfers();
-        // }
-
         return s_canceledTransfersByAddress[user];
     }
 
@@ -1470,10 +1450,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     function getExpiredAndRefundedTransfersForAddress(
         address user
     ) external view onlyValidAddress(user) returns (uint256[] memory) {
-        // if (s_expiredAndRefundedTransfersByAddress[user].length == 0) {
-        //     revert PST__NoExpiredTransfers();
-        // }
-
         return s_expiredAndRefundedTransfersByAddress[user];
     }
 
@@ -1487,10 +1463,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     function getClaimedTransfersForAddress(
         address user
     ) external view onlyValidAddress(user) returns (uint256[] memory) {
-        // if (s_claimedTransfersByAddress[user].length == 0) {
-        //     revert PST__NoClaimedTransfers();
-        // }
-
         return s_claimedTransfersByAddress[user];
     }
 
