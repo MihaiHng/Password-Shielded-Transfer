@@ -744,6 +744,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    /**
+     * @dev This function will be called everytime "checkUpkeep" returns true 
+     * @dev This function will refund expired transfers in batches(currently of max 50 transferIds)
+     */
     function performUpkeep(
         bytes calldata performData
     ) external override onlyKeepers {
@@ -761,6 +765,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                         EXTERNAL ONLYOWNER FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @param newOwner: address of the new assigned owner
+     * @notice This function will assign the "owner" role to a new address
+     */
     function transferOwnership(address newOwner) public override onlyOwner {
         if (newOwner == address(0)) {
             revert PST__InvalidNewOwnerAddress();
@@ -768,6 +776,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         super.transferOwnership(newOwner);
     }
 
+    
     function addTokenToAllowList(address token) external onlyOwner {
         _addTokenToAllowList(token);
     }
