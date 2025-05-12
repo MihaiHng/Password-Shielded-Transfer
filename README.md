@@ -16,10 +16,12 @@ The main functionality of this system is the addition of an extra security layer
     -> [address] of [Receiver]
     -> [token] 
     -> [amount]
-    -> [password] chosed by the [Sender] with min 7 characters
+    -> [password] chosen by the [Sender] with min 7 characters
   - [Sender] sends the [password] to [Receiver] by a communication method of its choice outside the platform
   - At this point there is a pending transfer created in the system, waiting to be claimed
-  - [Receiver] can claim the pending transfer if the [password] entered matches the [password] set by [Sender]
+  - There are 3 main conditions in order for the [Receiver] to be able to claim the transfer
+  - [Receiver] can claim the pending transfer if the [password] entered matches the [password] set by [Sender] and 
+  if the claim is done before claim cooldown period has elapsed
 
 ## Properties
 
@@ -62,6 +64,18 @@ cd Password-Shielded-Transfer
 forge build
 ```
 
-## Testing In progress
+## Testing 
+
+### Coverage Report
+
+### Unit Tests
+
+### Integration Tests
+
+### Stateless - Fuzz Tests
+
+### Statefull - Invariant Tests
 
 ## Frontend to follow
+
+## Future Improvements 

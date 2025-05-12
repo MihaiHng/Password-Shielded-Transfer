@@ -32,7 +32,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 // Complete events ✅
-// Test chainlink automation, Use the Forwarder(Chainlink Automation Best Practices) ✅
+// Test chainlink automation ✅
 // Batch processing ✅
 // Setter funtions for important parameters ✅
 // Unit testing ✅
@@ -123,7 +123,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     /*//////////////////////////////////////////////////////////////
                           STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    address private immutable i_owner;
     address private immutable i_automationRegistry;
 
     uint256 private constant REQ_MIN_PASSWORD_LENGTH = 7;
@@ -385,6 +384,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         uint256 _transferFeeLvlThree,
         address _automationRegistry
     ) Ownable(msg.sender) {
+        if (address(_automationRegistry) == address(0)) {
+            revert PST__InvalidAddress();
+        }
         i_automationRegistry = _automationRegistry;
 
         transferFee = TransferFeeLibrary.TransferFee({
@@ -414,8 +416,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @dev
-     *
+     * @param receiver: The addres that will claim the transfer
+     * @param token: The token transfered to receiver
+     * @param amount: The amount of token transfered to receiver
+     * @param password: The password which will be used by receiver to claim the transfer
+     * @notice This function will create transfer Ids in the system which will have a "pending" status
      */
     function createTransfer(
         address receiver,
@@ -541,7 +546,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @dev
+     * @param transferId: The Id of the transfer that will be canceled
+     * @notice This function will cancel a transferId, only if the transferId has the status "pending", meaning:
+     * - claimCooldownPeriod didn't elapse
+     * - transferId wasn't claimed already
+     * - transferId didn't expire already
+     * @notice The new status of transferId will be "canceled"
      */
     function cancelTransfer(
         uint256 transferId
@@ -595,7 +605,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @dev
+     * @param transferId: The Id of the transfer that will be claimed
+     * @param password: The password has to mach the password set by sender when transferId was created by calling createTransfer
+     * @notice The receiver(calling address) will receive the amount of token sent by sender when createTransfer was called
+     * @notice The new status of transferId will be "claimed"
      */
     function claimTransfer(
         uint256 transferId,
