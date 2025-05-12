@@ -683,19 +683,24 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    /**
+     * @notice This function will call 2 other functions, _clearHistory() and _removeInactiveAddresses(),
+     * in order to perform a general data cleanup
+     * @dev This function will be automated with Chanlink Automation -> Time-based triggered at set intervals(for example 90 days)
+     */
     function performMaintenance() external {
         _clearHistory();
         _removeInactiveAddresses();
     }
 
     /**
+     * @notice This function automatically refunds expired transferIds
+     * @dev This function will be automated with Chanlink Automation -> Custom Logic Triggered
      * @dev This is the function that the Chainlink Automation nodes call
-     * they look for `upkeepNeeded` to return True.
-     * the following should be true for this to return true:
-     * 1.
-     * 2.
-     * 3.
-     * 4. Implicity, your subscription is funded with LINK.
+     * @dev They look for `upkeepNeeded` to return True.
+     * @dev The following should be true for this to return true:
+     * 1. Expired transferIds exist, expiredCount > 0.
+     * 2. Implicity, the subscription is funded with LINK.
      */
     function checkUpkeep(
         bytes calldata /* checkData */
