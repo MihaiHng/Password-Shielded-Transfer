@@ -929,6 +929,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit MinPasswordLengthChanged(newMinPasswordLength);
     }
 
+    /**
+     * @param newClaimCooldownPeriod: Value for new claim cooldown period 
+     * @notice This function allows only the owner to set a new claim cooldown period
+     */
     function setNewClaimCooldownPeriod(
         uint256 newClaimCooldownPeriod
     ) external onlyOwner moreThanZero(newClaimCooldownPeriod) {
@@ -943,6 +947,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit ClaimCooldownPeriodChanged(newClaimCooldownPeriod);
     }
 
+    /**
+     * @param newAvailabilityPeriod: Value for new transfer availability period
+     * @notice This function allows only the owner to set a new transfer availability period
+     */
     function setNewAvailabilityPeriod(
         uint256 newAvailabilityPeriod
     ) external onlyOwner moreThanZero(newAvailabilityPeriod) {
@@ -957,6 +965,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit AvailabilityPeriodChanged(newAvailabilityPeriod);
     }
 
+    /**
+     * @param newCleanupInterval: Value for new cleanup interval
+     * @notice This function allows only the owner to set a new cleanup interval
+     */
     function setNewCleanupInterval(
         uint256 newCleanupInterval
     ) external onlyOwner moreThanZero(newCleanupInterval) {
@@ -971,6 +983,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit CleanupIntervalChanged(newCleanupInterval);
     }
 
+    /**
+     * @param newInactivityThreshold: Value for new inactivity threshold
+     * @notice This function allows only the owner to set a new inactivity threshold
+     */
     function setNewInactivityThreshold(
         uint256 newInactivityThreshold
     ) external onlyOwner moreThanZero(newInactivityThreshold) {
@@ -985,6 +1001,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit InactivityThresholdChanged(newInactivityThreshold);
     }
 
+    /**
+     * @param newBatchLimit: Value for new batch limit
+     * @notice This function allows only the owner to set a new batch limit
+     */
     function setNewBatchLimit(uint256 newBatchLimit) external onlyOwner {
         if (newBatchLimit < MIN_BATCH_LIMIT) {
             revert PST__InvalidBatchLimit({minRequired: MIN_BATCH_LIMIT});
@@ -999,7 +1019,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                         PUBLIC FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     /**
-     *  @dev
+     * @dev This is the function called by "performUpkeep" through Chainlink Automation to refund expired transfers
+     * @param transferId: transfer id to refund
+     * @notice This function will refund an expired transfer
      */
     function refundExpiredTransfer(
         uint256 transferId
@@ -1049,6 +1071,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    /**
+     * @param user: Address to be added into tracking array, addressList
+     * @notice This function will add an address to addressList
+     */
     function addAddressToTracking(address user) public {
         if (!s_trackedAddresses[user]) {
             s_trackedAddresses[user] = true;
@@ -1057,6 +1083,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    /**
+     * @param user: Address to be removed from tracking array, addressList
+     * @notice This function will remove an address from addressList
+     */
     function removeAddressFromTracking(address user) public {
         bool userFound;
 
@@ -1076,6 +1106,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    /**
+     * @param token: Token address that is having its fee balance updated
+     * @param _transferFeeCost: Cost of transfer fee, added to token fee balance
+     * @notice This function will update the token fee balance with transfer fee cost
+     * @notice This function is called when a transferId is created by calling createTransfer
+     */
     function addFee(
         address token,
         uint256 _transferFeeCost
@@ -1083,6 +1119,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         s_feeBalances[token] += _transferFeeCost;
     }
 
+    /**
+     * @param transferId: TransferId that has its password encoded
+     * @param _password: The password provided by sender when calling createTransfer
+     * @notice This function will encode a password with a salt, by using keccak256()
+     */
     function encodePassword(
         uint256 transferId,
         string memory _password
@@ -1097,6 +1138,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return (encodedPassword);
     }
 
+    /**
+     * @param transferId: TransferId that is going to be checked for correct password
+     * @param password: Provided password to be checked
+     * @notice This function will check if the claim password matches the sender password
+     * @notice This function is called when a transferId is claimed by calling claimTransfer
+     */
     function checkPassword(
         uint256 transferId,
         string memory password
@@ -1107,6 +1154,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return senderPassword == receiverPassword;
     }
 
+    /**
+     * @param amount: Amount used to calculate totalTransferCost and transferFeeCost
+     * @notice This function will calculate and return totalTransferCost and transferFeeCost
+     */
     function calculateTotalTransferCostPublic(
         uint256 amount
     ) public view returns (uint256 totalTransferCost, uint256 transferFeeCost) {
