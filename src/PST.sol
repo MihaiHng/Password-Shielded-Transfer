@@ -67,9 +67,9 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
  *
  * @notice The system will charge a fee per transfer. The fee is calculated as a percentage.
  * @notice The fee is determined based on the amount transfered. There will be 3 fee levels, for example:
- *   -> 0.1% (1000/10e6) for transfers <= 10 ETH
- *   -> 0.01% (100/10e6) for 10 ETH < transfers <= 100 ETH
- *   -> 0.001% (10/10e6) for transfers > 100 ETH
+ *   -> 0.01% (1000/10e7) for transfers <= 10 ETH
+ *   -> 0.001% (100/10e7) for 10 ETH < transfers <= 100 ETH
+ *   -> 0.0001% (10/10e7) for transfers > 100 ETH
  *
  */
 contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
@@ -767,7 +767,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @param newOwner: address of the new assigned owner
-     * @notice This function will assign the "owner" role to a new address
+     * @notice This function allows only the owner to assign the "owner" role to a new address
      */
     function transferOwnership(address newOwner) public override onlyOwner {
         if (newOwner == address(0)) {
@@ -776,23 +776,49 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         super.transferOwnership(newOwner);
     }
 
-    
+    /**
+     * @dev This function is intended for tests
+     * @dev This function is a wraper for _addTokenToAllowList(token) with external visibility
+     * @param token: Address of an ERC20 token
+     * @notice This function allows only the owner to add a new token to the allow list
+     */
     function addTokenToAllowList(address token) external onlyOwner {
         _addTokenToAllowList(token);
     }
 
+    /**
+     * @dev This function is intended for tests
+     * @dev This function is a wraper for _removeTokenFromAllowList(token) with external visibility
+     * @param token: Address of an ERC20 token
+     * @notice This function allows only the owner to remove a token from the allow list
+     */
     function removeTokenFromAllowList(address token) external onlyOwner {
         _removeTokenFromAllowList(token);
     }
 
+    /**
+     * @dev This function is intended for tests
+     * @dev This function is a wraper for _clearHistory() with external visibility
+     * @notice This function allows only the owner to remove old transferId info
+     */
     function clearHistory() external onlyOwner {
         _clearHistory();
     }
 
+    /**
+     * @dev This function is intended for tests
+     * @dev This function is a wraper for _removeInactiveAddresses() with external visibility
+     * @notice This function allows only the owner to remove inactive addresses
+     */
     function removeInactiveAddresses() external onlyOwner {
         _removeInactiveAddresses();
     }
 
+    /**
+     * @param level: Selects a fee level. There are three fee levels: 1, 2, 3.
+     * @param newTransferFee: Value of the new transfer fee
+     * @notice This function allows only the owner to set a new transfer fee value for a fee level
+     */
     function setTransferFee(
         uint8 level,
         uint256 newTransferFee
@@ -810,6 +836,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit TransferFeeChanged(level, newTransferFee);
     }
 
+    /**
+     * @param newLimitLevelOne: New limit value for level 1, for example 10e18 / 10 ethereum.
+     * @notice This function allows only the owner to set a new limit value for fee level 1
+     */
     function setNewLimitLevelOne(
         uint256 newLimitLevelOne
     ) external onlyOwner moreThanZero(newLimitLevelOne) {
@@ -818,6 +848,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit LimitLevelOneChanged(newLimitLevelOne);
     }
 
+    /**
+     * @param newLimitLevelTwo: New limit value for level 2, for example 300e18 / 300 ethereum.
+     * @notice This function allows only the owner to set a new limit value for fee level 2
+     */
     function setNewLimitLevelTwo(
         uint256 newLimitLevelTwo
     ) external onlyOwner moreThanZero(newLimitLevelTwo) {
@@ -830,6 +864,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit LimitLevelTwoChanged(newLimitLevelTwo);
     }
 
+    /**
+     * @param newFeeScalingFactor: New value for the scaling factor(ex. 1e6 or 1e8)
+     * @notice This function allows only the owner to assign a new value to the fee scaling factor
+     */
     function setNewFeeScalingFactor(
         uint256 newFeeScalingFactor
     ) external onlyOwner moreThanZero(newFeeScalingFactor) {
@@ -838,6 +876,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit FeeScalingFactorChanged(newFeeScalingFactor);
     }
 
+    /**
+     * @param token: Token fee to withdraw
+     * @param amount: Amount of fee to withdraw
+     * @notice This function allows only the owner to withdraw a certain amount of token fee accumulated
+     */
     function withdrawFeesForToken(
         address token,
         uint256 amount
@@ -870,6 +913,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    /**
+     * @param newMinPasswordLength: Value for new min password length
+     * @notice This function allows only the owner to set a new min password length
+     */
     function setNewMinPasswordLength(
         uint256 newMinPasswordLength
     ) external onlyOwner moreThanZero(newMinPasswordLength) {
