@@ -34,7 +34,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Complete events ✅
 // Test chainlink automation ✅
 // Batch processing ✅
-// Setter funtions for important parameters ✅
+// Setter functions for important parameters ✅
 // Unit testing ✅
 // Fuzz testing ✅
 // Invariant testing ✅
@@ -42,7 +42,7 @@ import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 // Security checklist [Notion]
 // Private constants and setting new values ✅
 // Remove length = 0 checks in getters ✅
-// Comments on functions
+// Comments on functions ✅
 // Frontend/UI
 // Finalize Readme
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -88,7 +88,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     error PST__IncorrectPassword();
     error PST__OnlySenderCanCancel();
     error PST__InvalidFeeLevel();
-    error PST__FeeWIthdrawalFailed();
+    error PST__FeeWithdrawalFailed();
     error PST__RefundFailed();
     error PST__InvalidTransferId();
     error PST__TransferNotPending();
@@ -97,7 +97,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     error PST__InvalidClaimCooldownPeriod(uint256 minRequired);
     error PST__InvalidAvailabilityPeriod(uint256 minRequired);
     error PST__InvalidCleanupInterval(uint256 minRequired);
-    error PST__InvalidInactivityThreshhold(uint256 minRequired);
+    error PST__InvalidInactivityThreshold(uint256 minRequired);
     error PST__InvalidBatchLimit(uint256 minRequired);
     error PST__NotEnoughFunds(uint256 required, uint256 provided);
     error PST__NoExpiredTransfersToRemove();
@@ -202,7 +202,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     // Mapping to track if a token address is whitelisted
     mapping(address token => bool isAllowed) public s_allowedTokens;
-    // Mappping to track the accumulated fees for each token allowed in whitelist
+    // Mapping to track the accumulated fees for each token allowed in whitelist
     mapping(address token => uint256 feeBalance) public s_feeBalances;
 
     /*//////////////////////////////////////////////////////////////
@@ -416,7 +416,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @param receiver: The addres that will claim the transfer
+     * @param receiver: The address that will claim the transfer
      * @param token: The token transfered to receiver
      * @param amount: The amount of token transfered to receiver
      * @param password: The password which will be used by receiver to claim the transfer
@@ -547,7 +547,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @param transferId: The Id of the transfer that will be canceled
-     * @notice This function will cancel a transferId, only if the transferId has the status "pending", meaning:
+     * @notice This function will cancel a transferId, only if the transferId has the "pending" status, meaning:
      * - claimCooldownPeriod didn't elapse
      * - transferId wasn't claimed already
      * - transferId didn't expire already
@@ -606,8 +606,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @param transferId: The Id of the transfer that will be claimed
-     * @param password: The password has to mach the password set by sender when transferId was created by calling createTransfer
-     * @notice The receiver(calling address) will receive the amount of token sent by sender when createTransfer was called
+     * @param password: The password has to match the password set by sender when transfer was created via createTransfer
+     * @notice The receiver(i.e., the calling address) will receive the amount of token sent by sender when createTransfer was called
      * @notice The new status of transferId will be "claimed"
      */
     function claimTransfer(
@@ -686,7 +686,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     /**
      * @notice This function will call 2 other functions, _clearHistory() and _removeInactiveAddresses(),
      * in order to perform a general data cleanup
-     * @dev This function will be automated with Chanlink Automation -> Time-based triggered at set intervals(for example 90 days)
+     * @dev This function will be automated with Chainlink Automation -> Time-based triggered at set intervals(e.g., every 90 days)
      */
     function performMaintenance() external {
         _clearHistory();
@@ -695,12 +695,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @notice This function automatically refunds expired transferIds
-     * @dev This function will be automated with Chanlink Automation -> Custom Logic Triggered
+     * @dev This function will be automated with Chainlink Automation -> Custom Logic Triggered
      * @dev This is the function that the Chainlink Automation nodes call
      * @dev They look for `upkeepNeeded` to return True.
      * @dev The following should be true for this to return true:
      * 1. Expired transferIds exist, expiredCount > 0.
-     * 2. Implicity, the subscription is funded with LINK.
+     * 2. Implicitly, the subscription is funded with LINK.
      */
     function checkUpkeep(
         bytes calldata /* checkData */
@@ -745,8 +745,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @dev This function will be called everytime "checkUpkeep" returns true 
-     * @dev This function will refund expired transfers in batches(currently of max 50 transferIds)
+     * @dev This function will be called every time "checkUpkeep" returns true
+     * @dev This function will refund expired transfers in batches(ccurrently up to 50 transfer IDs)
      */
     function performUpkeep(
         bytes calldata performData
@@ -778,7 +778,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @dev This function is intended for tests
-     * @dev This function is a wraper for _addTokenToAllowList(token) with external visibility
+     * @dev This function is a wrapper for _addTokenToAllowList(token) with external visibility
      * @param token: Address of an ERC20 token
      * @notice This function allows only the owner to add a new token to the allow list
      */
@@ -788,7 +788,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @dev This function is intended for tests
-     * @dev This function is a wraper for _removeTokenFromAllowList(token) with external visibility
+     * @dev This function is a wrapper for _removeTokenFromAllowList(token) with external visibility
      * @param token: Address of an ERC20 token
      * @notice This function allows only the owner to remove a token from the allow list
      */
@@ -798,7 +798,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @dev This function is intended for tests
-     * @dev This function is a wraper for _clearHistory() with external visibility
+     * @dev This function is a wrapper for _clearHistory() with external visibility
      * @notice This function allows only the owner to remove old transferId info
      */
     function clearHistory() external onlyOwner {
@@ -807,7 +807,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @dev This function is intended for tests
-     * @dev This function is a wraper for _removeInactiveAddresses() with external visibility
+     * @dev This function is a wrapper for _removeInactiveAddresses() with external visibility
      * @notice This function allows only the owner to remove inactive addresses
      */
     function removeInactiveAddresses() external onlyOwner {
@@ -816,7 +816,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @param level: Selects a fee level. There are three fee levels: 1, 2, 3.
-     * @param newTransferFee: Value of the new transfer fee
+     * @param newTransferFee: Value for the new transfer fee
      * @notice This function allows only the owner to set a new transfer fee value for a fee level
      */
     function setTransferFee(
@@ -837,7 +837,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @param newLimitLevelOne: New limit value for level 1, for example 10e18 / 10 ethereum.
+     * @param newLimitLevelOne: Value for new limit level 1, for example 10e18 / 10 ethereum.
      * @notice This function allows only the owner to set a new limit value for fee level 1
      */
     function setNewLimitLevelOne(
@@ -849,7 +849,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @param newLimitLevelTwo: New limit value for level 2, for example 300e18 / 300 ethereum.
+     * @param newLimitLevelTwo: Value for new limit level 2, for example 300e18 / 300 ethereum.
      * @notice This function allows only the owner to set a new limit value for fee level 2
      */
     function setNewLimitLevelTwo(
@@ -865,7 +865,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @param newFeeScalingFactor: New value for the scaling factor(ex. 1e6 or 1e8)
+     * @param newFeeScalingFactor: Value for new scaling factor(ex. 1e6 or 1e8)
      * @notice This function allows only the owner to assign a new value to the fee scaling factor
      */
     function setNewFeeScalingFactor(
@@ -879,7 +879,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     /**
      * @param token: Token fee to withdraw
      * @param amount: Amount of fee to withdraw
-     * @notice This function allows only the owner to withdraw a certain amount of token fee accumulated
+     * @notice This function allows only the owner to withdraw a specified amount of accumulated token fees
      */
     function withdrawFeesForToken(
         address token,
@@ -902,20 +902,20 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         if (token == address(0)) {
             (bool success, ) = msg.sender.call{value: amount}("");
             if (!success) {
-                revert PST__FeeWIthdrawalFailed();
+                revert PST__FeeWithdrawalFailed();
             }
         } else {
             IERC20 erc20 = IERC20(token);
             bool success = erc20.transfer(msg.sender, amount);
             if (!success) {
-                revert PST__FeeWIthdrawalFailed();
+                revert PST__FeeWithdrawalFailed();
             }
         }
     }
 
     /**
-     * @param newMinPasswordLength: Value for new min password length
-     * @notice This function allows only the owner to set a new min password length
+     * @param newMinPasswordLength: Value for new minimum password length
+     * @notice This function allows only the owner to set a new minimum password length
      */
     function setNewMinPasswordLength(
         uint256 newMinPasswordLength
@@ -930,8 +930,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @param newClaimCooldownPeriod: Value for new claim cooldown period 
-     * @notice This function allows only the owner to set a new claim cooldown period
+     * @param newClaimCooldownPeriod: Value for new claim cooldown period
+     * @notice This function allows only the owner to configure a new claim cooldown period
      */
     function setNewClaimCooldownPeriod(
         uint256 newClaimCooldownPeriod
@@ -949,7 +949,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @param newAvailabilityPeriod: Value for new transfer availability period
-     * @notice This function allows only the owner to set a new transfer availability period
+     * @notice This function allows only the owner to set a new period during which a transfer remains available
      */
     function setNewAvailabilityPeriod(
         uint256 newAvailabilityPeriod
@@ -991,7 +991,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         uint256 newInactivityThreshold
     ) external onlyOwner moreThanZero(newInactivityThreshold) {
         if (newInactivityThreshold < MIN_INACTIVITY_THRESHOLD) {
-            revert PST__InvalidInactivityThreshhold({
+            revert PST__InvalidInactivityThreshold({
                 minRequired: MIN_INACTIVITY_THRESHOLD
             });
         }
@@ -1019,8 +1019,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                         PUBLIC FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     /**
-     * @dev This is the function called by "performUpkeep" through Chainlink Automation to refund expired transfers
-     * @param transferId: transfer id to refund
+     * @dev Function called by "performUpkeep" through Chainlink Automation to refund expired transfers
+     * @param transferId: Id of transfer to refund
      * @notice This function will refund an expired transfer
      */
     function refundExpiredTransfer(
@@ -1072,8 +1072,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @param user: Address to be added into tracking array, addressList
-     * @notice This function will add an address to addressList
+     * @param user: Address to be added to the tracking array "addressList"
+     * @notice This function will add an address to "addressList"
      */
     function addAddressToTracking(address user) public {
         if (!s_trackedAddresses[user]) {
@@ -1084,8 +1084,8 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @param user: Address to be removed from tracking array, addressList
-     * @notice This function will remove an address from addressList
+     * @param user: Address to be removed from tracking array "addressList"
+     * @notice This function will remove an address from "addressList"
      */
     function removeAddressFromTracking(address user) public {
         bool userFound;
@@ -1108,9 +1108,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
 
     /**
      * @param token: Token address that is having its fee balance updated
-     * @param _transferFeeCost: Cost of transfer fee, added to token fee balance
+     * @param _transferFeeCost: Fee to add to the token’s balance
      * @notice This function will update the token fee balance with transfer fee cost
-     * @notice This function is called when a transferId is created by calling createTransfer
+     * @notice This function is called when a transferId is created via "createTransfer"
      */
     function addFee(
         address token,
@@ -1120,9 +1120,9 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @param transferId: TransferId that has its password encoded
-     * @param _password: The password provided by sender when calling createTransfer
-     * @notice This function will encode a password with a salt, by using keccak256()
+     * @param transferId: Transfer Id whose password it's being encoded
+     * @param _password: The password provided by sender during "createTransfer"
+     * @notice This function will encode a password using a salt, via "keccak256()"
      */
     function encodePassword(
         uint256 transferId,
@@ -1139,10 +1139,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     }
 
     /**
-     * @param transferId: TransferId that is going to be checked for correct password
-     * @param password: Provided password to be checked
-     * @notice This function will check if the claim password matches the sender password
-     * @notice This function is called when a transferId is claimed by calling claimTransfer
+     * @param transferId: ID of the transfer to check
+     * @param password: Password to verify against the stored hash
+     * @notice This function will check if the claim password matches the sender's password
+     * @notice This function is called when a transferId is claimed via "claimTransfer"
      */
     function checkPassword(
         uint256 transferId,
@@ -1171,6 +1171,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
             );
     }
 
+    /**
+     * @param transferId: ID of the pending transfer to remove
+     * @notice This function will remove transfer id with status "pending" from s_pendingTransfers array
+     */
     function removeFromPendingTransfers(uint256 transferId) public {
         uint256 length = s_pendingTransferIds.length;
         bool idFound;
@@ -1193,6 +1197,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    /**
+     * @param user: Address associated with the transfer
+     * @param transferId: ID of the pending transfer to remove
+     * @notice This function will remove for user, a transfer ID with status "pending" from "s_pendingTransfersByAddress array"
+     */
     function removeFromPendingTransfersByAddress(
         address user,
         uint256 transferId
@@ -1213,7 +1222,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
-    // Function to remove all canceled transfers
+    /**
+     * @notice Removes all canceled transfer IDs from storage
+     * @notice Iterates over global list and removes canceled transfer IDs
+     * @notice This function can only be called by the owner
+     */
     function removeAllCanceledTransfers() public onlyOwner {
         uint256 length = s_canceledTransferIds.length;
 
@@ -1232,7 +1245,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit CanceledTransfersHistoryCleared();
     }
 
-    // Function to remove all expired and refunded transfers
+    /**
+     * @notice Removes all expired and refunded transfer IDs from storage
+     * @notice Iterates over global list and removes expired and refunded transfer IDs
+     * @notice This function can only be called by the owner
+     */
     function removeAllExpiredAndRefundedTransfers() public onlyOwner {
         uint256 length = s_expiredAndRefundedTransferIds.length;
 
@@ -1251,7 +1268,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit ExpiredAndRefundedTransfersHistoryCleared();
     }
 
-    // Function to remove all claimed transfers
+    /**
+     * @notice Removes all claimed transfer IDs from storage
+     * @notice Iterates over global list and removes claimed transfer IDs
+     * @notice This function can only be called by the owner
+     */
     function removeAllClaimedTransfers() public onlyOwner {
         uint256 length = s_claimedTransferIds.length;
 
@@ -1270,6 +1291,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit ClaimedTransfersHistoryCleared();
     }
 
+    /**
+     * @param user: User address whose canceled transfers will be removed
+     * @notice This function will remove all canceled transfer IDs for a given address
+     */
     function removeAllCanceledTransfersByAddress(
         address user
     ) public onlyValidAddress(user) {
@@ -1278,6 +1303,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit CanceledTransfersForAddressHistoryCleared(user);
     }
 
+    /**
+     * @param user: User address whose expired and refunded transfers will be removed
+     * @notice This function will remove all expired and refunded transfer IDs for a given address
+     */
     function removeAllExpiredAndRefundedTransfersByAddress(
         address user
     ) public onlyValidAddress(user) {
@@ -1286,6 +1315,10 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit ExpiredAndRefundedTransfersForAddressHistoryCleared(user);
     }
 
+    /**
+     * @param user: User address whose claimed transfers will be removed
+     * @notice This function will remove all claimed transfer IDs for a given address
+     */
     function removeAllClaimedTransfersByAddress(
         address user
     ) public onlyValidAddress(user) {
@@ -1298,6 +1331,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                         PRIVATE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    /**
+     * @param token: Address of ERC20 token that will be added to allow list "s_allowedTokens"
+     * @notice This function will add token to allow list "s_allowedTokens"
+     * @notice This function has an external onlyOwner version for testing purposes - addTokenToAllowList
+     */
     function _addTokenToAllowList(address token) internal {
         if (s_allowedTokens[token]) {
             revert PST__TokenAlreadyWhitelisted();
@@ -1309,6 +1347,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit TokenAddedToAllowList(token);
     }
 
+    /**
+     * @param token: Address of ERC20 token that will be removed from allow list "s_allowedTokens"
+     * @notice This function will remove token from allow list "s_allowedTokens"
+     * @notice This function has an external onlyOwner version for testing purposes - removeTokenFromAllowList
+     */
     function _removeTokenFromAllowList(address token) internal {
         uint256 length = s_tokenList.length;
         s_allowedTokens[token] = false;
@@ -1323,6 +1366,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit TokenRemovedFromAllowList(token);
     }
 
+    /**
+     * @notice This function removes in batches of maximum 50, all canceled, expired-refunded, claimed transfer IDs
+     * @notice Only removes for users whose last cleanup was more than "s_cleanupInterval" ago
+     * @notice This function is performed automatically, being called by "performMaintainance()" which is called periodically
+     * by Chainlink Automation nodes
+     */
     function _clearHistory() private {
         uint256 batchLimit = s_batchLimit;
         address[] memory addressList = s_addressList;
@@ -1355,6 +1404,12 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    /**
+     * @notice This function removes in batches of maximum 50, all inactive addresses
+     * @notice Inactive meaning no operation in the last "s_inactivityThreshold" days
+     * @notice This function is performed automatically, being called by "performMaintainance()"
+     * which is called periodically by Chainlink Automation nodes
+     */
     function _removeInactiveAddresses() private {
         uint256 batchLimit = s_batchLimit;
         address[] memory addressList = s_addressList;
@@ -1428,6 +1483,13 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return address(this).balance;
     }
 
+    // Function to get contract balance for a token
+    function getBalanceForToken(
+        address token
+    ) external view onlyValidToken(token) returns (uint256) {
+        return IERC20(token).balanceOf(address(this));
+    }
+
     // Function to get the list of all allowed tokens
     function getAllowedTokens() external view returns (address[] memory) {
         return s_tokenList;
@@ -1438,13 +1500,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_addressList;
     }
 
-    // Function to get contract balance for a token
-    function getBalanceForToken(
-        address token
-    ) external view onlyValidToken(token) returns (uint256) {
-        return IERC20(token).balanceOf(address(this));
-    }
-
     // Function to get all accumulated fees for a token
     function getAccumulatedFeesForToken(
         address token
@@ -1452,6 +1507,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_feeBalances[token];
     }
 
+    // Function to get all transfer fees
     function getTransferFees()
         external
         view
@@ -1460,6 +1516,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return transferFee;
     }
 
+    // Function to get the transfer fee for a certain level
     function getTransferFee(uint8 level) external view returns (uint256) {
         if (level == 1) {
             return transferFee.lvlOne;
@@ -1472,6 +1529,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         }
     }
 
+    // Function to get claim cooldown status and time remaining until elapsed for a transfer Id
     function getClaimCooldownStatus(
         uint256 transferId
     ) external view returns (bool isCoolDownActive, uint256 timeRemaining) {
@@ -1495,6 +1553,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_canceledTransferIds;
     }
 
+    // Function to get canceled transfers count
     function getCanceledTransferCount() external view returns (uint256) {
         return s_canceledTransferIds.length;
     }
@@ -1508,6 +1567,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_expiredAndRefundedTransferIds;
     }
 
+    // Function to get expired and refunded transfers count
     function getExpiredAndRefundedTransferCount()
         external
         view
@@ -1521,6 +1581,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_claimedTransferIds;
     }
 
+    // Function to get claimed transfers count
     function getClaimedTransferCount() external view returns (uint256) {
         return s_claimedTransferIds.length;
     }
@@ -1565,19 +1626,21 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_canceledTransfersByAddress[user];
     }
 
+    // Function to get the count of canceled transfers for an address
     function getCanceledTransferForAddressCount(
         address user
     ) external view returns (uint256) {
         return s_canceledTransfersByAddress[user].length;
     }
 
-    // Function to get all expired transfers for an address
+    // Function to get all expired and refunded transfers for an address
     function getExpiredAndRefundedTransfersForAddress(
         address user
     ) external view onlyValidAddress(user) returns (uint256[] memory) {
         return s_expiredAndRefundedTransfersByAddress[user];
     }
 
+    // Function to get the count of expired and refunded transfers for an address
     function getExpiredAndRefundedTransfersForAddressCount(
         address user
     ) external view returns (uint256) {
@@ -1591,6 +1654,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         return s_claimedTransfersByAddress[user];
     }
 
+    // Function to get the count of claimed transfers for an address
     function getClaimedTransfersForAddressCount(
         address user
     ) external view returns (uint256) {
