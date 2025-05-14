@@ -8,7 +8,8 @@
 
 ## Description
 
-The main functionality of this system is the addition of an extra security layer to tranfer operations
+The main functionality of this system is the addition of an extra security layer to tranfer operations.
+The system uses a pull-based mechanism, where the receiver has to claim a transfer.
 
   A Password Shielded Transfer(PST) will require the following steps:
 
@@ -27,9 +28,15 @@ The main functionality of this system is the addition of an extra security layer
 
 Additional properties:
 
+   - A PST has a few additional abilities, in regards to traditional transfers:
+     1. 
+     2. 
+     3.
+
    - The system charges a [fee] for every transfer. The [fee] is dynamically adjusted in relation with the amount sent  
-   - The added layer of security provided by the [password] allows [Sender] to cancel the tranfer and claim back the [amount] at any point before the [Receiver] claims the [amount]
-   - A transfer will have a limited availability period when it can be claimed, when this period has elapsed the transfer will expire and  [Sender] will be refunded
+   
+   {- The added layer of security provided by the [password] allows [Sender] to cancel the tranfer and claim back the [amount] at any point before the [Receiver] claims the [amount]
+   - A transfer will have a limited availability period when it can be claimed, when this period has elapsed the transfer will expire and  [Sender] will be refunded}
    - The system allows transfers of native ETH tokens as well as ERC20 tokens 
    - New ERC20 tokens can be approved and added by the owner
    - The system periodically removes inactive users from tracking

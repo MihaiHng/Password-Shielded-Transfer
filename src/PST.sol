@@ -1,26 +1,5 @@
 // SPDX-License-Identifier: MIT
 
-// Layout of Contract:
-// version
-// imports
-// interfaces, libraries, contracts
-// errors
-// Type declarations
-// State variables
-// Events
-// Modifiers
-// Functions
-
-// Layout of Functions:
-// constructor
-// receive function (if exists)
-// fallback function (if exists)
-// external
-// public
-// internal
-// private
-// view & pure functions
-
 pragma solidity ^0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -30,43 +9,23 @@ import {AutomationCompatibleInterface} from "@chainlink/contracts/v0.8/automatio
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 import {PreApprovedTokensLibrary} from "./libraries/PreApprovedTokensLib.sol";
 
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// Complete events ✅
-// Test chainlink automation ✅
-// Batch processing ✅
-// Setter functions for important parameters ✅
-// Unit testing ✅
-// Fuzz testing ✅
-// Invariant testing ✅
-// Gas Tracking/Optimization ✅
-// Security checklist [Notion]
-// Private constants and setting new values ✅
-// Remove length = 0 checks in getters ✅
-// Comments on functions ✅
-// Frontend/UI
-// Finalize Readme
-// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-/**
- * UI Considerations:
- * - Create a file to cache token metadata to avoid redundant calls:
- * {
- *     "address": "0xTokenAddress1",
- *     "name": "USDT",
- *     "symbol": "Tether",
- *     "decimals": 6
- *    }
- */
-
 /**
  * @title PST Password Shielded Transfer
  * @author Mihai Hanga
  *
  * @dev This smart contract is the core of the Password Shielded Transfer(PST)
  * The main functionality of this system is the use of passwords to increase the security of transfers between accounts
+ * The system uses a pull-based mechanism, where the receiver needs to claim a transfer
+ * The receiver can only claim the transfer if they submit the correct passoword
+ *
+ * @notice The PST gives a few additional abilities to a regular transfer:
+ * - A created transfer can be canceled, as long as claim cooldown period didn't elapse
+ * - A created transfer has an expiry time, which if reached the transfer creator gets refunded
+ * - Transfer history gets removed automatically and periodically
+ * - Inactive users get removed automatically and periodically
  *
  * @notice The system will charge a fee per transfer. The fee is calculated as a percentage.
- * @notice The fee is determined based on the amount transfered. There will be 3 fee levels, for example:
+ * The fee is determined based on the amount transfered. There will be 3 fee levels, for example:
  *   -> 0.01% (1000/10e7) for transfers <= 10 ETH
  *   -> 0.001% (100/10e7) for 10 ETH < transfers <= 100 ETH
  *   -> 0.0001% (10/10e7) for transfers > 100 ETH
