@@ -4,47 +4,50 @@
 
 ## Contract Address
 
-
+Testnet:
 
 ## Description
 
-The main functionality of this system is the addition of an extra security layer to tranfer operations.
-The system uses a pull-based mechanism, where the receiver has to claim a transfer.
+- The main functionality of this system is the use of passwords to secure transfer operations.
+- The system uses a pull-based mechanism, where the receiver has to claim a transfer.
+- The receiver will need to provide a valid password to claim a transfer.
 
-  A Password Shielded Transfer(PST) will require the following steps:
+- A Password Shielded Transfer(PST) will require the following steps:
 
-  - [Sender] sends an [amount] of [token] to [Receiver] by submitting the following data:
-    -> [address] of [Receiver]
-    -> [token] 
-    -> [amount]
-    -> [password] chosen by the [Sender] with min 7 characters
-  - [Sender] sends the [password] to [Receiver] by a communication method of its choice outside the platform
-  - At this point there is a pending transfer created in the system, waiting to be claimed
-  - There are 3 main conditions in order for the [Receiver] to be able to claim the transfer
-  - [Receiver] can claim the pending transfer if the [password] entered matches the [password] set by [Sender] and 
-  if the claim is done before claim cooldown period has elapsed
+  1. [Sender] sends an [amount] of [token] to [Receiver] by submitting the following data:
+      - [address] of [Receiver]
+      - [token] 
+      - [amount]
+      - [password] chosen by the [Sender]
+  2. [Sender] sends the [password] to [Receiver] by a communication method of its choice outside the platform
+  3. At this point there is a pending transfer created in the system, waiting to be claimed
+  4. [Receiver] can claim the pending transfer if:
+      - the [password] entered matches the [password] set by [Sender] 
+      - the claim is done after claim cooldown period has elapsed
 
 ## Properties
 
 Additional properties:
 
-   - A PST has a few additional abilities, in regards to traditional transfers:
-     1. 
-     2. 
-     3.
+- A PST has a few additional abilities, in regards to traditional transfers:
 
-   - The system charges a [fee] for every transfer. The [fee] is dynamically adjusted in relation with the amount sent  
+  1. Claim cooldown period - sender can change its mind and cancel the transfer
+  2. Transfer expiring time - if the receiver doesn't claim the transfer before expiring the sender is refunded
+    
+- The system charges a [fee] for every transfer. The [fee] is dynamically adjusted in relation with the amount sent  
    
-   {- The added layer of security provided by the [password] allows [Sender] to cancel the tranfer and claim back the [amount] at any point before the [Receiver] claims the [amount]
-   - A transfer will have a limited availability period when it can be claimed, when this period has elapsed the transfer will expire and  [Sender] will be refunded}
-   - The system allows transfers of native ETH tokens as well as ERC20 tokens 
-   - New ERC20 tokens can be approved and added by the owner
-   - The system periodically removes inactive users from tracking
-   - User transaction history is cleaned periodically 
-   - Functions ready to be automatically called with Chainlink Automation:
-    -> Refunding of expired transfers(custom-logic)
-    -> Removing of inactive users(time-based)
-    -> Cleaning of user history(time-based)
+- The system allows transfers of native ETH tokens as well as ERC20 tokens
+
+- New ERC20 tokens can be approved and added by the owner
+
+- The system removes periodically and automatically old transfers from tracking
+
+- The system removes periodically and automatically inactive users from tracking
+
+- Functions ready to be automatically called with Chainlink Automation:
+    - Refunding of expired transfers(custom-logic)
+    - Removing of inactive users(time-based)
+    - Cleaning of user history(time-based)
 
 # Getting Started
 
@@ -75,15 +78,26 @@ forge build
 
 ### Coverage Report
 
-### Unit Tests
+![alt text](forge_coverage.png)
 
-### Integration Tests
+### Test Suite
 
-### Stateless - Fuzz Tests
+- Unit Tests
+- Integration Tests
+- Fuzz Tests(stateless)
+- Invariant Tests(statefull)
 
-### Statefull - Invariant Tests
+### Static Analysis 
+
+Slither
+
+![alt text](slither_report.png)
 
 
-## Frontend to follow
+## Frontend 
 
 ## Future Improvements 
+
+1. Improve password encryption mechanism
+2. Make claims free of charge, by refunding the gas cost to the receiver, using a % percentage of the transfer fees
+3. Improve fee calculation 

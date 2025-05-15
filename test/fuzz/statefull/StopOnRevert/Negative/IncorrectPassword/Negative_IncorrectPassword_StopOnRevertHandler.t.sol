@@ -22,19 +22,9 @@ contract Negative_IncorrectPassword_StopOnRevertHandler is Test {
     uint256 MAX_AMOUNT_TO_SEND = type(uint96).max;
     uint256 MIN_AMOUNT_TO_SEND = 1e14;
 
-    // address[] public actors;
-    // address internal currentActor;
-
     constructor(PST _pst) {
         pst = _pst;
     }
-
-    // modifier useActor(uint256 actorIndexSeed) {
-    //     currentActor = actors[bound(actorIndexSeed, 0, actors.length - 1)];
-    //     vm.startPrank(currentActor);
-    //     _;
-    //     vm.stopPrank();
-    // }
 
     function createTransfer(
         address receiver,
@@ -46,7 +36,6 @@ contract Negative_IncorrectPassword_StopOnRevertHandler is Test {
 
         vm.assume(receiver != address(0) && receiver != address(this));
 
-        //vm.assume(bytes(password).length >= 7);
         string memory password;
         if (bytes(passwordData).length < 7) {
             password = "default_password"; // Use a default valid password
@@ -105,9 +94,7 @@ contract Negative_IncorrectPassword_StopOnRevertHandler is Test {
         removeFromPendingTransfers(transferId);
     }
 
-    function claimTransfer(
-        uint256 index /*, bool useValidPassword, string memory invalidPassword*/
-    ) public {
+    function claimTransfer(uint256 index) public {
         console.log("Handler: claimTransfer called");
 
         if (pendingTransfers.length == 0) return;
