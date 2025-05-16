@@ -76,6 +76,12 @@ forge build
 
 ## Testing 
 
+### Static Analysis 
+
+Slither
+
+![alt text](slither_report.png)
+
 ### Coverage Report
 
 ![alt text](forge_coverage.png)
@@ -86,13 +92,6 @@ forge build
 - Integration Tests
 - Fuzz Tests(stateless)
 - Invariant Tests(statefull)
-
-### Static Analysis 
-
-Slither
-
-![alt text](slither_report.png)
-
 
 ## Frontend 
 
