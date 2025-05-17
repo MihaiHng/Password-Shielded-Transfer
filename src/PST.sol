@@ -471,11 +471,6 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
                 });
             }
 
-            (bool success, ) = address(this).call{value: totalTransferCost}("");
-            if (!success) {
-                revert PST__TransferFailed();
-            }
-
             if (msg.value > totalTransferCost) {
                 (bool refundSuccess, ) = msg.sender.call{
                     value: msg.value - totalTransferCost
