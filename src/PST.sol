@@ -59,6 +59,7 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
     error PST__InvalidInactivityThreshold(uint256 minRequired);
     error PST__InvalidBatchLimit(uint256 minRequired);
     error PST__NotEnoughFunds(uint256 required, uint256 provided);
+    error PST__InvalidAmountSent(uint256 required, uint256 provided);
     error PST__NoExpiredTransfersToRemove();
     error PST__NoCanceledTransfersToRemove();
     error PST__NoClaimedTransfersToRemove();
@@ -464,20 +465,11 @@ contract PST is Ownable, ReentrancyGuard, AutomationCompatibleInterface {
         emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
 
         if (token == address(0)) {
-            if (msg.value < totalTransferCost) {
-                revert PST__NotEnoughFunds({
+            if (msg.value != totalTransferCost) {
+                revert PST__InvalidAmountSent({
                     required: totalTransferCost,
                     provided: msg.value
                 });
-            }
-
-            if (msg.value > totalTransferCost) {
-                (bool refundSuccess, ) = msg.sender.call{
-                    value: msg.value - totalTransferCost
-                }("");
-                if (!refundSuccess) {
-                    revert PST__RefundFailed();
-                }
             }
         } else {
             IERC20 erc20 = IERC20(token);
