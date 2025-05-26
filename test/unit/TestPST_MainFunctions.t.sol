@@ -690,7 +690,12 @@ contract TestPST_MainFunctions is Test {
     //     // Arrange
     //     transferId = 9999;
     //     vm.prank(SENDER);
-    //     pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+    //     pst.createTransfer{value: totalTransferCost}(
+    //         RECEIVER,
+    //         address(mockERC20Token),
+    //         AMOUNT_TO_SEND,
+    //         PASSWORD
+    //     );
     //     console.log(transferId);
     //     transferId = pst.s_transferCounter() - 1;
     //     console.log(transferId);
@@ -698,7 +703,7 @@ contract TestPST_MainFunctions is Test {
     //     // Act / Assert
     //     vm.prank(SENDER);
     //     vm.expectRevert(PST_Store.PST__InvalidTransferId.selector);
-    //     pst.cancelTransfer(transferId);
+    //     pst.cancelTransfer(transferId + 1);
     // }
 
     function testCancelTransferUpdatesTransferPendingStateToFalse()
