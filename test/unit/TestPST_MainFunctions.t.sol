@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.28;
 
+import {PST_Store} from "../../src/PST_Store.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Test, console, console2} from "forge-std/Test.sol";
 import {DeployPST} from "../../script/DeployPST.s.sol";
@@ -134,7 +135,7 @@ contract TestPST_MainFunctions is Test {
 
     function testCreateTransferRevertsWhenAmountIsNotMoreThanZero() public {
         // Arrange / Act / Assert
-        vm.expectRevert(PST.PST__NeedsMoreThanZero.selector);
+        vm.expectRevert(PST_Store.PST__NeedsMoreThanZero.selector);
         pst.createTransfer(RECEIVER, address(mockERC20Token), 0, PASSWORD);
     }
 
@@ -146,7 +147,7 @@ contract TestPST_MainFunctions is Test {
         address INVALID_RECEIVER = address(0);
 
         // Act // Assert
-        vm.expectRevert(PST.PST__InvalidAddress.selector);
+        vm.expectRevert(PST_Store.PST__InvalidAddress.selector);
         pst.createTransfer(
             INVALID_RECEIVER,
             address(mockERC20Token),
@@ -165,7 +166,7 @@ contract TestPST_MainFunctions is Test {
         na_mockERC20Token.transfer(SENDER, 100 ether);
 
         // Act // Assert
-        vm.expectRevert(PST.PST__TokenNotAllowed.selector);
+        vm.expectRevert(PST_Store.PST__TokenNotAllowed.selector);
         pst.createTransfer(
             RECEIVER,
             address(na_mockERC20Token),
@@ -176,7 +177,7 @@ contract TestPST_MainFunctions is Test {
 
     function testCreateTransferRevertsWhenSendingToOWnAddress() public {
         // Arrange / Act / Assert
-        vm.expectRevert(PST.PST__CantSendToOwnAddress.selector);
+        vm.expectRevert(PST_Store.PST__CantSendToOwnAddress.selector);
         vm.prank(SENDER);
         pst.createTransfer(
             SENDER,
@@ -193,7 +194,7 @@ contract TestPST_MainFunctions is Test {
         // Assert
         vm.expectRevert(
             abi.encodeWithSelector(
-                PST.PST__AmountToSendShouldBeHigher.selector,
+                PST_Store.PST__AmountToSendShouldBeHigher.selector,
                 MIN_AMOUNT_TO_SEND
             )
         );
@@ -208,7 +209,7 @@ contract TestPST_MainFunctions is Test {
 
     function testCreateTransferRevertsWhenPasswordNotProvided() public {
         // Arrange / Act / Assert
-        vm.expectRevert(PST.PST__PasswordNotProvided.selector);
+        vm.expectRevert(PST_Store.PST__PasswordNotProvided.selector);
         pst.createTransfer(
             RECEIVER,
             address(mockERC20Token),
@@ -225,7 +226,7 @@ contract TestPST_MainFunctions is Test {
         // Act // Assert
         vm.expectRevert(
             abi.encodeWithSelector(
-                PST.PST__PasswordTooShort.selector,
+                PST_Store.PST__PasswordTooShort.selector,
                 MIN_PASSWORD_LENGTH
             )
         );
@@ -531,7 +532,7 @@ contract TestPST_MainFunctions is Test {
         // Act / Assert
         vm.expectRevert(
             abi.encodeWithSelector(
-                PST.PST__InvalidAmountSent.selector,
+                PST_Store.PST__InvalidAmountSent.selector,
                 totalTransferCost,
                 INVALID_AMOUNT
             )
@@ -589,7 +590,7 @@ contract TestPST_MainFunctions is Test {
         // Act / Assert
         vm.expectRevert(
             abi.encodeWithSelector(
-                PST.PST__NotEnoughFunds.selector,
+                PST_Store.PST__NotEnoughFunds.selector,
                 totalTransferCost,
                 INSUFFICIENT_AMOUNT
             )
@@ -615,7 +616,7 @@ contract TestPST_MainFunctions is Test {
         pst.addTokenToAllowList(address(failingERC20Mock));
 
         // Act / Assert
-        vm.expectRevert(PST.PST__TransferFailed.selector);
+        vm.expectRevert(PST_Store.PST__TransferFailed.selector);
         vm.prank(SENDER);
         pst.createTransfer{value: totalTransferCost}(
             RECEIVER,
@@ -657,7 +658,7 @@ contract TestPST_MainFunctions is Test {
         vm.deal(NOT_SENDER, SENDER_BALANCE);
 
         // Act / Assert
-        vm.expectRevert(PST.PST__OnlySenderCanCancel.selector);
+        vm.expectRevert(PST_Store.PST__OnlySenderCanCancel.selector);
         vm.prank(NOT_SENDER);
         pst.cancelTransfer(transferId);
     }
@@ -681,7 +682,7 @@ contract TestPST_MainFunctions is Test {
 
         // Act / Assert
         vm.prank(SENDER);
-        vm.expectRevert(PST.PST__TransferNotPending.selector);
+        vm.expectRevert(PST_Store.PST__TransferNotPending.selector);
         pst.cancelTransfer(transferId);
     }
 
@@ -696,7 +697,7 @@ contract TestPST_MainFunctions is Test {
 
     //     // Act / Assert
     //     vm.prank(SENDER);
-    //     vm.expectRevert(PST.PST__InvalidTransferId.selector);
+    //     vm.expectRevert(PST_Store.PST__InvalidTransferId.selector);
     //     pst.cancelTransfer(transferId);
     // }
 
@@ -929,7 +930,7 @@ contract TestPST_MainFunctions is Test {
 
         // Act & Assert
         vm.prank(address(nonPayable));
-        vm.expectRevert(PST.PST__TransferFailed.selector);
+        vm.expectRevert(PST_Store.PST__TransferFailed.selector);
         pst.cancelTransfer(transferId);
     }
 
@@ -979,7 +980,7 @@ contract TestPST_MainFunctions is Test {
 
         // Assert
         vm.prank(SENDER);
-        vm.expectRevert(PST.PST__TransferFailed.selector);
+        vm.expectRevert(PST_Store.PST__TransferFailed.selector);
         pst.cancelTransfer(transferId);
     }
 
@@ -991,7 +992,7 @@ contract TestPST_MainFunctions is Test {
         transferCreated
     {
         // Arrange / Act / Assert
-        vm.expectRevert(PST.PST__CooldownPeriodNotElapsed.selector);
+        vm.expectRevert(PST_Store.PST__CooldownPeriodNotElapsed.selector);
         vm.prank(SENDER);
         pst.claimTransfer(transferId, PASSWORD);
     }
@@ -1005,7 +1006,7 @@ contract TestPST_MainFunctions is Test {
         vm.roll(block.number + 1);
 
         // Act / Assert
-        vm.expectRevert(PST.PST__TransferNotPending.selector);
+        vm.expectRevert(PST_Store.PST__TransferNotPending.selector);
         vm.prank(SENDER);
         pst.claimTransfer(transferId, PASSWORD);
     }
@@ -1019,7 +1020,7 @@ contract TestPST_MainFunctions is Test {
         vm.roll(block.number + 1);
 
         // Act / Assert
-        vm.expectRevert(PST.PST__InvalidReceiver.selector);
+        vm.expectRevert(PST_Store.PST__InvalidReceiver.selector);
         vm.prank(SENDER);
         pst.claimTransfer(transferId, PASSWORD);
     }
@@ -1033,7 +1034,7 @@ contract TestPST_MainFunctions is Test {
         vm.roll(block.number + 1);
 
         // Act / Assert
-        vm.expectRevert(PST.PST__PasswordNotProvided.selector);
+        vm.expectRevert(PST_Store.PST__PasswordNotProvided.selector);
         vm.prank(RECEIVER);
         pst.claimTransfer(transferId, "");
     }
@@ -1052,7 +1053,7 @@ contract TestPST_MainFunctions is Test {
         // Act // Assert
         vm.expectRevert(
             abi.encodeWithSelector(
-                PST.PST__PasswordTooShort.selector,
+                PST_Store.PST__PasswordTooShort.selector,
                 MIN_PASSWORD_LENGTH
             )
         );
@@ -1071,7 +1072,7 @@ contract TestPST_MainFunctions is Test {
         vm.roll(block.number + 1);
 
         // Act // Assert
-        vm.expectRevert(PST.PST__IncorrectPassword.selector);
+        vm.expectRevert(PST_Store.PST__IncorrectPassword.selector);
         vm.prank(RECEIVER);
         pst.claimTransfer(transferId, INCORRECT_PASSWORD);
     }
@@ -1410,7 +1411,7 @@ contract TestPST_MainFunctions is Test {
 
         // Act & Assert
         vm.prank(address(nonPayable));
-        vm.expectRevert(PST.PST__TransferFailed.selector);
+        vm.expectRevert(PST_Store.PST__TransferFailed.selector);
         pst.claimTransfer(transferId, PASSWORD);
     }
 
@@ -1468,7 +1469,7 @@ contract TestPST_MainFunctions is Test {
 
         // Assert
         vm.prank(RECEIVER);
-        vm.expectRevert(PST.PST__TransferFailed.selector);
+        vm.expectRevert(PST_Store.PST__TransferFailed.selector);
         pst.claimTransfer(transferId, PASSWORD);
     }
 

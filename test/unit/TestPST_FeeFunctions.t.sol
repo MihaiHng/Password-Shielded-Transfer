@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.28;
 
+import {PST_Store} from "../../src/PST_Store.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Test, console, console2} from "forge-std/Test.sol";
 import {DeployPST} from "../../script/DeployPST.s.sol";
@@ -455,7 +456,7 @@ contract TestPST_FeeFunctions is Test {
 
         // Act / Assert
         vm.prank(address(nonPayableERC20Mock));
-        vm.expectRevert(PST.PST__FeeWithdrawalFailed.selector);
+        vm.expectRevert(PST_Store.PST__FeeWithdrawalFailed.selector);
         pst.withdrawFeesForToken(address(0), withdrawalAmount);
     }
 
@@ -541,7 +542,7 @@ contract TestPST_FeeFunctions is Test {
 
         // Act / Assert
         vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__FeeWithdrawalFailed.selector);
+        vm.expectRevert(PST_Store.PST__FeeWithdrawalFailed.selector);
         pst.withdrawFeesForToken(address(failingERC20Mock), withdrawalAmount);
     }
 
@@ -555,7 +556,7 @@ contract TestPST_FeeFunctions is Test {
 
         // Act & Assert
         vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__InsufficientFeeBalance.selector);
+        vm.expectRevert(PST_Store.PST__InsufficientFeeBalance.selector);
         pst.withdrawFeesForToken(address(mockERC20Token), withdrawalAmount);
     }
 
@@ -565,7 +566,7 @@ contract TestPST_FeeFunctions is Test {
     {
         // Arrange / Act / Assert
         vm.prank(pst.owner());
-        vm.expectRevert(PST.PST__NeedsMoreThanZero.selector);
+        vm.expectRevert(PST_Store.PST__NeedsMoreThanZero.selector);
         pst.withdrawFeesForToken(address(mockERC20Token), 0);
     }
 }
