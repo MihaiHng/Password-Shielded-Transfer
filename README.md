@@ -100,3 +100,4 @@ Slither
 1. Improve password encryption mechanism
 2. Make claims free of charge, by refunding the gas cost to the receiver, using a % percentage of the transfer fees
 3. Improve fee calculation 
+4. Use a different solution to restrict access to important functions. Multi-sig Wallet instead of onlyOwner <- centralization risk
