@@ -277,10 +277,10 @@ contract PST is
         uint256 transferId
     )
         external
+        onlyValidTransferIds(transferId)
         nonReentrant
         onlySender(transferId)
         onlyPendingTransfers(transferId)
-        onlyValidTransferIds(transferId)
     {
         Transfer storage transferToCancel = s_transfersById[transferId];
         address receiver = transferToCancel.receiver;

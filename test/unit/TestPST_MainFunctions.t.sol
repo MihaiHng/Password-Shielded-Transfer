@@ -657,6 +657,15 @@ contract TestPST_MainFunctions is Test {
         address NOT_SENDER = makeAddr("not sender");
         vm.deal(NOT_SENDER, SENDER_BALANCE);
 
+        vm.prank(SENDER);
+        pst.createTransfer(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
+        transferId = pst.s_transferCounter() - 1;
+
         // Act / Assert
         vm.expectRevert(PST_Store.PST__OnlySenderCanCancel.selector);
         vm.prank(NOT_SENDER);
@@ -686,25 +695,23 @@ contract TestPST_MainFunctions is Test {
         pst.cancelTransfer(transferId);
     }
 
-    // function testCancelTransferRevertsIfTransferIdIsInvalid() public {
-    //     // Arrange
-    //     transferId = 9999;
-    //     vm.prank(SENDER);
-    //     pst.createTransfer{value: totalTransferCost}(
-    //         RECEIVER,
-    //         address(mockERC20Token),
-    //         AMOUNT_TO_SEND,
-    //         PASSWORD
-    //     );
-    //     console.log(transferId);
-    //     transferId = pst.s_transferCounter() - 1;
-    //     console.log(transferId);
+    function testCancelTransferRevertsIfTransferIdIsInvalid() public {
+        // Arrange
+        vm.prank(SENDER);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
+        transferId = pst.s_transferCounter() - 1;
+        console.log(transferId);
 
-    //     // Act / Assert
-    //     vm.prank(SENDER);
-    //     vm.expectRevert(PST_Store.PST__InvalidTransferId.selector);
-    //     pst.cancelTransfer(transferId + 1);
-    // }
+        // Act / Assert
+        vm.prank(SENDER);
+        vm.expectRevert(PST_Store.PST__InvalidTransferId.selector);
+        pst.cancelTransfer(transferId + 10);
+    }
 
     function testCancelTransferUpdatesTransferPendingStateToFalse()
         public
