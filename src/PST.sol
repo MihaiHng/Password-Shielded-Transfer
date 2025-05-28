@@ -261,9 +261,6 @@ contract PST is
                 address(this),
                 totalTransferCost
             );
-            // if (!success) {
-            //     revert PST__TransferFailed();
-            // }
         }
     }
 
@@ -279,8 +276,8 @@ contract PST is
         uint256 transferId
     )
         external
-        onlyValidTransferIds(transferId)
         nonReentrant
+        onlyValidTransferIds(transferId)
         onlySender(transferId)
         onlyPendingTransfers(transferId)
     {
@@ -320,9 +317,6 @@ contract PST is
         } else {
             IERC20 erc20 = IERC20(tokenToCancel);
             erc20.safeTransfer(msg.sender, amountToCancel);
-            // if (!success) {
-            //     revert PST__TransferFailed();
-            // }
         }
     }
 
@@ -398,10 +392,7 @@ contract PST is
             }
         } else {
             IERC20 erc20 = IERC20(tokenToClaim);
-            bool success = erc20.transfer(msg.sender, amountToClaim);
-            if (!success) {
-                revert PST__TransferFailed();
-            }
+            erc20.safeTransfer(msg.sender, amountToClaim);
         }
     }
 
@@ -444,22 +435,18 @@ contract PST is
 
         if (expiredCount > 0) {
             upkeepNeeded = true;
-
-            uint256[] memory batchExpiredTransfers = new uint256[](batchLimit);
             uint256 batchExpiredCount = expiredCount > batchLimit
                 ? batchLimit
                 : expiredCount;
+            uint256[] memory batchExpiredTransfers = new uint256[](
+                batchExpiredCount
+            );
 
-            if (expiredCount > 0) {
-                for (uint256 i = 0; i < batchExpiredCount; i++) {
-                    batchExpiredTransfers[i] = expiredTransfers[i];
-                }
-
-                performData = abi.encode(
-                    batchExpiredTransfers,
-                    batchExpiredCount
-                );
+            for (uint256 i = 0; i < batchExpiredCount; i++) {
+                batchExpiredTransfers[i] = expiredTransfers[i];
             }
+
+            performData = abi.encode(batchExpiredTransfers);
         } else {
             upkeepNeeded = false;
             performData = "";
@@ -473,10 +460,11 @@ contract PST is
     function performUpkeep(
         bytes calldata performData
     ) external override onlyKeepers {
-        (
-            uint256[] memory batchExpiredTransfers,
-            uint256 batchExpiredCount
-        ) = abi.decode(performData, (uint256[], uint256));
+        uint256[] memory batchExpiredTransfers = abi.decode(
+            performData,
+            (uint256[])
+        );
+        uint256 batchExpiredCount = batchExpiredTransfers.length;
 
         for (uint256 i = 0; i < batchExpiredCount; i++) {
             refundExpiredTransfer(batchExpiredTransfers[i]);
@@ -608,10 +596,10 @@ contract PST is
         uint256 amount
     )
         external
+        nonReentrant
         onlyOwner
         onlyValidToken(token)
         moreThanZero(amount)
-        nonReentrant
     {
         if (amount > s_feeBalances[token]) {
             revert PST__InsufficientFeeBalance();
@@ -628,10 +616,7 @@ contract PST is
             }
         } else {
             IERC20 erc20 = IERC20(token);
-            bool success = erc20.transfer(msg.sender, amount);
-            if (!success) {
-                revert PST__FeeWithdrawalFailed();
-            }
+            erc20.safeTransfer(msg.sender, amount);
         }
     }
 
@@ -747,7 +732,7 @@ contract PST is
      */
     function refundExpiredTransfer(
         uint256 transferId
-    ) public onlyValidTransferIds(transferId) {
+    ) public nonReentrant onlyValidTransferIds(transferId) {
         Transfer storage transferToRefund = s_transfersById[transferId];
         address sender = transferToRefund.sender;
         address receiver = transferToRefund.receiver;
@@ -786,10 +771,7 @@ contract PST is
             }
         } else {
             IERC20 erc20 = IERC20(tokenToRefund);
-            bool success = erc20.transfer(sender, amountToRefund);
-            if (!success) {
-                revert PST__TransferFailed();
-            }
+            erc20.safeTransfer(sender, amountToRefund);
         }
     }
 

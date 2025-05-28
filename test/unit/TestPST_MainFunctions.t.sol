@@ -998,7 +998,6 @@ contract TestPST_MainFunctions is Test {
 
         // Assert
         vm.prank(SENDER);
-        //vm.expectRevert(PST_Store.PST__TransferFailed.selector);
         vm.expectRevert(
             abi.encodeWithSelector(
                 SafeERC20.SafeERC20FailedOperation.selector,
@@ -1493,7 +1492,12 @@ contract TestPST_MainFunctions is Test {
 
         // Assert
         vm.prank(RECEIVER);
-        vm.expectRevert(PST_Store.PST__TransferFailed.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SafeERC20.SafeERC20FailedOperation.selector,
+                address(failingERC20Mock)
+            )
+        );
         pst.claimTransfer(transferId, PASSWORD);
     }
 
