@@ -43,6 +43,7 @@ contract PST is
                           TYPE DECLARATIONS
     //////////////////////////////////////////////////////////////*/
     using TransferFeeLibrary for TransferFeeLibrary.TransferFee;
+    using SafeERC20 for IERC20;
 
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
@@ -255,14 +256,14 @@ contract PST is
                 });
             }
 
-            bool success = erc20.transferFrom(
+            erc20.safeTransferFrom(
                 msg.sender,
                 address(this),
                 totalTransferCost
             );
-            if (!success) {
-                revert PST__TransferFailed();
-            }
+            // if (!success) {
+            //     revert PST__TransferFailed();
+            // }
         }
     }
 
@@ -318,10 +319,10 @@ contract PST is
             }
         } else {
             IERC20 erc20 = IERC20(tokenToCancel);
-            bool success = erc20.transfer(msg.sender, amountToCancel);
-            if (!success) {
-                revert PST__TransferFailed();
-            }
+            erc20.safeTransfer(msg.sender, amountToCancel);
+            // if (!success) {
+            //     revert PST__TransferFailed();
+            // }
         }
     }
 

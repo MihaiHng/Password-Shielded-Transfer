@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 
 import {PST_Store} from "../../src/PST_Store.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Test, console, console2} from "forge-std/Test.sol";
 import {DeployPST} from "../../script/DeployPST.s.sol";
 import {PST} from "src/PST.sol";
@@ -616,7 +617,12 @@ contract TestPST_MainFunctions is Test {
         pst.addTokenToAllowList(address(failingERC20Mock));
 
         // Act / Assert
-        vm.expectRevert(PST_Store.PST__TransferFailed.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SafeERC20.SafeERC20FailedOperation.selector,
+                address(failingERC20Mock)
+            )
+        );
         vm.prank(SENDER);
         pst.createTransfer{value: totalTransferCost}(
             RECEIVER,
@@ -992,7 +998,13 @@ contract TestPST_MainFunctions is Test {
 
         // Assert
         vm.prank(SENDER);
-        vm.expectRevert(PST_Store.PST__TransferFailed.selector);
+        //vm.expectRevert(PST_Store.PST__TransferFailed.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SafeERC20.SafeERC20FailedOperation.selector,
+                address(failingERC20Mock)
+            )
+        );
         pst.cancelTransfer(transferId);
     }
 
