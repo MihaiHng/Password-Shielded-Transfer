@@ -776,6 +776,27 @@ contract PST is
     }
 
     /**
+     * @param amount: Amount used to calculate totalTransferCost and transferFeeCost
+     * @notice This function will calculate and return totalTransferCost and transferFeeCost
+     */
+    function calculateTotalTransferCostPublic(
+        uint256 amount
+    )
+        external
+        view
+        returns (uint256 totalTransferCost, uint256 transferFeeCost)
+    {
+        return
+            TransferFeeLibrary.calculateTotalTransferCost(
+                amount,
+                s_limitLevelOne,
+                s_limitLevelTwo,
+                s_feeScalingFactor,
+                transferFee
+            );
+    }
+
+    /**
      * @param user: Address to be added to the tracking array "addressList"
      * @notice This function will add an address to "addressList"
      */
@@ -792,21 +813,23 @@ contract PST is
      * @notice This function will remove an address from "addressList"
      */
     function removeAddressFromTracking(address user) public {
-        bool userFound;
+        address[] storage list = s_addressList;
+        uint256 length = list.length;
 
-        for (uint256 i = 0; i < s_addressList.length; i++) {
-            if (s_addressList[i] == user) {
-                s_addressList[i] = s_addressList[s_addressList.length - 1];
-                s_addressList.pop();
-                userFound = true;
+        for (uint256 i = 0; i < length; i++) {
+            if (list[i] == user) {
+                if (i != length - 1) {
+                    // Only write if it's not already the last element
+                    list[i] = list[length - 1];
+                }
+                list.pop();
+
+                delete s_trackedAddresses[user];
+                delete s_lastInteractionTime[user];
+                delete s_lastCleanupTimeByAddress[user];
+
                 break;
             }
-        }
-
-        if (userFound) {
-            delete s_trackedAddresses[user];
-            delete s_lastInteractionTime[user];
-            delete s_lastCleanupTimeByAddress[user];
         }
     }
 
@@ -856,23 +879,6 @@ contract PST is
         bytes32 senderPassword = s_transfersById[transferId].encodedPassword;
 
         return senderPassword == receiverPassword;
-    }
-
-    /**
-     * @param amount: Amount used to calculate totalTransferCost and transferFeeCost
-     * @notice This function will calculate and return totalTransferCost and transferFeeCost
-     */
-    function calculateTotalTransferCostPublic(
-        uint256 amount
-    ) public view returns (uint256 totalTransferCost, uint256 transferFeeCost) {
-        return
-            TransferFeeLibrary.calculateTotalTransferCost(
-                amount,
-                s_limitLevelOne,
-                s_limitLevelTwo,
-                s_feeScalingFactor,
-                transferFee
-            );
     }
 
     /**
@@ -1079,7 +1085,7 @@ contract PST is
     function _clearHistory() private {
         uint256 batchLimit = s_batchLimit;
         address[] memory addressList = s_addressList;
-        uint256 countCleanedAddresses;
+        uint256 countCleanedAddresses = 0;
 
         for (
             uint256 i = 0;
