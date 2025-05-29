@@ -1084,12 +1084,12 @@ contract PST is
      */
     function _clearHistory() private {
         uint256 batchLimit = s_batchLimit;
-        address[] memory addressList = s_addressList;
+        address[] storage addressList = s_addressList;
         uint256 countCleanedAddresses = 0;
 
         for (
             uint256 i = 0;
-            i < addressList.length && countCleanedAddresses < batchLimit / 2;
+            i < addressList.length && countCleanedAddresses < batchLimit;
             i++
         ) {
             address user = addressList[i];
@@ -1106,24 +1106,18 @@ contract PST is
                 s_lastCleanupTimeByAddress[user] = block.timestamp;
             }
         }
-
-        if (countCleanedAddresses < batchLimit / 2) {
-            s_batchLimit = batchLimit - countCleanedAddresses;
-        } else {
-            s_batchLimit = batchLimit / 2;
-        }
     }
 
     /**
      * @notice This function removes in batches of maximum 50, all inactive addresses
-     * @notice Inactive meaning no operation in the last "s_inactivityThreshold" days
+     * @notice Inactive meaning no operations in the last "s_inactivityThreshold" days
      * @notice This function is performed automatically, being called by "performMaintainance()"
      * which is called periodically by Chainlink Automation nodes
      */
     function _removeInactiveAddresses() private {
         uint256 batchLimit = s_batchLimit;
         address[] memory addressList = s_addressList;
-        uint256 countRemovedAddresses;
+        uint256 countRemovedAddresses = 0;
 
         for (
             uint256 i = 0;
@@ -1140,12 +1134,6 @@ contract PST is
                 countRemovedAddresses++;
             }
         }
-
-        if (countRemovedAddresses < batchLimit / 2) {
-            s_batchLimit = batchLimit - countRemovedAddresses;
-        } else {
-            s_batchLimit = batchLimit / 2;
-        }
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -1155,34 +1143,38 @@ contract PST is
     // CHECKER FUNCTIONS //
 
     // Function to check if a token is allowed
-    function isTokenAllowed(address token) public view returns (bool) {
+    function isTokenAllowed(address token) external view returns (bool) {
         return s_allowedTokens[token];
     }
 
     // Function to check if an address is in tracking
-    function isAddressInTracking(address user) public view returns (bool) {
+    function isAddressInTracking(address user) external view returns (bool) {
         return s_trackedAddresses[user];
     }
 
     // Function to check if a specific transfer is pending
-    function isPendingTransfer(uint256 transferId) public view returns (bool) {
+    function isPendingTransfer(
+        uint256 transferId
+    ) external view returns (bool) {
         return s_isPending[transferId];
     }
 
     // Function to check if a specific transfer is canceled
-    function isCanceledTransfer(uint256 transferId) public view returns (bool) {
+    function isCanceledTransfer(
+        uint256 transferId
+    ) external view returns (bool) {
         return s_isCanceled[transferId];
     }
 
     // Function to check if a specific transfer is expired and refunded
     function isExpiredAndRefundedTransfer(
         uint256 transferId
-    ) public view returns (bool) {
+    ) external view returns (bool) {
         return s_isExpiredAndRefunded[transferId];
     }
 
     // Function to check if a specific transfer is claimed
-    function isClaimed(uint256 transferId) public view returns (bool) {
+    function isClaimed(uint256 transferId) external view returns (bool) {
         return s_isClaimed[transferId];
     }
 
@@ -1299,7 +1291,7 @@ contract PST is
     // Function to get all expired transfers in the system
     function getExpiredTransfers() public view returns (uint256[] memory) {
         uint256[] memory pendingTransfers = s_pendingTransferIds;
-        uint256 expiredCount;
+        uint256 expiredCount = 0;
 
         for (uint256 i = 0; i < pendingTransfers.length; i++) {
             uint256 transferId = pendingTransfers[i];

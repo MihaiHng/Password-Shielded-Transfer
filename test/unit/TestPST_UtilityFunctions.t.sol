@@ -804,7 +804,6 @@ contract TestPST_UtilityFunctions is Test {
         transferCreatedThenExpiredAndRefunded
     {
         // Arrange
-        uint256 initialBatchLimit = pst.s_batchLimit();
         uint256 expectedCleanupTime = block.timestamp +
             pst.s_cleanupInterval() +
             1;
@@ -815,7 +814,6 @@ contract TestPST_UtilityFunctions is Test {
         pst.clearHistory();
 
         uint256 lastCleanupTime = pst.s_lastCleanupTimeByAddress(SENDER);
-        uint256 updatedBatchLimit = pst.s_batchLimit();
         bool isTracked = pst.s_trackedAddresses(SENDER);
 
         // Assert
@@ -823,11 +821,6 @@ contract TestPST_UtilityFunctions is Test {
             lastCleanupTime,
             expectedCleanupTime,
             "Cleanup time should be updated"
-        );
-
-        assertTrue(
-            updatedBatchLimit < initialBatchLimit,
-            "Batch limit should decrease after cleanup"
         );
 
         assertTrue(
@@ -848,7 +841,6 @@ contract TestPST_UtilityFunctions is Test {
 
     function testRemoveInactiveAddresses() public {
         // Arrange
-        uint256 initialBatchLimit = pst.s_batchLimit();
         pst.addAddressToTracking(SENDER);
         pst.addAddressToTracking(RECEIVER);
         address[] memory initialAddressList = pst.getTrackedAddresses();
@@ -859,15 +851,10 @@ contract TestPST_UtilityFunctions is Test {
         // Act
         vm.prank(pst.owner());
         pst.removeInactiveAddresses();
-        uint256 updatedBatchLimit = pst.s_batchLimit();
         address[] memory updatedAddressList = pst.getTrackedAddresses();
         uint256 updatedLength = updatedAddressList.length;
 
         // Assert
-        assertTrue(
-            updatedBatchLimit < initialBatchLimit,
-            "Batch limit should decrease after cleanup"
-        );
         assertEq(
             updatedLength,
             initialLength - 2,
