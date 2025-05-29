@@ -933,6 +933,40 @@ contract PST is
     }
 
     /**
+     * @notice Removes all non-pending transfers from storage
+     * @dev Deletes claimed, canceled, and expired/refunded transfers and their metadata
+     * @dev Only callable by the contract owner
+     */
+    function removeAllFinalizedTransfers() public onlyOwner {
+        // Clean claimed transfers
+        for (uint256 i = 0; i < s_claimedTransferIds.length; i++) {
+            uint256 transferId = s_claimedTransferIds[i];
+            delete s_isClaimed[transferId];
+            delete s_transfersById[transferId];
+        }
+        delete s_claimedTransferIds;
+        emit ClaimedTransfersHistoryCleared();
+
+        // Clean canceled transfers
+        for (uint256 i = 0; i < s_canceledTransferIds.length; i++) {
+            uint256 transferId = s_canceledTransferIds[i];
+            delete s_isCanceled[transferId];
+            delete s_transfersById[transferId];
+        }
+        delete s_canceledTransferIds;
+        emit CanceledTransfersHistoryCleared();
+
+        // Clean expired and refunded transfers
+        for (uint256 i = 0; i < s_expiredAndRefundedTransferIds.length; i++) {
+            uint256 transferId = s_expiredAndRefundedTransferIds[i];
+            delete s_isExpiredAndRefunded[transferId];
+            delete s_transfersById[transferId];
+        }
+        delete s_expiredAndRefundedTransferIds;
+        emit ExpiredAndRefundedTransfersHistoryCleared();
+    }
+
+    /**
      * @notice Removes all canceled transfer IDs from storage
      * @notice Iterates over global list and removes canceled transfer IDs
      * @notice This function can only be called by the owner
@@ -1116,7 +1150,7 @@ contract PST is
      */
     function _removeInactiveAddresses() private {
         uint256 batchLimit = s_batchLimit;
-        address[] memory addressList = s_addressList;
+        address[] storage addressList = s_addressList;
         uint256 countRemovedAddresses = 0;
 
         for (
