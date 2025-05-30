@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {Script} from "forge-std/Script.sol";
 import {PST} from "../src/PST.sol";
@@ -14,7 +14,12 @@ contract DeployPST is Script {
 
     function run() external returns (PST) {
         vm.startBroadcast();
-        PST pST = new PST(transferFeeLvlOne, transferFeeLvlTwo, transferFeeLvlThree, automationRegistry);
+        PST pST = new PST(
+            transferFeeLvlOne,
+            transferFeeLvlTwo,
+            transferFeeLvlThree,
+            automationRegistry
+        );
         vm.stopBroadcast();
         return pST;
     }

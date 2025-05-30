@@ -3,7 +3,7 @@
 // Negative Stop on Revert
 // 1. A pending transfer can only be claimed with the correct password
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {PST} from "src/PST.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
@@ -13,7 +13,10 @@ import {Negative_IncorrectPassword_StopOnRevertHandler} from "./Negative_Incorre
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Mock} from "../../../../../mocks/ERC20Mock.sol";
 
-contract Negative_IncorrectPassword_StopOnRevertInvariantsPST is StdInvariant, Test {
+contract Negative_IncorrectPassword_StopOnRevertInvariantsPST is
+    StdInvariant,
+    Test
+{
     PST public pst;
     Negative_IncorrectPassword_StopOnRevertHandler public handler;
     ERC20Mock[] public tokens;
@@ -86,5 +89,4 @@ contract Negative_IncorrectPassword_StopOnRevertInvariantsPST is StdInvariant, T
     function invariant_PendingTransfersCanOnlyBeClaimedWithCorrectPassword()
         public
     {}
-
 }

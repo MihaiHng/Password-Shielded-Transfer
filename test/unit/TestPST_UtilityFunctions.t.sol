@@ -189,7 +189,7 @@ contract TestPST_UtilityFunctions is Test {
         public
     {
         // Act / Assert
-        vm.expectRevert(PST_Store.PST__NoPendingTransfers.selector);
+        vm.expectRevert(PST_Store.PST__TransferNotPending.selector);
         vm.prank(SENDER);
         pst.removeFromPendingTransfers(0);
     }

@@ -110,9 +110,11 @@ contract PST_Store {
 
     // Mapping to track the index for an address
     mapping(address => uint256) public s_addressIndex; // 1-based index to detect presence (0 = not present)
-    // Mapping to track the index for a transfer Id of a user
+    // Mapping to track the index for a pending transfer Id for user
     mapping(address => mapping(uint256 => uint256))
         public s_pendingTransferIndexByAddress; // 1-based index to detect presence (0 = not present)
+    // Mapping to track the index for a pending transfer Id
+    mapping(uint256 => uint256) public s_pendingTransferIndex; // 1-based index to detect presence (0 = not present)
 
     // Mapping of transfer Id to Transfer info struct
     mapping(uint256 transferId => Transfer transfer) public s_transfersById;

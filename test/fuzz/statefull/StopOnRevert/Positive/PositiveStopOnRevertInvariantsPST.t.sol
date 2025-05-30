@@ -3,7 +3,7 @@
 // Positive Stop on Revert
 // 1. Getter view functions should never revert
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {PST} from "src/PST.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";

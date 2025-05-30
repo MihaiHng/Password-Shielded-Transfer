@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 /**
  * @title TransferFeeLibrary
@@ -37,8 +37,17 @@ library TransferFeeLibrary {
         uint256 s_limitLevelTwo,
         uint256 s_feeScalingFactor,
         TransferFee memory transferFees
-    ) external pure returns (uint256 totalTransferCost, uint256 transferFeeCost) {
-        uint256 _transferFee = selectTransferFee(amount, s_limitLevelOne, s_limitLevelTwo, transferFees);
+    )
+        external
+        pure
+        returns (uint256 totalTransferCost, uint256 transferFeeCost)
+    {
+        uint256 _transferFee = selectTransferFee(
+            amount,
+            s_limitLevelOne,
+            s_limitLevelTwo,
+            transferFees
+        );
         uint256 _transferFeeCost = (amount * _transferFee) / s_feeScalingFactor;
         uint256 _totalTransferCost = amount + _transferFeeCost;
 

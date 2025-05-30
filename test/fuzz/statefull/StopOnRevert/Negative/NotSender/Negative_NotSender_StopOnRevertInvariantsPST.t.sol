@@ -4,7 +4,7 @@
 // 1. A pending transfer can only be claimed with the correct password
 // 2. A pending transfer can only be canceled by its sender/creator
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {PST} from "src/PST.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
@@ -66,8 +66,6 @@ contract Negative_NotSender_StopOnRevertInvariantsPST is StdInvariant, Test {
         selectors[4] = handler.claimTransfer.selector;
         selectors[5] = handler.refundExpiredTransfer.selector;
         selectors[6] = handler.cancelTransferAsNonSender.selector;
-        
-        
 
         FuzzSelector memory selector = FuzzSelector({
             addr: address(handler),

@@ -222,7 +222,8 @@ contract PST is
         });
 
         s_isPending[transferId] = true;
-        s_pendingTransferIds.push(transferId);
+        // s_pendingTransferIds.push(transferId);
+        addToPendingTransfers(transferId);
         // s_pendingTransfersByAddress[msg.sender].push(transferId);
         // s_pendingTransfersByAddress[receiver].push(transferId);
         addToPendingTransfersByAddress(msg.sender, transferId);
@@ -897,30 +898,59 @@ contract PST is
     }
 
     /**
+     * @param transferId: ID of the pending transfer to add
+     * @notice This function will add a transfer ID with status "pending" to "s_pendingTransfers" array
+     */
+    function addToPendingTransfers(uint256 transferId) public {
+        s_pendingTransferIds.push(transferId);
+        s_pendingTransferIndex[transferId] = s_pendingTransferIds.length;
+    }
+
+    /**
      * @param transferId: ID of the pending transfer to remove
-     * @notice This function will remove transfer id with status "pending" from s_pendingTransfers array
+     * @notice This function will remove transfer id with status "pending" from "s_pendingTransfers" array
      */
     function removeFromPendingTransfers(uint256 transferId) public {
-        uint256 length = s_pendingTransferIds.length;
-        bool idFound;
+        uint256 index = s_pendingTransferIndex[transferId];
 
-        if (length == 0) {
-            revert PST__NoPendingTransfers();
+        if (index == 0) {
+            revert PST__TransferNotPending();
         }
 
-        for (uint256 i = 0; i < length; i++) {
-            if (s_pendingTransferIds[i] == transferId) {
-                s_pendingTransferIds[i] = s_pendingTransferIds[length - 1];
-                s_pendingTransferIds.pop();
-                idFound = true;
-                break;
-            }
+        uint256 idxToRemove = index - 1;
+        uint256 lastIndex = s_pendingTransferIds.length - 1;
+
+        if (idxToRemove != lastIndex) {
+            uint256 lastTransferId = s_pendingTransferIds[lastIndex];
+            s_pendingTransferIds[idxToRemove] = lastTransferId;
+            s_pendingTransferIndex[lastTransferId] = index;
         }
 
-        if (!idFound) {
-            revert PST__TransferIdNotFound();
-        }
+        s_pendingTransferIds.pop();
+        delete s_pendingTransferIndex[transferId];
     }
+
+    // function removeFromPendingTransfers(uint256 transferId) public {
+    //     uint256 length = s_pendingTransferIds.length;
+    //     bool idFound;
+
+    //     if (length == 0) {
+    //         revert PST__NoPendingTransfers();
+    //     }
+
+    //     for (uint256 i = 0; i < length; i++) {
+    //         if (s_pendingTransferIds[i] == transferId) {
+    //             s_pendingTransferIds[i] = s_pendingTransferIds[length - 1];
+    //             s_pendingTransferIds.pop();
+    //             idFound = true;
+    //             break;
+    //         }
+    //     }
+
+    //     if (!idFound) {
+    //         revert PST__TransferIdNotFound();
+    //     }
+    // }
 
     /**
      * @param user: Address associated with the transfer
@@ -949,7 +979,7 @@ contract PST is
         uint256 index = s_pendingTransferIndexByAddress[user][transferId];
 
         if (index == 0) {
-            revert PST__TransferNotPending(); // Not present
+            revert PST__TransferNotPending();
         }
 
         uint256 idxToRemove = index - 1;
@@ -960,7 +990,7 @@ contract PST is
                 lastIndex
             ];
             s_pendingTransfersByAddress[user][idxToRemove] = lastTransferId;
-            s_pendingTransferIndexByAddress[user][lastTransferId] = index; // Update moved transfer
+            s_pendingTransferIndexByAddress[user][lastTransferId] = index;
         }
 
         s_pendingTransfersByAddress[user].pop();

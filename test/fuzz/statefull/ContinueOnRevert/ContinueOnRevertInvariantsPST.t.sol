@@ -4,7 +4,7 @@
 // 1. Pst token balance is always equal to the sum of the total pending transfers value + fees value for that token
 // 2. A pending transfer always expires and is refunded when the availability period has elapsed
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {PST} from "src/PST.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";

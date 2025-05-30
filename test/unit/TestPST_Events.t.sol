@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Test, console, console2} from "forge-std/Test.sol";
@@ -50,10 +50,18 @@ contract TestPST_Events is Test {
         uint256 transferFeeCost
     );
     event TransferCanceled(
-        address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
+        address indexed sender,
+        address indexed receiver,
+        uint256 indexed transferIndex,
+        address token,
+        uint256 amount
     );
     event TransferCompleted(
-        address indexed sender, address indexed receiver, uint256 indexed transferIndex, address token, uint256 amount
+        address indexed sender,
+        address indexed receiver,
+        uint256 indexed transferIndex,
+        address token,
+        uint256 amount
     );
     event TransferExpiredAndRefunded(
         address indexed sender,
@@ -63,7 +71,10 @@ contract TestPST_Events is Test {
         uint256 amount,
         uint256 expiringTime
     );
-    event SuccessfulFeeWithdrawal(address indexed token, uint256 indexed amount);
+    event SuccessfulFeeWithdrawal(
+        address indexed token,
+        uint256 indexed amount
+    );
     event TokenAddedToAllowList(address indexed token);
     event TokenRemovedFromAllowList(address indexed token);
     event TransferFeeChanged(uint8 level, uint256 newTransferFee);
@@ -71,7 +82,11 @@ contract TestPST_Events is Test {
     function setUp() external {
         DeployPST deployer = new DeployPST();
         pst = deployer.run();
-        mockERC20Token = new ERC20Mock("ERC20MockToken", "ERC20MOCK", 1e6 ether);
+        mockERC20Token = new ERC20Mock(
+            "ERC20MockToken",
+            "ERC20MOCK",
+            1e6 ether
+        );
 
         vm.prank(pst.owner());
         pst.addTokenToAllowList(address(mockERC20Token));
@@ -79,9 +94,14 @@ contract TestPST_Events is Test {
         vm.deal(SENDER, SENDER_BALANCE);
         mockERC20Token.transfer(SENDER, 100 ether);
 
-        (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
-        );
+        (totalTransferCost, transferFeeCost) = TransferFeeLibrary
+            .calculateTotalTransferCost(
+                AMOUNT_TO_SEND,
+                LIMIT_LEVEL_ONE,
+                LIMIT_LEVEL_TWO,
+                FEE_SCALING_FACTOR,
+                pst.getTransferFees()
+            );
 
         vm.prank(SENDER);
         mockERC20Token.approve(address(pst), 100 ether);
@@ -94,13 +114,23 @@ contract TestPST_Events is Test {
     //////////////////////////////////////////////////////////////*/
     modifier transferCreated() {
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
         _;
     }
 
     modifier transferCreatedAndCanceled() {
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
 
         transferId = pst.s_transferCounter() - 1;
         vm.prank(SENDER);
@@ -110,7 +140,12 @@ contract TestPST_Events is Test {
 
     modifier transferCreatedAndClaimed() {
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
 
         vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
         vm.roll(block.number + 1);
@@ -131,11 +166,21 @@ contract TestPST_Events is Test {
         // Act & Assert
         vm.expectEmit(true, true, true, true);
         emit TransferInitiated(
-            SENDER, RECEIVER, expectedTransferIndex, address(mockERC20Token), AMOUNT_TO_SEND, transferFeeCost
+            SENDER,
+            RECEIVER,
+            expectedTransferIndex,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            transferFeeCost
         );
 
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
     }
 
     function testEmitTransferCanceled() public transferCreated {
@@ -144,7 +189,13 @@ contract TestPST_Events is Test {
 
         // Act & Assert
         vm.expectEmit(true, true, true, true);
-        emit TransferCanceled(SENDER, RECEIVER, expectedTransferIndex, address(mockERC20Token), AMOUNT_TO_SEND);
+        emit TransferCanceled(
+            SENDER,
+            RECEIVER,
+            expectedTransferIndex,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND
+        );
 
         vm.prank(SENDER);
         pst.cancelTransfer(expectedTransferIndex);
@@ -158,7 +209,13 @@ contract TestPST_Events is Test {
 
         // Act & Assert
         vm.expectEmit(true, true, true, true);
-        emit TransferCompleted(SENDER, RECEIVER, expectedTransferIndex, address(mockERC20Token), AMOUNT_TO_SEND);
+        emit TransferCompleted(
+            SENDER,
+            RECEIVER,
+            expectedTransferIndex,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND
+        );
 
         vm.prank(RECEIVER);
         pst.claimTransfer(expectedTransferIndex, PASSWORD);
@@ -167,12 +224,19 @@ contract TestPST_Events is Test {
     function testEmitTransferExpiredAndRefunded() public transferCreated {
         // Arrange
         uint256 expectedTransferIndex = pst.s_transferCounter() - 1;
-        (,,,,, uint256 expiringTime,) = pst.s_transfersById(expectedTransferIndex);
+        (, , , , , uint256 expiringTime, ) = pst.s_transfersById(
+            expectedTransferIndex
+        );
 
         // Act & Assert
         vm.expectEmit(true, true, true, true);
         emit TransferExpiredAndRefunded(
-            SENDER, RECEIVER, expectedTransferIndex, address(mockERC20Token), AMOUNT_TO_SEND, expiringTime
+            SENDER,
+            RECEIVER,
+            expectedTransferIndex,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            expiringTime
         );
 
         vm.prank(SENDER);
@@ -181,7 +245,9 @@ contract TestPST_Events is Test {
 
     function testEmitSuccessfulFeeWithdrawal() public transferCreated {
         // Arrange
-        uint256 balanceToken = pst.getAccumulatedFeesForToken(address(mockERC20Token));
+        uint256 balanceToken = pst.getAccumulatedFeesForToken(
+            address(mockERC20Token)
+        );
 
         // Act & Assert
         vm.expectEmit(true, true, false, false);
@@ -192,7 +258,11 @@ contract TestPST_Events is Test {
 
     function testEmitTokenAddedToAllowList() public {
         // Arrange
-        ERC20Mock anotherMockERC20Token = new ERC20Mock("AnotherERC20MockToken", "ERC20MOCKA", 1e6 ether);
+        ERC20Mock anotherMockERC20Token = new ERC20Mock(
+            "AnotherERC20MockToken",
+            "ERC20MOCKA",
+            1e6 ether
+        );
 
         // Act & Assert
         vm.expectEmit(true, false, false, false);
@@ -203,7 +273,11 @@ contract TestPST_Events is Test {
 
     function testEmitTokenRemovedFromAllowList() public {
         // Arrange
-        ERC20Mock anotherMockERC20Token = new ERC20Mock("AnotherERC20MockToken", "ERC20MOCKA", 1e6 ether);
+        ERC20Mock anotherMockERC20Token = new ERC20Mock(
+            "AnotherERC20MockToken",
+            "ERC20MOCKA",
+            1e6 ether
+        );
         vm.prank(pst.owner());
         pst.addTokenToAllowList(address(anotherMockERC20Token));
 
