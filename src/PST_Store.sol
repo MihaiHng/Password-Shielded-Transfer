@@ -33,13 +33,7 @@ contract PST_Store {
     error PST__InvalidBatchLimit(uint256 minRequired);
     error PST__NotEnoughFunds(uint256 required, uint256 provided);
     error PST__InvalidAmountSent(uint256 required, uint256 provided);
-    error PST__NoExpiredTransfersToRemove();
-    error PST__NoCanceledTransfersToRemove();
-    error PST__NoClaimedTransfersToRemove();
     error PST__NoPendingTransfers();
-    error PST__NoCanceledTransfers();
-    error PST__NoExpiredTransfers();
-    error PST__NoClaimedTransfers();
     error PST__TransferNotFound();
     error PST__TokenAlreadyWhitelisted();
     error PST__TokenNotAllowed();
@@ -114,6 +108,8 @@ contract PST_Store {
     mapping(address user => uint256[] transferIds)
         internal s_claimedTransfersByAddress;
 
+    // Mapping to track the index of an address
+    mapping(address => uint256) public s_addressIndex; // stores 1-based index
     // Mapping of transfer Id to Transfer info struct
     mapping(uint256 transferId => Transfer transfer) public s_transfersById;
     // Mapping of transfer Id to last failed claim attempt time
@@ -236,4 +232,10 @@ contract PST_Store {
 
     // Event to log Claimed Transfers for an Address were removed from tracking
     event ClaimedTransfersForAddressHistoryCleared(address user);
+
+    // Event to log an address being added to tracking
+    event AddressAddedToTracking(address user);
+
+    // Event to log an address being removed from tracking
+    event AddressRemovedFromTracking(address user);
 }

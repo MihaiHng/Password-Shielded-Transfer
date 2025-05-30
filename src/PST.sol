@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {PST_Store} from "./PST_Store.sol";
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
@@ -801,11 +801,18 @@ contract PST is
      * @notice This function will add an address to "addressList"
      */
     function addAddressToTracking(address user) public {
-        if (!s_trackedAddresses[user]) {
-            s_trackedAddresses[user] = true;
+        if (s_addressIndex[user] == 0) {
             s_addressList.push(user);
+            s_addressIndex[user] = s_addressList.length; // store 1-based index
+            s_trackedAddresses[user] = true;
+            s_lastInteractionTime[user] = block.timestamp;
             s_lastCleanupTimeByAddress[user] = block.timestamp;
+        } else {
+            // If already tracked, update last interaction time only
+            s_lastInteractionTime[user] = block.timestamp;
         }
+
+        emit AddressAddedToTracking(user);
     }
 
     /**
@@ -813,24 +820,30 @@ contract PST is
      * @notice This function will remove an address from "addressList"
      */
     function removeAddressFromTracking(address user) public {
-        address[] storage list = s_addressList;
-        uint256 length = list.length;
+        uint256 index = s_addressIndex[user];
 
-        for (uint256 i = 0; i < length; i++) {
-            if (list[i] == user) {
-                if (i != length - 1) {
-                    // Only write if it's not already the last element
-                    list[i] = list[length - 1];
-                }
-                list.pop();
-
-                delete s_trackedAddresses[user];
-                delete s_lastInteractionTime[user];
-                delete s_lastCleanupTimeByAddress[user];
-
-                break;
-            }
+        if (index == 0) {
+            // User not tracked
+            return;
         }
+
+        // Convert to 0-based index
+        uint256 idxToRemove = index - 1;
+        uint256 lastIndex = s_addressList.length - 1;
+
+        if (idxToRemove != lastIndex) {
+            address lastAddress = s_addressList[lastIndex];
+            s_addressList[idxToRemove] = lastAddress;
+            s_addressIndex[lastAddress] = index; // update moved address index
+        }
+
+        s_addressList.pop();
+        delete s_addressIndex[user];
+        delete s_trackedAddresses[user];
+        delete s_lastInteractionTime[user];
+        delete s_lastCleanupTimeByAddress[user];
+
+        emit AddressRemovedFromTracking(user);
     }
 
     /**
@@ -930,109 +943,6 @@ contract PST is
                 break;
             }
         }
-    }
-
-    /**
-     * @notice Removes all non-pending transfers from storage
-     * @dev Deletes claimed, canceled, and expired/refunded transfers and their metadata
-     * @dev Only callable by the contract owner
-     */
-    function removeAllFinalizedTransfers() public onlyOwner {
-        // Clean claimed transfers
-        for (uint256 i = 0; i < s_claimedTransferIds.length; i++) {
-            uint256 transferId = s_claimedTransferIds[i];
-            delete s_isClaimed[transferId];
-            delete s_transfersById[transferId];
-        }
-        delete s_claimedTransferIds;
-        emit ClaimedTransfersHistoryCleared();
-
-        // Clean canceled transfers
-        for (uint256 i = 0; i < s_canceledTransferIds.length; i++) {
-            uint256 transferId = s_canceledTransferIds[i];
-            delete s_isCanceled[transferId];
-            delete s_transfersById[transferId];
-        }
-        delete s_canceledTransferIds;
-        emit CanceledTransfersHistoryCleared();
-
-        // Clean expired and refunded transfers
-        for (uint256 i = 0; i < s_expiredAndRefundedTransferIds.length; i++) {
-            uint256 transferId = s_expiredAndRefundedTransferIds[i];
-            delete s_isExpiredAndRefunded[transferId];
-            delete s_transfersById[transferId];
-        }
-        delete s_expiredAndRefundedTransferIds;
-        emit ExpiredAndRefundedTransfersHistoryCleared();
-    }
-
-    /**
-     * @notice Removes all canceled transfer IDs from storage
-     * @notice Iterates over global list and removes canceled transfer IDs
-     * @notice This function can only be called by the owner
-     */
-    function removeAllCanceledTransfers() public onlyOwner {
-        uint256 length = s_canceledTransferIds.length;
-
-        if (length == 0) {
-            revert PST__NoCanceledTransfersToRemove();
-        }
-
-        for (uint256 i = 0; i < length; i++) {
-            uint256 transferId = s_canceledTransferIds[i];
-            delete s_isCanceled[transferId];
-            delete s_transfersById[transferId];
-        }
-
-        delete s_canceledTransferIds;
-
-        emit CanceledTransfersHistoryCleared();
-    }
-
-    /**
-     * @notice Removes all expired and refunded transfer IDs from storage
-     * @notice Iterates over global list and removes expired and refunded transfer IDs
-     * @notice This function can only be called by the owner
-     */
-    function removeAllExpiredAndRefundedTransfers() public onlyOwner {
-        uint256 length = s_expiredAndRefundedTransferIds.length;
-
-        if (length == 0) {
-            revert PST__NoExpiredTransfersToRemove();
-        }
-
-        for (uint256 i = 0; i < length; i++) {
-            uint256 transferId = s_expiredAndRefundedTransferIds[i];
-            delete s_isExpiredAndRefunded[transferId];
-            delete s_transfersById[transferId];
-        }
-
-        delete s_expiredAndRefundedTransferIds;
-
-        emit ExpiredAndRefundedTransfersHistoryCleared();
-    }
-
-    /**
-     * @notice Removes all claimed transfer IDs from storage
-     * @notice Iterates over global list and removes claimed transfer IDs
-     * @notice This function can only be called by the owner
-     */
-    function removeAllClaimedTransfers() public onlyOwner {
-        uint256 length = s_claimedTransferIds.length;
-
-        if (length == 0) {
-            revert PST__NoClaimedTransfersToRemove();
-        }
-
-        for (uint256 i = 0; i < length; i++) {
-            uint256 transferId = s_claimedTransferIds[i];
-            delete s_isClaimed[transferId];
-            delete s_transfersById[transferId];
-        }
-
-        delete s_claimedTransferIds;
-
-        emit ClaimedTransfersHistoryCleared();
     }
 
     /**
@@ -1152,12 +1062,9 @@ contract PST is
         uint256 batchLimit = s_batchLimit;
         address[] storage addressList = s_addressList;
         uint256 countRemovedAddresses = 0;
+        uint256 i = 0;
 
-        for (
-            uint256 i = 0;
-            i < addressList.length && countRemovedAddresses < batchLimit;
-            i++
-        ) {
+        while (i < addressList.length && countRemovedAddresses < batchLimit) {
             address user = addressList[i];
 
             if (
@@ -1166,6 +1073,8 @@ contract PST is
             ) {
                 removeAddressFromTracking(user);
                 countRemovedAddresses++;
+            } else {
+                i++; // only increment if we didn't remove
             }
         }
     }

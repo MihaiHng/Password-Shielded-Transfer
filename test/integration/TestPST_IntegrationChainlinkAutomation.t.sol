@@ -44,7 +44,11 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
     function setUp() external {
         DeployPST deployer = new DeployPST();
         pst = deployer.run();
-        mockERC20Token = new ERC20Mock("ERC20MockToken", "ERC20MOCK", 1e6 ether);
+        mockERC20Token = new ERC20Mock(
+            "ERC20MockToken",
+            "ERC20MOCK",
+            1e6 ether
+        );
 
         vm.prank(pst.owner());
         pst.addTokenToAllowList(address(mockERC20Token));
@@ -54,9 +58,14 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         vm.deal(ANOTHER_SENDER, SENDER_BALANCE);
         mockERC20Token.transfer(ANOTHER_SENDER, 100 ether);
 
-        (totalTransferCost, transferFeeCost) = TransferFeeLibrary.calculateTotalTransferCost(
-            AMOUNT_TO_SEND, LIMIT_LEVEL_ONE, LIMIT_LEVEL_TWO, FEE_SCALING_FACTOR, pst.getTransferFees()
-        );
+        (totalTransferCost, transferFeeCost) = TransferFeeLibrary
+            .calculateTotalTransferCost(
+                AMOUNT_TO_SEND,
+                LIMIT_LEVEL_ONE,
+                LIMIT_LEVEL_TWO,
+                FEE_SCALING_FACTOR,
+                pst.getTransferFees()
+            );
 
         vm.prank(SENDER);
         mockERC20Token.approve(address(pst), 100 ether);
@@ -71,13 +80,23 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
     //////////////////////////////////////////////////////////////*/
     modifier transferCreated() {
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
         _;
     }
 
     modifier transferCreatedAndCanceled() {
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
 
         transferId = pst.s_transferCounter() - 1;
         vm.prank(SENDER);
@@ -87,7 +106,12 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
 
     modifier transferCreatedAndClaimed() {
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
 
         transferId = pst.s_transferCounter() - 1;
         vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
@@ -100,7 +124,12 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
 
     modifier transferCreatedThenExpiredAndRefunded() {
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(mockERC20Token), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(mockERC20Token),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
 
         transferId = pst.s_transferCounter() - 1;
         vm.warp(block.timestamp + pst.s_availabilityPeriod() + 1);
@@ -119,12 +148,17 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         uint256 transferId1 = pst.s_transferCounter() - 1;
 
         vm.prank(SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(0),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
 
         uint256 transferId2 = pst.s_transferCounter() - 1;
 
-        (,,,,, uint256 expiringTime1,) = pst.s_transfersById(transferId1);
-        (,,,,, uint256 expiringTime2,) = pst.s_transfersById(transferId2);
+        (, , , , , uint256 expiringTime1, ) = pst.s_transfersById(transferId1);
+        (, , , , , uint256 expiringTime2, ) = pst.s_transfersById(transferId2);
 
         vm.warp(expiringTime1 + 1);
         vm.warp(expiringTime2 + 1);
@@ -140,11 +174,20 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         pst.performUpkeep(performData);
 
         // Assert
-        assertTrue(pst.isExpiredAndRefundedTransfer(transferId1), "Transfer 1 should be refunded");
-        assertTrue(pst.isExpiredAndRefundedTransfer(transferId2), "Transfer 2 should be refunded");
+        assertTrue(
+            pst.isExpiredAndRefundedTransfer(transferId1),
+            "Transfer 1 should be refunded"
+        );
+        assertTrue(
+            pst.isExpiredAndRefundedTransfer(transferId2),
+            "Transfer 2 should be refunded"
+        );
 
         uint256 senderBalanceAfter = SENDER.balance;
-        assertTrue(senderBalanceAfter >= AMOUNT_TO_SEND * 2, "Sender should receive refunded funds");
+        assertTrue(
+            senderBalanceAfter >= AMOUNT_TO_SEND * 2,
+            "Sender should receive refunded funds"
+        );
     }
 
     function testChainlinkAutomationMaintenance()
@@ -156,10 +199,20 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
     {
         // Arrange
         vm.prank(ANOTHER_SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(0),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
 
         vm.prank(ANOTHER_SENDER);
-        pst.createTransfer{value: totalTransferCost}(RECEIVER, address(0), AMOUNT_TO_SEND, PASSWORD);
+        pst.createTransfer{value: totalTransferCost}(
+            RECEIVER,
+            address(0),
+            AMOUNT_TO_SEND,
+            PASSWORD
+        );
 
         transferId = pst.s_transferCounter() - 1;
         vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
@@ -176,24 +229,35 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         pst.performMaintenance();
 
         // Assert
-        uint256 canceledForAddressLength = pst.getCanceledTransferForAddressCount(SENDER);
+        uint256 canceledForAddressLength = pst
+            .getCanceledTransferForAddressCount(SENDER);
         assertEq(canceledForAddressLength, 0);
-        uint256 claimedTransfersForAddress0Length = pst.getClaimedTransfersForAddressCount(SENDER);
+        uint256 claimedTransfersForAddress0Length = pst
+            .getClaimedTransfersForAddressCount(SENDER);
         assertEq(claimedTransfersForAddress0Length, 0);
-        uint256 expiredAndRefundedForAddressLength = pst.getExpiredAndRefundedTransfersForAddressCount(SENDER);
+        uint256 expiredAndRefundedForAddressLength = pst
+            .getExpiredAndRefundedTransfersForAddressCount(SENDER);
         assertEq(expiredAndRefundedForAddressLength, 0);
-        uint256 claimedTransfersForAddress1Length = pst.getClaimedTransfersForAddressCount(ANOTHER_SENDER);
+        uint256 claimedTransfersForAddress1Length = pst
+            .getClaimedTransfersForAddressCount(ANOTHER_SENDER);
         assertEq(claimedTransfersForAddress1Length, 0);
 
         assertTrue(
-            pst.getPendingTransfersForAddress(SENDER).length > 0, "SENDER's pending transfers should not be removed"
+            pst.getPendingTransfersForAddress(SENDER).length > 0,
+            "SENDER's pending transfers should not be removed"
         );
         assertTrue(
             pst.getPendingTransfersForAddress(ANOTHER_SENDER).length > 0,
             "ANOTHER_SENDER's pending transfers should not be removed"
         );
 
-        assertFalse(pst.isAddressInTracking(SENDER), "SENDER should be removed for inactivity");
-        assertFalse(pst.isAddressInTracking(ANOTHER_SENDER), "ANOTHER_SENDER should be removed for inactivity");
+        assertFalse(
+            pst.isAddressInTracking(SENDER),
+            "SENDER should be removed for inactivity"
+        );
+        assertFalse(
+            pst.isAddressInTracking(ANOTHER_SENDER),
+            "ANOTHER_SENDER should be removed for inactivity"
+        );
     }
 }
