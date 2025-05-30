@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {TransferFeeLibrary} from "./libraries/TransferFeeLib.sol";
 
@@ -108,8 +108,12 @@ contract PST_Store {
     mapping(address user => uint256[] transferIds)
         internal s_claimedTransfersByAddress;
 
-    // Mapping to track the index of an address
-    mapping(address => uint256) public s_addressIndex; // stores 1-based index
+    // Mapping to track the index for an address
+    mapping(address => uint256) public s_addressIndex; // 1-based index to detect presence (0 = not present)
+    // Mapping to track the index for a transfer Id of a user
+    mapping(address => mapping(uint256 => uint256))
+        public s_pendingTransferIndexByAddress; // 1-based index to detect presence (0 = not present)
+
     // Mapping of transfer Id to Transfer info struct
     mapping(uint256 transferId => Transfer transfer) public s_transfersById;
     // Mapping of transfer Id to last failed claim attempt time

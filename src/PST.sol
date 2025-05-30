@@ -223,8 +223,10 @@ contract PST is
 
         s_isPending[transferId] = true;
         s_pendingTransferIds.push(transferId);
-        s_pendingTransfersByAddress[msg.sender].push(transferId);
-        s_pendingTransfersByAddress[receiver].push(transferId);
+        // s_pendingTransfersByAddress[msg.sender].push(transferId);
+        // s_pendingTransfersByAddress[receiver].push(transferId);
+        addToPendingTransfersByAddress(msg.sender, transferId);
+        addToPendingTransfersByAddress(receiver, transferId);
 
         addFee(token, transferFeeCost);
         addAddressToTracking(msg.sender);
@@ -922,27 +924,47 @@ contract PST is
 
     /**
      * @param user: Address associated with the transfer
+     * @param transferId: ID of the pending transfer to add
+     * @notice This function will add for user, a transfer ID with status "pending" to "s_pendingTransfersByAddress" array
+     */
+    function addToPendingTransfersByAddress(
+        address user,
+        uint256 transferId
+    ) internal {
+        s_pendingTransfersByAddress[user].push(transferId);
+        s_pendingTransferIndexByAddress[user][
+            transferId
+        ] = s_pendingTransfersByAddress[user].length; // 1-based
+    }
+
+    /**
+     * @param user: Address associated with the transfer
      * @param transferId: ID of the pending transfer to remove
-     * @notice This function will remove for user, a transfer ID with status "pending" from "s_pendingTransfersByAddress array"
+     * @notice This function will remove for user, a transfer ID with status "pending" from "s_pendingTransfersByAddress" array
      */
     function removeFromPendingTransfersByAddress(
         address user,
         uint256 transferId
     ) public {
-        uint256 length = s_pendingTransfersByAddress[user].length;
-        if (length == 0) {
-            revert PST__NoPendingTransfers();
+        uint256 index = s_pendingTransferIndexByAddress[user][transferId];
+
+        if (index == 0) {
+            revert PST__TransferNotPending(); // Not present
         }
 
-        for (uint256 i = 0; i < length; i++) {
-            if (s_pendingTransfersByAddress[user][i] == transferId) {
-                s_pendingTransfersByAddress[user][
-                    i
-                ] = s_pendingTransfersByAddress[user][length - 1];
-                s_pendingTransfersByAddress[user].pop();
-                break;
-            }
+        uint256 idxToRemove = index - 1;
+        uint256 lastIndex = s_pendingTransfersByAddress[user].length - 1;
+
+        if (idxToRemove != lastIndex) {
+            uint256 lastTransferId = s_pendingTransfersByAddress[user][
+                lastIndex
+            ];
+            s_pendingTransfersByAddress[user][idxToRemove] = lastTransferId;
+            s_pendingTransferIndexByAddress[user][lastTransferId] = index; // Update moved transfer
         }
+
+        s_pendingTransfersByAddress[user].pop();
+        delete s_pendingTransferIndexByAddress[user][transferId];
     }
 
     /**

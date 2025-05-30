@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 import {PST_Store} from "../../src/PST_Store.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
@@ -198,7 +198,7 @@ contract TestPST_UtilityFunctions is Test {
         public
     {
         // Act / Assert
-        vm.expectRevert(PST_Store.PST__NoPendingTransfers.selector);
+        vm.expectRevert(PST_Store.PST__TransferNotPending.selector);
         vm.prank(SENDER);
         pst.removeFromPendingTransfersByAddress(SENDER, 0);
     }

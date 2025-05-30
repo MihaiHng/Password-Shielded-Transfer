@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.28;
+pragma solidity 0.8.28;
 
 /**
  * @title PreApprovedTokensLibrary
@@ -28,7 +28,11 @@ library PreApprovedTokensLibrary {
     address constant SEPOLIA_LINK = 0x779877A7B0D9E8603169DdbD7836e478b4624789;
     address constant SEPOLIA_USDC = 0x5fd84259d66Cd46123540766Be93DFE6D43130D7;
 
-    function getPreApprovedTokens() external pure returns (address[] memory tokens) {
+    function getPreApprovedTokens()
+        external
+        pure
+        returns (address[] memory tokens)
+    {
         tokens = new address[](3); // Change the size of the array when changing the number of preapproved tokens
 
         tokens[0] = SEPOLIA_ETH;
