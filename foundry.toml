@@ -3,18 +3,20 @@ src = "src"
 out = "out"
 libs = ["lib"]
 
+optimizer = true
+optimizer_runs = 20000
+
 remappings = [
     '@chainlink/contracts/=lib/chainlink-brownie-contracts/contracts/src/',
     '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
     "forge-std/=lib/forge-std/src/",
-
 ]
 
 [fuzz]
 runs = 1000
 
 [invariant]
-runs = 10
+runs = 100
 depth = 128
 fail_on_revert = false
 show_metrics = true
