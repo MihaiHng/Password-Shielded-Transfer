@@ -22,7 +22,7 @@ import {AutomationCompatibleInterface} from "@chainlink/contracts/v0.8/automatio
  *
  * @notice The PST gives a few additional abilities to a regular transfer:
  * - A created transfer can be canceled, as long as claim cooldown period didn't elapse
- * - A created transfer has an expiry time, which if reached the transfer creator gets refunded
+ * - A created transfer has an expiry time, which if reached, the transfer creator gets refunded
  * - Transfer history gets removed automatically and periodically
  * - Inactive users get removed automatically and periodically
  *
@@ -222,10 +222,7 @@ contract PST is
         });
 
         s_isPending[transferId] = true;
-        // s_pendingTransferIds.push(transferId);
         addToPendingTransfers(transferId);
-        // s_pendingTransfersByAddress[msg.sender].push(transferId);
-        // s_pendingTransfersByAddress[receiver].push(transferId);
         addToPendingTransfersByAddress(msg.sender, transferId);
         addToPendingTransfersByAddress(receiver, transferId);
 
@@ -929,28 +926,6 @@ contract PST is
         s_pendingTransferIds.pop();
         delete s_pendingTransferIndex[transferId];
     }
-
-    // function removeFromPendingTransfers(uint256 transferId) public {
-    //     uint256 length = s_pendingTransferIds.length;
-    //     bool idFound;
-
-    //     if (length == 0) {
-    //         revert PST__NoPendingTransfers();
-    //     }
-
-    //     for (uint256 i = 0; i < length; i++) {
-    //         if (s_pendingTransferIds[i] == transferId) {
-    //             s_pendingTransferIds[i] = s_pendingTransferIds[length - 1];
-    //             s_pendingTransferIds.pop();
-    //             idFound = true;
-    //             break;
-    //         }
-    //     }
-
-    //     if (!idFound) {
-    //         revert PST__TransferIdNotFound();
-    //     }
-    // }
 
     /**
      * @param user: Address associated with the transfer
