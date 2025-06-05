@@ -4,12 +4,16 @@ import viteLogo from '/vite.svg'
 import './App.css'
 import { ethers } from "ethers";
 import abi from '../public/abi/PST.json';
+import { ConnectButton } from '@reown/walletkit'
 
 function App() {
   const [count, setCount] = useState(0)
 
   return (
     <>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '1rem' }}>
+        <ConnectButton />
+      </div>
       <div>
         <a href="https://vite.dev" target="_blank">
           <img src={viteLogo} className="logo" alt="Vite logo" />
