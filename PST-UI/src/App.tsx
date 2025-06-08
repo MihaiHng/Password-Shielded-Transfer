@@ -3,6 +3,20 @@ import './App.css'
 import { ethers } from "ethers";
 import abi from '../public/abi/PST.json';
 
+const buttonStyle = {
+  width: '150px',
+  height: '60px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '1.2rem',
+  fontWeight: 'bold',
+  borderRadius: '8px',
+  border: 'none',
+  cursor: 'pointer'
+}
+
+
 function App() {
   const [activeTab, setActiveTab] = useState<'send' | 'receive' | 'history'>('send')
 
@@ -20,7 +34,7 @@ function App() {
           right: 0,
           zIndex: 1000,
           background: '#1e1e1e', // same as content
-          borderBottom: '1px solid #333'
+          borderBottom: 'none'
         }}
       >
         <w3m-button />
@@ -40,7 +54,7 @@ function App() {
         <div
           style={{
             display: 'flex',
-            gap: '1rem',
+            gap: '5rem',
             marginBottom: '2rem',
             position: 'fixed',
             top: '64px',
@@ -49,18 +63,15 @@ function App() {
             width: '100%',
             justifyContent: 'center',
             zIndex: 999,
-            borderBottom: '1px solid #333'
+            borderBottom: '1px solid #1e1e1e'
           }}
         >
           <button
             onClick={() => setActiveTab('send')}
             style={{
+              ...buttonStyle,
               backgroundColor: activeTab === 'send' ? '#4CAF50' : '#1e1e1e',
               color: activeTab === 'send' ? '#fff' : '#ccc',
-              padding: '0.5rem 1rem',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer'
             }}
           >
             SEND
@@ -68,12 +79,9 @@ function App() {
           <button
             onClick={() => setActiveTab('receive')}
             style={{
+              ...buttonStyle,
               backgroundColor: activeTab === 'receive' ? '#2196F3' : '#1e1e1e',
               color: activeTab === 'receive' ? '#fff' : '#ccc',
-              padding: '0.5rem 1rem',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer'
             }}
           >
             RECEIVE
@@ -81,12 +89,9 @@ function App() {
           <button
             onClick={() => setActiveTab('history')}
             style={{
+              ...buttonStyle,
               backgroundColor: activeTab === 'history' ? '#FF9800' : '#1e1e1e',
               color: activeTab === 'history' ? '#fff' : '#ccc',
-              padding: '0.5rem 1rem',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer'
             }}
           >
             HISTORY
