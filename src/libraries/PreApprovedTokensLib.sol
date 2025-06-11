@@ -29,7 +29,7 @@ library PreApprovedTokensLibrary {
     address constant SEPOLIA_USDC = 0x5fd84259d66Cd46123540766Be93DFE6D43130D7;
 
     function getPreApprovedTokens()
-        external
+        internal
         pure
         returns (address[] memory tokens)
     {
