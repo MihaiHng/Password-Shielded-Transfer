@@ -12,7 +12,7 @@ docs/
 
 # Dotenv file
 .env
-.env.sepolia_zksync
+.env.sepolia-zksync
 lib/
 broadcast/
 archived_code/
