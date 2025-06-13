@@ -1,21 +1,9 @@
 import { useState } from 'react'
 import './App.css'
-import { ethers } from "ethers";
-import abi from '../public/abi/PST.json';
-
-const buttonStyle = {
-  width: '150px',
-  height: '60px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: '1.2rem',
-  fontWeight: 'bold',
-  borderRadius: '8px',
-  border: 'none',
-  cursor: 'pointer'
-}
-
+import SendTransfer from './components/CreateTransfer';
+import { headerButtonStyle } from './styles/buttonStyles'
+import { ethers } from "ethers"
+import abi_pst from './lib/abis/abi_pst.json'
 
 function App() {
   const [activeTab, setActiveTab] = useState<'send' | 'receive' | 'history'>('send')
@@ -69,7 +57,7 @@ function App() {
           <button
             onClick={() => setActiveTab('send')}
             style={{
-              ...buttonStyle,
+              ...headerButtonStyle,
               backgroundColor: activeTab === 'send' ? '#4CAF50' : '#1e1e1e',
               color: activeTab === 'send' ? '#fff' : '#ccc',
             }}
@@ -79,7 +67,7 @@ function App() {
           <button
             onClick={() => setActiveTab('receive')}
             style={{
-              ...buttonStyle,
+              ...headerButtonStyle,
               backgroundColor: activeTab === 'receive' ? '#2196F3' : '#1e1e1e',
               color: activeTab === 'receive' ? '#fff' : '#ccc',
             }}
@@ -89,7 +77,7 @@ function App() {
           <button
             onClick={() => setActiveTab('history')}
             style={{
-              ...buttonStyle,
+              ...headerButtonStyle,
               backgroundColor: activeTab === 'history' ? '#FF9800' : '#1e1e1e',
               color: activeTab === 'history' ? '#fff' : '#ccc',
             }}
@@ -100,7 +88,7 @@ function App() {
 
         {/* Tab Content */}
         <div style={{ textAlign: 'center', marginTop: '3rem' }}>
-          {activeTab === 'send' && <p>This is the SEND view</p>}
+          {activeTab === 'send' && <SendTransfer />}
           {activeTab === 'receive' && <p>This is the RECEIVE view</p>}
           {activeTab === 'history' && <p>This is the HISTORY view</p>}
         </div>

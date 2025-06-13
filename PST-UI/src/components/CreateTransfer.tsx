@@ -1,139 +1,294 @@
-// src/components/SendTransfer.tsx
-import React, { useState } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useChainId, useSwitchChain } from 'wagmi';
-import { parseEther, parseUnits, isAddress } from 'viem';
-import { sepolia, zksyncSepoliaTestnet } from '@reown/appkit/networks'; // Make sure this import is correct
-import { appKit } from '../lib/appkit'; // Import appKit instance for switchNetwork
-import abi from '../../public/abi/PST.json'; // Your PST contract ABI
+// src/components/CreateTransfer.tsx
 
-// Define your deployed contract addresses for each network
+import React, { useState, useEffect } from 'react';
+import {
+    useAccount,
+    useWriteContract,
+    useWaitForTransactionReceipt,
+    useChainId,
+    useSwitchChain,
+    useReadContract,
+    usePublicClient,
+} from 'wagmi';
+import { parseEther, isAddress, formatUnits } from 'viem';
+import type { Abi } from 'viem';
+import { sepolia, zksyncSepoliaTestnet } from '@reown/appkit/networks';
+
+// IMPORT YOUR ABIs FROM .json files with their names
+import abi_pst from '../lib/abis/abi_pst.json';
+import erc20AbiJson from '../lib/abis/abi_erc20.json';
+
+import { formButtonStyle } from '../styles/buttonStyles';
+
+// Cast imported JSON to Abi type as a workaround for ts(1355)
+const PST_CONTRACT_ABI = abi_pst as unknown as Abi;
+const ERC20_CONTRACT_ABI = erc20AbiJson as unknown as Abi;
+
 // IMPORTANT: Replace these with your actual deployed addresses!
-const PST_CONTRACT_ADDRESS_SEPOLIA = '0xYourPSTContractAddressOnSepoliaETH'; // Example: 0x123...
-const PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA = '0xYourPSTContractAddressOnzksyncSepoliaTestnet'; // Example: 0x456...
+// Make sure these are valid 0x addresses, not placeholders for production!
+const PST_CONTRACT_ADDRESS_SEPOLIA = import.meta.env.VITE_PST_ETH_SEPOLIA_ADDRESS as `0x${string}`;
+const PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA = import.meta.env.VITE_PST_ZKSYNC_SEPOLIA_ADDRESS as `0x${string}`;
+// const PST_CONTRACT_ADDRESS_SEPOLIA = '0x271b19d1c7679974267eb281440ba6223476586c';
+// const PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA = '0x8FF033E4CEE2d867fB3C70e11d7a804E2C2fe062';
 
-const SendTransfer: React.FC = () => {
+// Add a check to ensure they are defined, especially for production builds
+if (!PST_CONTRACT_ADDRESS_SEPOLIA || !PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA) {
+    console.error("Missing contract addresses in .env file! Please check VITE_PST_ETH_SEPOLIA_ADDRESS and VITE_PST_ZKSYNC_SEPOLIA_ADDRESS.");
+    // In a production app, you might want to throw an error or render an error state here.
+}
+
+
+const CreateTransfer: React.FC = () => {
     const { address: walletAddress, chainId, isConnected } = useAccount();
-    const { switchChain } = useSwitchChain();
+    const publicClient = usePublicClient();
 
     const [receiver, setReceiver] = useState<string>('');
-    const [tokenAddress, setTokenAddress] = useState<string>('0x0000000000000000000000000000000000000000'); // Default to ETH (address(0))
+    const [tokenAddress, setTokenAddress] = useState<string>('0x0000000000000000000000000000000000000000');
     const [amount, setAmount] = useState<string>('');
     const [password, setPassword] = useState<string>('');
     const [currentPstContractAddress, setCurrentPstContractAddress] = useState<`0x${string}` | undefined>(undefined);
+    const [parsedAmount, setParsedAmount] = useState<bigint>(0n);
 
-    React.useEffect(() => {
+    const isEthTransfer = tokenAddress === '0x0000000000000000000000000000000000000000';
+
+    // --- UI/Process States ---
+    const [isProcessingApprovalAndTransfer, setIsProcessingApprovalAndTransfer] = useState(false);
+    const [currentStatusMessage, setCurrentStatusMessage] = useState('');
+    const [isCreateTransferConfirmedLocally, setIsCreateTransferConfirmedLocally] = useState(false);
+
+    // --- Token Info States ---
+    const [tokenDecimals, setTokenDecimals] = useState<number>(18);
+    const [tokenSymbol, setTokenSymbol] = useState<string>('ETH');
+
+    // --- Effect for Chain ID and PST Contract Address ---
+    useEffect(() => {
         if (chainId) {
-            if (chainId === sepolia.id) {
-                setCurrentPstContractAddress(PST_CONTRACT_ADDRESS_SEPOLIA as `0x${string}`);
-            } else if (chainId === zksyncSepoliaTestnet.id) {
-                setCurrentPstContractAddress(PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA as `0x${string}`);
+            if (chainId === sepolia.id && PST_CONTRACT_ADDRESS_SEPOLIA) { // Also check if env var is defined
+                setCurrentPstContractAddress(PST_CONTRACT_ADDRESS_SEPOLIA);
+            } else if (chainId === zksyncSepoliaTestnet.id && PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA) { // Also check
+                setCurrentPstContractAddress(PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA);
             } else {
-                setCurrentPstContractAddress(undefined); // No known contract on this chain
+                setCurrentPstContractAddress(undefined);
             }
         }
-    }, [chainId]);
+    }, [chainId]); // Removed contract addresses from dependencies to avoid unnecessary re-renders as they are constants
 
+
+    // --- Effect for Parsing Amount ---
+    useEffect(() => {
+        try {
+            if (amount) {
+                // Ensure parseEther is used correctly based on token decimals if you fetch them
+                // For now, assuming parseEther (18 decimals) is fine for initial setup
+                setParsedAmount(parseEther(amount));
+            } else {
+                setParsedAmount(0n);
+            }
+        } catch (e) {
+            setParsedAmount(0n);
+        }
+    }, [amount]);
+
+
+    // --- Read ERC20 Allowance ---
+    // Use a temporary name for 'data' and then assert its type
+    const { data: allowanceData, refetch: refetchAllowance } = useReadContract({
+        abi: ERC20_CONTRACT_ABI,
+        address: isEthTransfer ? undefined : (tokenAddress as `0x${string}`),
+        functionName: 'allowance',
+        args: [walletAddress!, currentPstContractAddress!],
+        query: {
+            enabled: isConnected && !isEthTransfer && !!walletAddress && !!currentPstContractAddress && isAddress(tokenAddress),
+            refetchInterval: 4000,
+        },
+    });
+    const currentAllowance = allowanceData as bigint | undefined; // Type assertion
+
+    // --- Read Token Decimals ---
+    const { data: decimalsData } = useReadContract({
+        abi: ERC20_CONTRACT_ABI,
+        address: isEthTransfer ? undefined : (tokenAddress as `0x${string}`),
+        functionName: 'decimals',
+        query: { enabled: isConnected && !isEthTransfer && isAddress(tokenAddress), staleTime: Infinity, },
+    });
+    const fetchedDecimals = decimalsData as number | undefined; // Type assertion
+
+    // --- Read Token Symbol ---
+    const { data: symbolData } = useReadContract({
+        abi: ERC20_CONTRACT_ABI,
+        address: isEthTransfer ? undefined : (tokenAddress as `0x${string}`),
+        functionName: 'symbol',
+        query: { enabled: isConnected && !isEthTransfer && isAddress(tokenAddress), staleTime: Infinity, },
+    });
+    const fetchedSymbol = symbolData as string | undefined; // Type assertion
+
+
+    useEffect(() => {
+        if (fetchedDecimals !== undefined) setTokenDecimals(Number(fetchedDecimals));
+    }, [fetchedDecimals]);
+
+    useEffect(() => {
+        if (fetchedSymbol) {
+            setTokenSymbol(fetchedSymbol);
+        } else if (isEthTransfer) {
+            setTokenSymbol('ETH');
+        } else {
+            setTokenSymbol('TOKEN');
+        }
+    }, [fetchedSymbol, isEthTransfer]);
+
+
+    // --- Write Contracts Hooks ---
     const {
-        data: hash,
-        writeContract: createTransfer,
-        isPending: isCreateTransferPending,
-        error: createTransferError,
+        data: createTransferHashRaw, // Use raw name for temp
+        writeContract: sendCreateTransferTx,
+        isPending: isCreateTransferCallPending,
+        error: createTransferCallError, // This is the correct name
     } = useWriteContract();
 
-    const { isLoading: isConfirming, isSuccess: isConfirmed, error: transactionError } = useWaitForTransactionReceipt({
-        hash,
-    });
+    const {
+        writeContract: sendApproveTx,
+        isPending: isApproveCallPending,
+        error: approveCallError,
+    } = useWriteContract();
 
+
+    // --- Main Submit Handler: Orchestrates Approval and Transfer ---
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        // Reset states
+        setIsProcessingApprovalAndTransfer(true);
+        setCurrentStatusMessage('Initializing transaction...');
+        setIsCreateTransferConfirmedLocally(false);
+
+        // Initial validation checks
         if (!isConnected || !walletAddress || !currentPstContractAddress) {
-            alert('Please connect your wallet and ensure you are on a supported network (Sepolia ETH or zkSync Sepolia).');
+            setCurrentStatusMessage('Please connect your wallet and ensure you are on a supported network.');
+            setIsProcessingApprovalAndTransfer(false);
             return;
         }
+        if (!publicClient) {
+            setCurrentStatusMessage('Blockchain client not available. Please try again.');
+            setIsProcessingApprovalAndTransfer(false);
+            return;
+        }
+        if (!isAddress(receiver)) { setCurrentStatusMessage('Invalid receiver address.'); setIsProcessingApprovalAndTransfer(false); return; }
+        if (!parsedAmount || parsedAmount === 0n) { setCurrentStatusMessage('Invalid amount. Please enter a number greater than zero.'); setIsProcessingApprovalAndTransfer(false); return; }
+        if (!password) { setCurrentStatusMessage('Password cannot be empty.'); setIsProcessingApprovalAndTransfer(false); return; }
 
-        if (!isAddress(receiver)) {
-            alert('Invalid receiver address.');
-            return;
-        }
-
-        const isEthTransfer = tokenAddress === '0x0000000000000000000000000000000000000000';
-        let parsedAmount: bigint;
-        try {
-            // Assuming 18 decimals for ETH and most ERC20s for simplicity. Adjust for specific tokens.
-            parsedAmount = parseEther(amount);
-        } catch (err) {
-            alert('Invalid amount. Please enter a number.');
-            return;
-        }
-
-        if (!password) {
-            alert('Password cannot be empty.');
-            return;
-        }
 
         try {
-            // Construct the args for createTransfer
+            // --- Step 1: ERC20 Approval (if needed) ---
+            if (!isEthTransfer) {
+                if (!isAddress(tokenAddress)) { throw new Error('Invalid token address.'); }
+
+                if (currentAllowance === undefined) {
+                    setCurrentStatusMessage('Fetching token allowance... please wait.');
+                    throw new Error("Could not fetch token allowance data. Please check token address and network or try again.");
+                }
+
+                if (currentAllowance < parsedAmount) {
+                    setCurrentStatusMessage(`Awaiting wallet confirmation for ${tokenSymbol} approval... (1 of 2)`);
+
+                    // Use 'as any' on the function call to bypass problematic 'void' type inference
+                    const approveTxHash = (await (sendApproveTx as any)({
+                        address: tokenAddress as `0x${string}`,
+                        abi: ERC20_CONTRACT_ABI,
+                        functionName: 'approve',
+                        args: [currentPstContractAddress, parsedAmount],
+                    })) as `0x${string}` | undefined; // Assert the result type
+
+                    if (!approveTxHash) {
+                        throw new Error('Approval transaction rejected or failed by wallet.');
+                    }
+
+                    setCurrentStatusMessage('Approval transaction sent. Waiting for confirmation on chain...');
+                    const approvalReceipt = await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+
+                    if (approvalReceipt.status !== 'success') {
+                        throw new Error('Approval transaction failed on chain.');
+                    }
+                    setCurrentStatusMessage('Approval confirmed! Awaiting wallet confirmation for transfer... (2 of 2)');
+                    refetchAllowance();
+                }
+            }
+
+            // --- Step 2: Create Transfer ---
             const args = [
                 receiver as `0x${string}`,
-                tokenAddress as `0x${string}`, // Pass the token address (0x0 for ETH)
+                tokenAddress as `0x${string}`,
                 parsedAmount,
                 password,
             ];
 
-            // If it's an ETH transfer, include the value
-            const value = isEthTransfer ? parsedAmount : undefined; // The contract calculates totalTransferCost including fee
-            // For ETH, `msg.value` must cover amount + fee.
-            // We're passing `amount` here, and the contract will revert
-            // if `msg.value` (total sent) isn't enough.
-            // For a more robust UI, you might try to estimate the fee.
+            const valueToSend: bigint | undefined = isEthTransfer ? parsedAmount : undefined;
 
-            await createTransfer({
+            // Use 'as any' on the function call for sendCreateTransferTx too
+            const createTxHash = (await (sendCreateTransferTx as any)({
                 address: currentPstContractAddress,
-                abi: abi, // Your PST contract ABI
+                abi: PST_CONTRACT_ABI,
                 functionName: 'createTransfer',
                 args: args,
-                value: value, // Value for ETH transfers
-            });
+                value: valueToSend,
+            })) as `0x${string}` | undefined; // Assert the result type
+
+            if (!createTxHash) {
+                throw new Error('Transfer transaction rejected or failed by wallet.');
+            }
+
+            setCurrentStatusMessage('Transfer transaction sent. Waiting for confirmation on chain...');
 
         } catch (err) {
-            console.error("Error initiating transfer:", err);
-            // More user-friendly error handling based on err
-            alert(`Failed to initiate transfer: ${(err as Error).message || err}`);
+            console.error("Error during transaction flow:", err);
+            let errorMessage = 'An unexpected error occurred.';
+            if (err instanceof Error) {
+                errorMessage = err.message;
+            } else if (createTransferCallError) { // Use the correct error variable
+                errorMessage = createTransferCallError.message;
+            } else if (approveCallError) {
+                errorMessage = approveCallError.message;
+            }
+            setCurrentStatusMessage(`Error: ${errorMessage}`);
+            setIsProcessingApprovalAndTransfer(false);
+            setIsCreateTransferConfirmedLocally(false);
         }
     };
+    // Ensure createTransferHash is defined as the correctly typed hash
+    // This is needed if you refer to createTransferHash outside the try/catch or as a stable state
+    const createTransferHash: `0x${string}` | undefined = createTransferHashRaw;
+
 
     const currentChainName = chainId === sepolia.id ? 'Sepolia ETH' : (chainId === zksyncSepoliaTestnet.id ? 'zkSync Sepolia' : 'Unsupported Network');
 
-    // --- UI Elements ---
+    const isCreateTransferButtonDisabled =
+        isProcessingApprovalAndTransfer ||
+        !isConnected ||
+        !walletAddress ||
+        !currentPstContractAddress || // Form will be disabled if no PST contract address
+        !parsedAmount || parsedAmount === 0n ||
+        !isAddress(receiver) ||
+        !password ||
+        (isEthTransfer ? false : (currentAllowance === undefined));
+
+
     const inputStyle: React.CSSProperties = {
-        padding: '10px',
-        margin: '10px 0',
-        borderRadius: '4px',
-        border: '1px solid #555',
-        backgroundColor: '#333',
-        color: '#eee',
-        width: '300px',
+        padding: '10px', margin: '10px 0', borderRadius: '4px',
+        border: '1px solid #555', backgroundColor: '#333',
+        color: '#eee', width: '300px',
     };
 
     const formStyle: React.CSSProperties = {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: '10px',
-        backgroundColor: '#282828',
-        padding: '30px',
-        borderRadius: '10px',
-        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        gap: '10px', backgroundColor: '#282828', padding: '30px',
+        borderRadius: '10px', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
     };
 
     const labelStyle: React.CSSProperties = {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        width: '300px',
-        color: '#ccc',
+        display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
+        width: '300px', color: '#ccc',
     };
+
 
     return (
         <div style={{ textAlign: 'center', padding: '20px' }}>
@@ -143,26 +298,14 @@ const SendTransfer: React.FC = () => {
             {isConnected && (
                 <>
                     <p>Connected to: {currentChainName}</p>
-                    {currentPstContractAddress ? (
-                        <p>PST Contract Address: {currentPstContractAddress}</p>
-                    ) : (
-                        <>
-                            <p>PST contract not deployed on {currentChainName}.</p>
-                            <button
-                                onClick={() => switchChain({ chainId: sepolia.id })}
-                                style={{ ...buttonStyle, backgroundColor: '#FF9800', margin: '10px' }}
-                            >
-                                Switch to Sepolia ETH
-                            </button>
-                            <button
-                                onClick={() => switchChain({ chainId: zksyncSepoliaTestnet.id })}
-                                style={{ ...buttonStyle, backgroundColor: '#2196F3', margin: '10px' }}
-                            >
-                                Switch to zkSync Sepolia
-                            </button>
-                        </>
+                    {/* Display message if PST contract is not available on current chain */}
+                    {!currentPstContractAddress && (
+                        <p style={{ color: '#FF6347', marginBottom: '20px' }}>
+                            PST contract not deployed on {currentChainName}. Please connect to a supported network through your wallet or wallet connect button.
+                        </p>
                     )}
 
+                    {/* The form now shows only if currentPstContractAddress is available */}
                     {currentPstContractAddress && (
                         <form onSubmit={handleSubmit} style={formStyle}>
                             <label style={labelStyle}>
@@ -186,7 +329,7 @@ const SendTransfer: React.FC = () => {
                                 />
                             </label>
                             <label style={labelStyle}>
-                                Amount (in units of token/ETH):
+                                Amount (in units of {tokenSymbol}):
                                 <input
                                     type="text"
                                     value={amount}
@@ -206,27 +349,62 @@ const SendTransfer: React.FC = () => {
                                 />
                             </label>
 
+                            {!isEthTransfer && isAddress(tokenAddress) && walletAddress && currentPstContractAddress && (
+                                <div style={{ marginTop: '10px', fontSize: '0.9em', color: '#aaa' }}>
+                                    {currentAllowance !== undefined && (
+                                        <p>
+                                            Current Allowance for PST: {formatUnits(currentAllowance, tokenDecimals)} {tokenSymbol}
+                                        </p>
+                                    )}
+                                    {parsedAmount > 0n && currentAllowance !== undefined && currentAllowance < parsedAmount && (
+                                        <p style={{ color: '#ffcc00' }}>
+                                            Insufficient allowance. Approval will be requested automatically.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
                             <button
                                 type="submit"
-                                disabled={isCreateTransferPending || isConfirming}
+                                disabled={isCreateTransferButtonDisabled}
                                 style={{
-                                    ...buttonStyle,
+                                    ...formButtonStyle,
                                     backgroundColor: '#4CAF50',
                                     color: '#fff',
-                                    marginTop: '20px',
-                                    opacity: (isCreateTransferPending || isConfirming) ? 0.7 : 1,
+                                    opacity: isCreateTransferButtonDisabled ? 0.7 : 1,
                                 }}
                             >
-                                {(isCreateTransferPending || isConfirming) ? 'Sending...' : 'Create Transfer'}
+                                {isProcessingApprovalAndTransfer ? currentStatusMessage : (isCreateTransferConfirmedLocally ? 'Transfer Confirmed!' : 'Create Transfer')}
                             </button>
 
-                            {hash && <p>Transaction Hash: <a href={`https://sepolia.etherscan.io/tx/${hash}`} target="_blank" rel="noopener noreferrer" style={{ color: '#88f' }}>{hash}</a></p>}
-                            {isConfirming && <p>Confirming transaction...</p>}
-                            {isConfirmed && <p style={{ color: 'lightgreen' }}>Transfer Created Successfully!</p>}
-                            {createTransferError && <p style={{ color: 'red' }}>Error: {createTransferError.message}</p>}
-                            {transactionError && <p style={{ color: 'red' }}>Transaction Error: {transactionError.message}</p>}
+                            {isProcessingApprovalAndTransfer && !isCreateTransferConfirmedLocally && (
+                                <p style={{ color: '#00BFFF', marginTop: '10px' }}>
+                                    {currentStatusMessage}
+                                </p>
+                            )}
+
+                            {createTransferHash && (
+                                <p style={{ fontSize: '0.9em', marginTop: '10px' }}>
+                                    Transfer Hash: <a
+                                        href={chainId === sepolia.id
+                                            ? `https://sepolia.etherscan.io/tx/${createTransferHash}`
+                                            : `https://sepolia.explorer.zksync.io/tx/${createTransferHash}`
+                                        }
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{ color: '#88f' }}
+                                    >
+                                        {createTransferHash.substring(0, 10)}...{createTransferHash.substring(createTransferHash.length - 10)}
+                                    </a>
+                                </p>
+                            )}
+                            {isCreateTransferConfirmedLocally && <p style={{ color: 'lightgreen' }}>Transfer Created Successfully!</p>}
+                            {createTransferCallError && <p style={{ color: 'red' }}>Call Error: {createTransferCallError.message}</p>}
+                            {approveCallError && <p style={{ color: 'red' }}>Approval Call Error: {approveCallError.message}</p>}
+
+
                             <p style={{ marginTop: '20px', fontSize: '0.9em', color: '#999' }}>
-                                * Note: For ERC20 transfers, you need to approve the PST contract to spend your tokens first. This UI does not currently include an approve step.
+                                * Note: For ERC20 transfers, if insufficient allowance is found, an approval transaction will be prompted automatically before the transfer.
                             </p>
                         </form>
                     )}
@@ -236,4 +414,4 @@ const SendTransfer: React.FC = () => {
     );
 };
 
-export default SendTransfer;
+export default CreateTransfer;
