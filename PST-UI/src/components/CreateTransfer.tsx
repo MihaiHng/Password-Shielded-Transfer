@@ -4,9 +4,6 @@ import React, { useState, useEffect } from 'react';
 import {
     useAccount,
     useWriteContract,
-    useWaitForTransactionReceipt,
-    useChainId,
-    useSwitchChain,
     useReadContract,
     usePublicClient,
 } from 'wagmi';
@@ -28,8 +25,6 @@ const ERC20_CONTRACT_ABI = erc20AbiJson as unknown as Abi;
 // Make sure these are valid 0x addresses, not placeholders for production!
 const PST_CONTRACT_ADDRESS_SEPOLIA = import.meta.env.VITE_PST_ETH_SEPOLIA_ADDRESS as `0x${string}`;
 const PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA = import.meta.env.VITE_PST_ZKSYNC_SEPOLIA_ADDRESS as `0x${string}`;
-// const PST_CONTRACT_ADDRESS_SEPOLIA = '0x271b19d1c7679974267eb281440ba6223476586c';
-// const PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA = '0x8FF033E4CEE2d867fB3C70e11d7a804E2C2fe062';
 
 // Add a check to ensure they are defined, especially for production builds
 if (!PST_CONTRACT_ADDRESS_SEPOLIA || !PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA) {
@@ -63,23 +58,21 @@ const CreateTransfer: React.FC = () => {
     // --- Effect for Chain ID and PST Contract Address ---
     useEffect(() => {
         if (chainId) {
-            if (chainId === sepolia.id && PST_CONTRACT_ADDRESS_SEPOLIA) { // Also check if env var is defined
+            if (chainId === sepolia.id && PST_CONTRACT_ADDRESS_SEPOLIA) {
                 setCurrentPstContractAddress(PST_CONTRACT_ADDRESS_SEPOLIA);
-            } else if (chainId === zksyncSepoliaTestnet.id && PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA) { // Also check
+            } else if (chainId === zksyncSepoliaTestnet.id && PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA) {
                 setCurrentPstContractAddress(PST_CONTRACT_ADDRESS_ZKSYNC_SEPOLIA);
             } else {
                 setCurrentPstContractAddress(undefined);
             }
         }
-    }, [chainId]); // Removed contract addresses from dependencies to avoid unnecessary re-renders as they are constants
+    }, [chainId]);
 
 
     // --- Effect for Parsing Amount ---
     useEffect(() => {
         try {
             if (amount) {
-                // Ensure parseEther is used correctly based on token decimals if you fetch them
-                // For now, assuming parseEther (18 decimals) is fine for initial setup
                 setParsedAmount(parseEther(amount));
             } else {
                 setParsedAmount(0n);
@@ -91,7 +84,6 @@ const CreateTransfer: React.FC = () => {
 
 
     // --- Read ERC20 Allowance ---
-    // Use a temporary name for 'data' and then assert its type
     const { data: allowanceData, refetch: refetchAllowance } = useReadContract({
         abi: ERC20_CONTRACT_ABI,
         address: isEthTransfer ? undefined : (tokenAddress as `0x${string}`),
@@ -102,7 +94,7 @@ const CreateTransfer: React.FC = () => {
             refetchInterval: 4000,
         },
     });
-    const currentAllowance = allowanceData as bigint | undefined; // Type assertion
+    const currentAllowance = allowanceData as bigint | undefined;
 
     // --- Read Token Decimals ---
     const { data: decimalsData } = useReadContract({
@@ -111,7 +103,7 @@ const CreateTransfer: React.FC = () => {
         functionName: 'decimals',
         query: { enabled: isConnected && !isEthTransfer && isAddress(tokenAddress), staleTime: Infinity, },
     });
-    const fetchedDecimals = decimalsData as number | undefined; // Type assertion
+    const fetchedDecimals = decimalsData as number | undefined;
 
     // --- Read Token Symbol ---
     const { data: symbolData } = useReadContract({
@@ -120,7 +112,7 @@ const CreateTransfer: React.FC = () => {
         functionName: 'symbol',
         query: { enabled: isConnected && !isEthTransfer && isAddress(tokenAddress), staleTime: Infinity, },
     });
-    const fetchedSymbol = symbolData as string | undefined; // Type assertion
+    const fetchedSymbol = symbolData as string | undefined;
 
 
     useEffect(() => {
@@ -140,15 +132,15 @@ const CreateTransfer: React.FC = () => {
 
     // --- Write Contracts Hooks ---
     const {
-        data: createTransferHashRaw, // Use raw name for temp
+        data: createTransferHashRaw,
         writeContract: sendCreateTransferTx,
-        isPending: isCreateTransferCallPending,
-        error: createTransferCallError, // This is the correct name
+        isPending: isCreateTransferCallPending, // <-- RE-INTRODUCED
+        error: createTransferCallError,
     } = useWriteContract();
 
     const {
         writeContract: sendApproveTx,
-        isPending: isApproveCallPending,
+        isPending: isApproveCallPending, // <-- RE-INTRODUCED
         error: approveCallError,
     } = useWriteContract();
 
@@ -157,7 +149,7 @@ const CreateTransfer: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Reset states
+        // Reset states for a new transaction attempt
         setIsProcessingApprovalAndTransfer(true);
         setCurrentStatusMessage('Initializing transaction...');
         setIsCreateTransferConfirmedLocally(false);
@@ -191,13 +183,12 @@ const CreateTransfer: React.FC = () => {
                 if (currentAllowance < parsedAmount) {
                     setCurrentStatusMessage(`Awaiting wallet confirmation for ${tokenSymbol} approval... (1 of 2)`);
 
-                    // Use 'as any' on the function call to bypass problematic 'void' type inference
                     const approveTxHash = (await (sendApproveTx as any)({
                         address: tokenAddress as `0x${string}`,
                         abi: ERC20_CONTRACT_ABI,
                         functionName: 'approve',
                         args: [currentPstContractAddress, parsedAmount],
-                    })) as `0x${string}` | undefined; // Assert the result type
+                    })) as `0x${string}` | undefined;
 
                     if (!approveTxHash) {
                         throw new Error('Approval transaction rejected or failed by wallet.');
@@ -210,7 +201,7 @@ const CreateTransfer: React.FC = () => {
                         throw new Error('Approval transaction failed on chain.');
                     }
                     setCurrentStatusMessage('Approval confirmed! Awaiting wallet confirmation for transfer... (2 of 2)');
-                    refetchAllowance();
+                    refetchAllowance(); // Refetch allowance after successful approval
                 }
             }
 
@@ -224,14 +215,13 @@ const CreateTransfer: React.FC = () => {
 
             const valueToSend: bigint | undefined = isEthTransfer ? parsedAmount : undefined;
 
-            // Use 'as any' on the function call for sendCreateTransferTx too
             const createTxHash = (await (sendCreateTransferTx as any)({
                 address: currentPstContractAddress,
                 abi: PST_CONTRACT_ABI,
                 functionName: 'createTransfer',
                 args: args,
                 value: valueToSend,
-            })) as `0x${string}` | undefined; // Assert the result type
+            })) as `0x${string}` | undefined;
 
             if (!createTxHash) {
                 throw new Error('Transfer transaction rejected or failed by wallet.');
@@ -239,33 +229,46 @@ const CreateTransfer: React.FC = () => {
 
             setCurrentStatusMessage('Transfer transaction sent. Waiting for confirmation on chain...');
 
+            // <-- ADDED: AWAIT FOR THE TRANSFER TRANSACTION RECEIPT HERE!
+            const transferReceipt = await publicClient.waitForTransactionReceipt({ hash: createTxHash });
+
+            if (transferReceipt.status !== 'success') {
+                throw new Error('Transfer transaction failed on chain.');
+            }
+
+            // Transaction confirmed successfully!
+            setCurrentStatusMessage('Transfer Created Successfully!');
+            setIsCreateTransferConfirmedLocally(true);
+            setIsProcessingApprovalAndTransfer(false); // <-- Reset processing state on full success
+
         } catch (err) {
             console.error("Error during transaction flow:", err);
             let errorMessage = 'An unexpected error occurred.';
             if (err instanceof Error) {
                 errorMessage = err.message;
-            } else if (createTransferCallError) { // Use the correct error variable
+            } else if (createTransferCallError) {
                 errorMessage = createTransferCallError.message;
             } else if (approveCallError) {
                 errorMessage = approveCallError.message;
             }
             setCurrentStatusMessage(`Error: ${errorMessage}`);
-            setIsProcessingApprovalAndTransfer(false);
-            setIsCreateTransferConfirmedLocally(false);
+            setIsProcessingApprovalAndTransfer(false); // Reset on error
+            setIsCreateTransferConfirmedLocally(false); // Ensure it's false on error
         }
     };
-    // Ensure createTransferHash is defined as the correctly typed hash
-    // This is needed if you refer to createTransferHash outside the try/catch or as a stable state
+
     const createTransferHash: `0x${string}` | undefined = createTransferHashRaw;
 
 
     const currentChainName = chainId === sepolia.id ? 'Sepolia ETH' : (chainId === zksyncSepoliaTestnet.id ? 'zkSync Sepolia' : 'Unsupported Network');
 
     const isCreateTransferButtonDisabled =
-        isProcessingApprovalAndTransfer ||
+        isProcessingApprovalAndTransfer || // General state for initial confirmations/processing
+        isCreateTransferCallPending ||   // Wagmi flag: transfer transaction is sent, pending on-chain
+        isApproveCallPending ||        // Wagmi flag: approval transaction is sent, pending on-chain
         !isConnected ||
         !walletAddress ||
-        !currentPstContractAddress || // Form will be disabled if no PST contract address
+        !currentPstContractAddress ||
         !parsedAmount || parsedAmount === 0n ||
         !isAddress(receiver) ||
         !password ||
@@ -298,14 +301,12 @@ const CreateTransfer: React.FC = () => {
             {isConnected && (
                 <>
                     <p>Connected to: {currentChainName}</p>
-                    {/* Display message if PST contract is not available on current chain */}
                     {!currentPstContractAddress && (
                         <p style={{ color: '#FF6347', marginBottom: '20px' }}>
                             PST contract not deployed on {currentChainName}. Please connect to a supported network through your wallet or wallet connect button.
                         </p>
                     )}
 
-                    {/* The form now shows only if currentPstContractAddress is available */}
                     {currentPstContractAddress && (
                         <form onSubmit={handleSubmit} style={formStyle}>
                             <label style={labelStyle}>
@@ -374,14 +375,20 @@ const CreateTransfer: React.FC = () => {
                                     opacity: isCreateTransferButtonDisabled ? 0.7 : 1,
                                 }}
                             >
-                                {isProcessingApprovalAndTransfer ? currentStatusMessage : (isCreateTransferConfirmedLocally ? 'Transfer Confirmed!' : 'Create Transfer')}
+                                {isProcessingApprovalAndTransfer || isCreateTransferCallPending || isApproveCallPending
+                                    ? currentStatusMessage // Show detailed message during processing/pending
+                                    : (isCreateTransferConfirmedLocally
+                                        ? 'Transfer Confirmed!' // Show success message
+                                        : 'Create Transfer' // Default button text
+                                    )}
                             </button>
 
-                            {isProcessingApprovalAndTransfer && !isCreateTransferConfirmedLocally && (
+                            {/* Removed redundant status message display here as button text now handles it */}
+                            {/* {isProcessingApprovalAndTransfer && !isCreateTransferConfirmedLocally && (
                                 <p style={{ color: '#00BFFF', marginTop: '10px' }}>
                                     {currentStatusMessage}
                                 </p>
-                            )}
+                            )} */}
 
                             {createTransferHash && (
                                 <p style={{ fontSize: '0.9em', marginTop: '10px' }}>
