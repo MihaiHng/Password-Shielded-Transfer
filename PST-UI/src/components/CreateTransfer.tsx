@@ -726,25 +726,6 @@ const CreateTransfer: React.FC = () => {
 
     const parsedAmountForCalculation = amount && selectedToken ? parseUnits(amount, selectedToken.decimals) : 0n;
 
-    // const { totalTransferCost, transferFeeCost } =
-    //     sLimitLevelOne > 0n &&
-    //         sLimitLevelTwo > 0n &&
-    //         sFeeScalingFactor > 0n &&
-    //         transferFees.lvlOne >= 0n && transferFees.lvlTwo >= 0n && transferFees.lvlThree >= 0n &&
-    //         selectedToken?.decimals !== undefined &&
-    //         amount && parseFloat(amount) > 0 &&
-    //         !isLoadingTransferFees
-    //         ? calculateTotalTransferCostFrontend(
-    //             parsedAmountForCalculation,
-    //             sLimitLevelOne,
-    //             sLimitLevelTwo,
-    //             sFeeScalingFactor,
-    //             transferFees
-    //         )
-    //         : { totalTransferCost: 0n, transferFeeCost: 0n };
-
-    // const formattedTotalTransferCost = selectedToken ? formatUnits(totalTransferCost, selectedToken.decimals) : '0';
-
     const { totalTransferCost, transferFeeCost } =
         sLimitLevelOne > 0n &&
             sLimitLevelTwo > 0n &&
@@ -892,6 +873,7 @@ const CreateTransfer: React.FC = () => {
         }
     };
 
+    // Get transaction explorer URL
     const getExplorerUrl = (txHash: Address | undefined) => {
         if (!txHash || !chain) return '#';
         switch (chain.id) {
@@ -903,6 +885,51 @@ const CreateTransfer: React.FC = () => {
 
     const transactionHashToWatch = pstHash || erc20Hash;
     const transactionError = pstWriteError || erc20WriteError || confirmError;
+
+    // Function to get a user-friendly error message
+    const getUserFriendlyErrorMessage = (error: Error | null): string => {
+        if (!error) return '';
+
+        console.log("Full error object:", error); // Log the entire error object
+        console.log("Error message property:", error.message); // Log the base message
+        // Try to access the 'shortMessage' if it exists
+        const shortMessage = (error as any).shortMessage;
+        if (shortMessage) {
+            console.log("Error shortMessage property:", shortMessage);
+        }
+
+        // The property that often contains the revert reason is `cause` or `data` or `metaMessages`
+        // Inspecting the full error object will tell us for sure.
+        // For example, sometimes the actual revert string is nested like: error.cause.reason
+        // or error.data.message, or within an array like error.metaMessages.
+
+        const errorMessage = (error as any).shortMessage || error.message;
+
+        // Keep your existing checks, but we'll adapt them based on logs
+        if (errorMessage.includes("PST__CantSendToOwnAddress")) {
+            return "Error: You cannot send tokens to your own address.";
+        }
+        if (errorMessage.includes("PST__AmountToSendShouldBeHigher")) {
+            return "Error: The amount to send is too low. Please send a higher amount.";
+        }
+        if (errorMessage.includes("PST__PasswordNotProvided")) {
+            return "Error: A password must be provided for the transfer.";
+        }
+        if (errorMessage.includes("PST__PasswordTooShort")) {
+            return "Error: The password is too short. Please use a longer password.";
+        }
+        if (errorMessage.includes("User rejected the request.")) {
+            return "Transaction rejected by user.";
+        }
+        if (errorMessage.includes("insufficient funds for gas")) {
+            return "Error: Insufficient funds for gas. Please add more native tokens (e.g., ETH) to your wallet.";
+        }
+
+        // Fallback for other errors
+        return `Transaction Error: ${errorMessage}`;
+    };
+
+    const displayErrorMessage = getUserFriendlyErrorMessage(transactionError);
 
     // Effect to clear password when transaction is confirmed
     useEffect(() => {
@@ -1089,7 +1116,7 @@ const CreateTransfer: React.FC = () => {
             ) : null}
             {isConfirming && <p style={transactionStatusStyle}>Waiting for confirmation...</p>}
             {isConfirmed && <p style={{ ...transactionStatusStyle, color: '#4CAF50' }}>Transfer confirmed!</p>}
-            {transactionError && <p style={{ ...transactionStatusStyle, color: 'red' }}>Error: {transactionError.message}</p>}
+            {transactionError && <p style={{ ...transactionStatusStyle, color: 'red' }}>{displayErrorMessage}</p>} {/* Use displayErrorMessage here */}
         </div>
     );
 };
