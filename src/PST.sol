@@ -286,37 +286,44 @@ contract PST is
         address tokenToCancel = transferToCancel.token;
         uint256 amountToCancel = transferToCancel.amount;
 
-        s_isPending[transferId] = false;
-        s_isCanceled[transferId] = true;
-        transferToCancel.amount = 0;
-        s_canceledTransferIds.push(transferId);
+        if (
+            block.timestamp <
+            transferToCancel.creationTime + s_claimCooldownPeriod
+        ) {
+            s_isPending[transferId] = false;
+            s_isCanceled[transferId] = true;
+            transferToCancel.amount = 0;
+            s_canceledTransferIds.push(transferId);
 
-        s_canceledTransfersByAddress[msg.sender].push(transferId);
-        s_canceledTransfersByAddress[receiver].push(transferId);
+            s_canceledTransfersByAddress[msg.sender].push(transferId);
+            s_canceledTransfersByAddress[receiver].push(transferId);
 
-        removeFromPendingTransfers(transferId);
-        removeFromPendingTransfersByAddress(msg.sender, transferId);
-        removeFromPendingTransfersByAddress(receiver, transferId);
+            removeFromPendingTransfers(transferId);
+            removeFromPendingTransfersByAddress(msg.sender, transferId);
+            removeFromPendingTransfersByAddress(receiver, transferId);
 
-        s_lastInteractionTime[msg.sender] = block.timestamp;
+            s_lastInteractionTime[msg.sender] = block.timestamp;
 
-        emit TransferCanceled(
-            msg.sender,
-            receiver,
-            transferId,
-            tokenToCancel,
-            amountToCancel
-        );
-        emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
+            emit TransferCanceled(
+                msg.sender,
+                receiver,
+                transferId,
+                tokenToCancel,
+                amountToCancel
+            );
+            emit LastInteractionTimeUpdated(msg.sender, block.timestamp);
 
-        if (tokenToCancel == address(0)) {
-            (bool success, ) = msg.sender.call{value: amountToCancel}("");
-            if (!success) {
-                revert PST__TransferFailed();
+            if (tokenToCancel == address(0)) {
+                (bool success, ) = msg.sender.call{value: amountToCancel}("");
+                if (!success) {
+                    revert PST__TransferFailed();
+                }
+            } else {
+                IERC20 erc20 = IERC20(tokenToCancel);
+                erc20.safeTransfer(msg.sender, amountToCancel);
             }
         } else {
-            IERC20 erc20 = IERC20(tokenToCancel);
-            erc20.safeTransfer(msg.sender, amountToCancel);
+            revert PST__CooldownPeriodElapsed();
         }
     }
 

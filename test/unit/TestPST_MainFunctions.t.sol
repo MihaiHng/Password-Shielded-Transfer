@@ -1007,6 +1007,20 @@ contract TestPST_MainFunctions is Test {
         pst.cancelTransfer(transferId);
     }
 
+    function testCancelTransferRevertsIfCooldownElapsed()
+        public
+        transferCreated
+    {
+        // Arrange
+        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act / Assert
+        vm.expectRevert(PST_Store.PST__CooldownPeriodElapsed.selector);
+        vm.prank(SENDER);
+        pst.cancelTransfer(transferId);
+    }
+
     /*//////////////////////////////////////////////////////////////
                         CLAIM TRANSFER TESTS
     //////////////////////////////////////////////////////////////*/

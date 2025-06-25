@@ -26,6 +26,7 @@ contract PST_Store {
     error PST__TransferNotPending();
     error PST__InvalidReceiver();
     error PST__CooldownPeriodNotElapsed();
+    error PST__CooldownPeriodElapsed();
     error PST__InvalidClaimCooldownPeriod(uint256 minRequired);
     error PST__InvalidAvailabilityPeriod(uint256 minRequired);
     error PST__InvalidCleanupInterval(uint256 minRequired);

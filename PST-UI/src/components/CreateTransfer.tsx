@@ -903,6 +903,7 @@ const CreateTransfer: React.FC = () => {
             <PendingTransfers
                 pstContractAddress={pstContractAddress}
                 refetchTrigger={refetchPendingTransfers}
+                onTransferActionCompleted={() => setRefetchPendingTransfers(prev => !prev)} // Callback for when a transfer action (like cancel) is completed
             />
         </>
     );

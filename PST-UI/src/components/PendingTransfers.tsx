@@ -12,6 +12,9 @@ import erc20AbiJson from '../lib/abis/abi_erc20.json';
 // Import pre-approved tokens list (needed for token decimals lookup)
 import { ALL_NETWORK_TOKENS } from '../lib/constants/tokenList';
 
+// Import the new CancelTransferButton component
+import CancelTransferButton from './CancelTransfer';
+
 // Import React's CSSProperties type
 import type { CSSProperties } from 'react';
 
@@ -24,7 +27,7 @@ const pendingTransfersContainerStyle: CSSProperties = {
     background: '#1b1b1b',
     borderRadius: '20px',
     padding: '24px',
-    maxWidth: '950px', // Wider for table to accommodate new columns
+    maxWidth: '1000px', // Wider for table to accommodate new columns
     margin: '40px auto',
     boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
     backdropFilter: 'blur(4px)',
@@ -144,6 +147,8 @@ interface PendingTransferRowProps {
     transferId: bigint;
     pstContractAddress: Address;
     chainId: number;
+    userAddress: Address | undefined; // Passed down from parent
+    onCancelSuccess: () => void; // Callback for successful cancellation
 }
 
 const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
@@ -151,6 +156,8 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
     transferId,
     pstContractAddress,
     chainId,
+    userAddress,
+    onCancelSuccess,
 }) => {
     const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
 
@@ -213,7 +220,7 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
         return (
             <tr style={tableRowStyle}>
                 <td style={tableDataStyle}>{index + 1}</td>
-                <td style={tableDataStyle} colSpan={8}>Loading transfer details...</td> {/* Adjusted colspan for new columns */}
+                <td style={tableDataStyle} colSpan={9}>Loading transfer details...</td>
             </tr>
         );
     }
@@ -222,7 +229,7 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
         console.error("Error fetching transfer details for ID", transferId.toString(), detailsError);
         return (
             <tr style={tableRowStyle}>
-                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={8}>Error: {detailsError.message}</td> {/* MERGED STYLE */}
+                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={9}>Error: {detailsError.message}</td>
             </tr>
         );
     }
@@ -234,10 +241,7 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
             <td style={tableDataStyle}>{truncateAddress(receiver)}</td>
             <td style={tableDataStyle}>
                 <div style={tokenDisplayContainerStyle}>
-                    <span>{tokenSymbol || 'ETH'}</span> {/* Display ETH for native, or fetched symbol */}
-                    <span style={tokenAddressStyle}>
-                        ({truncateAddress(tokenAddress)})
-                    </span>
+                    <span>{tokenSymbol || 'ETH'}</span>
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -250,8 +254,8 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
                 </div>
             </td>
             <td style={tableDataStyle}>{displayAmount}</td>
-            <td style={tableDataStyle}>{formatTimestamp(creationTime)}</td> {/* New column */}
-            <td style={tableDataStyle}>{formatTimestamp(expiringTime)}</td> {/* New column */}
+            <td style={tableDataStyle}>{formatTimestamp(creationTime)}</td>
+            <td style={tableDataStyle}>{formatTimestamp(expiringTime)}</td>
             <td style={tableDataStyle}>{status}</td>
             <td style={tableDataStyle}>
                 <div style={tokenDisplayContainerStyle}>
@@ -263,9 +267,24 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
                         }}
                         style={copyButtonStyle}
                     >
-                        {copiedAddress === transferId.toString() ? 'Copied!' : '📋'}
+                        {copiedAddress === transferId.toString() ? 'Copied!' : '�'}
                     </button>
                 </div>
+            </td>
+            {/* New column for Cancel Button */}
+            <td style={tableDataStyle}>
+                {userAddress && pstContractAddress && chainId ? (
+                    <CancelTransferButton
+                        transferId={transferId}
+                        pstContractAddress={pstContractAddress}
+                        senderAddress={sender}
+                        transferStatus={status}
+                        chainId={chainId}
+                        onCancelSuccess={onCancelSuccess}
+                    />
+                ) : (
+                    <span style={{ color: '#888', fontSize: '12px' }}>Connect wallet for actions</span>
+                )}
             </td>
         </tr>
     );
@@ -275,9 +294,10 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
 interface PendingTransfersProps {
     pstContractAddress: Address | undefined;
     refetchTrigger: boolean; // Prop to trigger refetch from parent
+    onTransferActionCompleted: () => void; // New callback for any action completion
 }
 
-const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress, refetchTrigger }) => {
+const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress, refetchTrigger, onTransferActionCompleted }) => {
     const { address: userAddress, chain, isConnected } = useAccount();
 
     // Fetch Pending Transfer IDs for the connected wallet
@@ -293,12 +313,19 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress,
         }
     }) as { data?: bigint[], isLoading: boolean, error: Error | null, refetch: () => void };
 
-    // Automatically refetch pending transfers when refetchTrigger changes
+    // Automatically refetch pending transfers when refetchTrigger changes (from CreateTransfer)
     useEffect(() => {
         if (refetchTrigger) {
             refetchPendingIds();
         }
     }, [refetchTrigger, refetchPendingIds]);
+
+    // This callback is passed down to PendingTransferRow and then to CancelTransferButton
+    // It refetches transfers and then calls the parent's (CreateTransfer's) action completion callback
+    const handleActionCompleted = useCallback(() => {
+        refetchPendingIds();
+        onTransferActionCompleted();
+    }, [refetchPendingIds, onTransferActionCompleted]);
 
 
     return (
@@ -322,10 +349,11 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress,
                                 <th style={tableHeaderStyle}>Receiver</th>
                                 <th style={tableHeaderStyle}>Token</th>
                                 <th style={tableHeaderStyle}>Amount</th>
-                                <th style={tableHeaderStyle}>Creation Time</th> {/* New Header */}
-                                <th style={tableHeaderStyle}>Expiration Time</th> {/* New Header */}
+                                <th style={tableHeaderStyle}>Creation Time</th>
+                                <th style={tableHeaderStyle}>Expiration Time</th>
                                 <th style={tableHeaderStyle}>Status</th>
                                 <th style={tableHeaderStyle}>Transfer ID</th>
+                                <th style={tableHeaderStyle}>Action</th> {/* New Header for Cancel Button */}
                             </tr>
                         </thead>
                         <tbody>
@@ -334,8 +362,10 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress,
                                     key={transferId.toString()} // Use transferId as key
                                     index={index}
                                     transferId={transferId}
-                                    pstContractAddress={pstContractAddress as Address} // Cast as Address since enabled check ensures it's not undefined
-                                    chainId={chain?.id as number} // Cast as number since enabled check ensures it's not undefined
+                                    pstContractAddress={pstContractAddress as Address}
+                                    chainId={chain?.id as number}
+                                    userAddress={userAddress}
+                                    onCancelSuccess={handleActionCompleted} // Pass the callback
                                 />
                             ))}
                         </tbody>
