@@ -131,18 +131,18 @@ contract PST is
             lvlThree: _transferFeeLvlThree
         });
 
-        /**
-         * @dev Initializing an ERC20 list of preapproved tokens
-         */
-        address[] memory tokens = PreApprovedTokensLibrary
-            .getPreApprovedTokens();
+        // /**
+        //  * @dev Initializing an ERC20 list of preapproved tokens
+        //  */
+        // address[] memory tokens = PreApprovedTokensLibrary
+        //     .getPreApprovedTokens();
 
-        for (uint256 i = 0; i < tokens.length; i++) {
-            address token = tokens[i];
-            s_allowedTokens[token] = true;
-            s_feeBalances[token] = 0;
-            s_tokenList.push(token);
-        }
+        // for (uint256 i = 0; i < tokens.length; i++) {
+        //     address token = tokens[i];
+        //     s_allowedTokens[token] = true;
+        //     s_feeBalances[token] = 0;
+        //     s_tokenList.push(token);
+        // }
     }
 
     receive() external payable {}
