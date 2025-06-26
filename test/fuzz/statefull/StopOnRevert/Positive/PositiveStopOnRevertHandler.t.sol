@@ -74,7 +74,9 @@ contract PositiveStopOnRevertHandler is Test {
         index = bound(index, 0, pendingTransfers.length - 1);
         uint256 transferId = pendingTransfers[index];
 
-        (address sender, , , , , , ) = pst.s_transfersById(transferId);
+        (address sender, , , , uint256 creationTime, , ) = pst.s_transfersById(
+            transferId
+        );
         if (sender != address(this) || !pst.s_isPending(transferId)) {
             // Instead of discarding, check for a valid transfer id
             for (uint256 i = 0; i < pendingTransfers.length; i++) {
@@ -89,9 +91,13 @@ contract PositiveStopOnRevertHandler is Test {
             if (sender != address(this) || !pst.s_isPending(transferId)) return;
         }
 
-        pst.cancelTransfer(transferId);
+        if (block.timestamp < creationTime + pst.s_claimCooldownPeriod()) {
+            pst.cancelTransfer(transferId);
 
-        removeFromPendingTransfers(transferId);
+            removeFromPendingTransfers(transferId);
+        } else {
+            return;
+        }
     }
 
     function claimTransfer(uint256 index) public {

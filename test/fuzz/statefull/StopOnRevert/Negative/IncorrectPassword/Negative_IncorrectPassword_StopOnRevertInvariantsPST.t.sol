@@ -60,6 +60,9 @@ contract Negative_IncorrectPassword_StopOnRevertInvariantsPST is
             pst.addTokenToAllowList(address(tokens[i]));
         }
 
+        // vm.prank(pst.owner());
+        // pst.addTokenToAllowList(address(0));
+
         bytes4[] memory selectors = new bytes4[](7);
         selectors[0] = handler.createTransfer.selector;
         selectors[1] = handler.createTransfer.selector;

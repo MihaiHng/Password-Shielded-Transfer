@@ -50,8 +50,10 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
             1e6 ether
         );
 
-        vm.prank(pst.owner());
+        vm.startPrank(pst.owner());
         pst.addTokenToAllowList(address(mockERC20Token));
+        pst.addTokenToAllowList(address(0));
+        vm.stopPrank();
 
         vm.deal(SENDER, SENDER_BALANCE);
         mockERC20Token.transfer(SENDER, 100 ether);
