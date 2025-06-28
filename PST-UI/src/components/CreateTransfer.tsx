@@ -649,6 +649,8 @@ const CreateTransfer: React.FC = () => {
                     return "Error: A password must be provided for the transfer.";
                 case "PST__PasswordTooShort()":
                     return "Error: The password is too short. Please use a longer password (min 7 characters).";
+                case "PST__CooldownPeriodElapsed()": // NEW: Handle CooldownPeriodElapsed
+                    return "Error: The cancellation period for this transfer has elapsed.";
                 default:
                     return `Contract Error: ${customErrorName}`;
             }

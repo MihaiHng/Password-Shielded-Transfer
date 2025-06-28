@@ -37,6 +37,16 @@ const disabledButtonStyle: CSSProperties = {
     boxShadow: 'none',
 };
 
+interface CustomError extends Error {
+    cause?: unknown; // 'cause' can be of any type
+    shortMessage?: string; // wagmi/viem often adds this
+    details?: string; // another common detail field
+    data?: { // sometimes viem errors include a 'data' field
+        message?: string;
+        data?: unknown; // nested data
+    };
+}
+
 interface CancelTransferButtonProps {
     transferId: bigint;
     pstContractAddress: Address;
@@ -94,24 +104,103 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
         }
     }, [isConfirmed, onCancelSuccess]);
 
-    // Error handling (simplified for this component)
-    const displayError = simulateError || writeError || confirmError;
-    const errorMessage = displayError ? (displayError as any).shortMessage || displayError.message : '';
+    // Function to get a user-friendly error message for this component
+    const getUserFriendlyErrorMessage = (error: Error | null): string => {
+        if (!error) return '';
+
+        console.error("Error received by getUserFriendlyErrorMessage:", error);
+
+        const customError = error as CustomError;
+        let extractedMessage = customError.shortMessage || customError.message || String(error);
+        const customErrorPattern = /Error: ([A-Za-z0-9_]+\(\))(?:\s+\(.*\))?/;
+
+        let match = extractedMessage.match(customErrorPattern);
+        if (match && match[1]) {
+            const customErrorName = match[1];
+            switch (customErrorName) {
+                case "PST__CantSendToOwnAddress()":
+                    return "Error: Cannot send to own address.";
+                case "PST__AmountToSendShouldBeHigher()":
+                    return "Error: Amount too low.";
+                case "PST__PasswordNotProvided()":
+                    return "Error: Password not provided.";
+                case "PST__PasswordTooShort()":
+                    return "Error: Password too short.";
+                // Removed PST__CooldownPeriodElapsed() from here as it will be handled by button state directly
+                default:
+                    return `Contract Error: ${customErrorName.replace(/PST__/g, '').replace(/\(\)/g, '')}`;
+            }
+        }
+
+        if (customError.cause && typeof customError.cause === 'object') {
+            const causeAsAny = customError.cause as any;
+            const causeMessages = [
+                causeAsAny.shortMessage,
+                causeAsAny.message,
+                causeAsAny.reason,
+                causeAsAny.data?.message
+            ].filter(Boolean) as string[];
+
+            for (const msg of causeMessages) {
+                match = msg.match(customErrorPattern);
+                if (match && match[1]) {
+                    const customErrorName = match[1];
+                    switch (customErrorName) {
+                        case "PST__CantSendToOwnAddress()":
+                            return "Error: Cannot send to own address.";
+                        case "PST__AmountToSendShouldBeHigher()":
+                            return "Error: Amount too low.";
+                        case "PST__PasswordNotProvided()":
+                            return "Error: Password not provided.";
+                        case "PST__PasswordTooShort()":
+                            return "Error: Password too short.";
+                        // Removed PST__CooldownPeriodElapsed() from here
+                        default:
+                            return `Contract Error: ${customErrorName.replace(/PST__/g, '').replace(/\(\)/g, '')}`;
+                    }
+                }
+            }
+        }
+
+        if (extractedMessage.includes("User rejected the request")) {
+            return "Transaction rejected by user.";
+        }
+        if (extractedMessage.includes("insufficient funds for gas")) {
+            return "Error: Insufficient funds for gas.";
+        }
+        if (extractedMessage.includes("ChainMismatchError")) {
+            return "Wallet/Network Mismatch.";
+        }
+        if (extractedMessage.includes("revert")) {
+            return "Transaction reverted.";
+        }
+
+        return `Error: ${extractedMessage}`;
+    };
+
+    // Error handling for general errors to be displayed below the button
+    const displayErrorForMessage = simulateError || writeError || confirmError;
+    // Check if the specific cooldown error is present, if so, don't show general error message
+    const isCooldownPeriodElapsedError = (displayErrorForMessage as CustomError)?.shortMessage?.includes("PST__CooldownPeriodElapsed()") || (displayErrorForMessage as CustomError)?.message?.includes("PST__CooldownPeriodElapsed()");
+    const errorMessage = isCooldownPeriodElapsedError ? '' : getUserFriendlyErrorMessage(displayErrorForMessage);
+
 
     const handleCancel = async () => {
         if (!canAttemptCancellation) {
-            // This should ideally not be reachable if button is disabled correctly
             alert("Cannot cancel: Conditions not met (e.g., not sender, not pending, or wallet not connected).");
             return;
         }
-        if (!simulateData?.request) {
-            alert(`Cancellation pre-check failed: ${errorMessage || 'Unknown error'}`);
-            console.error("Simulation data not available for cancellation:", simulateError);
-            return;
-        }
+        // No need to check simulateData?.request explicitly here, button disabled state handles it.
 
         try {
-            writeContract(simulateData.request);
+            if (simulateData?.request) {
+                writeContract(simulateData.request);
+            } else {
+                // This case means simulateData was null/undefined or request was missing,
+                // and should be caught by isDisabled = true.
+                alert(`Cancellation pre-check failed: ${errorMessage || 'Unknown error. Check console.'}`);
+                console.error("Simulation data not available for cancellation, but button was clicked. SimulateError:", simulateError);
+            }
         } catch (e) {
             console.error("Error initiating cancel transaction:", e);
             alert(`Error cancelling transfer: ${e instanceof Error ? e.message : String(e)}`);
@@ -135,7 +224,10 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
     } else if (isSimulating) {
         buttonText = "Pre-checking...";
         isDisabled = true;
-    } else if (simulateError) {
+    } else if (simulateError && isCooldownPeriodElapsedError) { // Specific handling for cooldown elapsed
+        buttonText = "Cancellation period elapsed";
+        isDisabled = true;
+    } else if (simulateError) { // General simulation error (not cooldown related)
         buttonText = "Cannot Cancel"; // Indicating pre-check failed
         isDisabled = true;
     } else if (isWritePending) {
@@ -167,7 +259,7 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
             >
                 {buttonText}
             </button>
-            {errorMessage && (
+            {errorMessage && ( // Only show general error message if it's not the cooldown elapsed error
                 <p style={{ color: 'red', fontSize: '10px', marginTop: '5px' }}>
                     {errorMessage.includes("User rejected") ? "User rejected transaction." : `Error: ${errorMessage}`}
                 </p>

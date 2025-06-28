@@ -45,8 +45,8 @@ const pendingTransfersTitleStyle: CSSProperties = {
 };
 
 const tableContainerStyle: CSSProperties = {
-    maxHeight: '300px', // Fixed height for scrollability
-    overflowY: 'auto',
+    // maxHeight: '300px', // Fixed height for scrollability
+    // overflowY: 'auto',
     border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '12px',
 };
