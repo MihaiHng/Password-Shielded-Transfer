@@ -205,6 +205,8 @@ contract PST is
                 currentFee
             );
 
+        s_originalAmounts[transferId] = amount;
+
         s_transfersById[transferId].sender = msg.sender;
         s_transfersById[transferId].receiver = receiver;
 

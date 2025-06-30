@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import './App.css'
-import SendTransfer from './components/CreateTransfer';
+import CreateTransfer from './components/CreateTransfer';
+import ClaimTransfers from './components/ClaimTransfers';
+import History from './components/HistoryComponent';
 import { headerButtonStyle } from './styles/buttonStyles'
 import { ethers } from "ethers"
 import abi_pst from './lib/abis/abi_pst.json'
@@ -88,9 +90,9 @@ function App() {
 
         {/* Tab Content */}
         <div style={{ textAlign: 'center', marginTop: '3rem' }}>
-          {activeTab === 'send' && <SendTransfer />}
-          {activeTab === 'receive' && <p>This is the RECEIVE view</p>}
-          {activeTab === 'history' && <p>This is the HISTORY view</p>}
+          {activeTab === 'send' && <CreateTransfer />}
+          {activeTab === 'receive' && <ClaimTransfers />}
+          {activeTab === 'history' && <History />}
         </div>
       </main>
     </>

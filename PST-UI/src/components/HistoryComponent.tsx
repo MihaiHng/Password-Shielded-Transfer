@@ -1,4 +1,4 @@
-// src/components/PendingTransfers.tsx
+// src/components/History.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount, useReadContract } from 'wagmi';
@@ -8,12 +8,6 @@ import type { Abi } from 'viem';
 // Import ABIs
 import abiPstWrapper from '../lib/abis/abi_pst.json';
 import erc20AbiJson from '../lib/abis/abi_erc20.json';
-
-// Import pre-approved tokens list (needed for token decimals lookup)
-import { ALL_NETWORK_TOKENS } from '../lib/constants/tokenList';
-
-// Import the new CancelTransferButton component
-import CancelTransferButton from './CancelTransfer';
 
 // Import React's CSSProperties type
 import type { CSSProperties } from 'react';
@@ -34,12 +28,12 @@ const getPSTContractAddress = (chainId: number | undefined): Address | undefined
     }
 };
 
-// --- STYLES FOR PENDING TRANSFERS SECTION ---
-const pendingTransfersContainerStyle: CSSProperties = {
+// --- STYLES FOR HISTORY SECTION ---
+const historyContainerStyle: CSSProperties = {
     background: '#1b1b1b',
     borderRadius: '20px',
     padding: '24px',
-    maxWidth: '1000px', // Wider for table to accommodate new columns
+    maxWidth: '1100px', // Adjusted width for history table (no password/action column)
     margin: '40px auto',
     boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
     backdropFilter: 'blur(4px)',
@@ -48,7 +42,7 @@ const pendingTransfersContainerStyle: CSSProperties = {
     fontFamily: 'Inter, sans-serif',
 };
 
-const pendingTransfersTitleStyle: CSSProperties = {
+const historyTitleStyle: CSSProperties = {
     fontSize: '24px',
     fontWeight: 'bold',
     marginBottom: '20px',
@@ -151,29 +145,24 @@ const formatTimestamp = (timestamp: bigint | undefined): string => {
     return date.toLocaleString(); // Formats to local date and time string
 };
 
-// --- PENDING TRANSFER ROW COMPONENT ---
-interface PendingTransferRowProps {
+// --- HISTORY TABLE ROW COMPONENT ---
+interface HistoryRowProps {
     index: number;
     transferId: bigint;
     pstContractAddress: Address;
     chainId: number;
-    userAddress: Address | undefined;
-    onCancelSuccess: () => void;
-    initialTransferDetails: [Address, Address, Address, bigint, bigint, bigint, string]; // Now mandatory to pass pre-fetched details
+    initialTransferDetails: [Address, Address, Address, bigint, bigint, bigint, string]; // Pre-fetched details
 }
 
-const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
+const HistoryRow: React.FC<HistoryRowProps> = ({
     index,
     transferId,
     pstContractAddress,
     chainId,
-    userAddress,
-    onCancelSuccess,
-    initialTransferDetails, // Directly use initial details
+    initialTransferDetails,
 }) => {
     const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
 
-    // We no longer call useReadContract for details here, relying on initialTransferDetails
     const [
         sender,
         receiver,
@@ -182,10 +171,10 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
         creationTime,
         expiringTime,
         status,
-    ] = initialTransferDetails; // Destructure directly from prop
+    ] = initialTransferDetails;
 
     // Fetch token symbol and decimals if it's an ERC20 token
-    const isERC20Token = tokenAddress !== '0x0000000000000000000000000000000000000000';
+    const isERC20Token = tokenAddress !== '0x0000000000000000000000000000000000000000'; // Assuming 0x0 is native ETH
     const { data: tokenSymbol, isLoading: isTokenSymbolLoading, error: tokenSymbolError } = useReadContract({
         address: isERC20Token ? tokenAddress : undefined,
         abi: ERC20_CONTRACT_ABI,
@@ -208,13 +197,13 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
         }
     }) as { data?: number, isLoading: boolean, error?: Error };
 
-    const displayAmount = (amount && tokenDecimals !== undefined) ? formatUnits(amount, tokenDecimals) : (isERC20Token ? '...' : formatUnits(amount, 18));
+    const displayAmount = (amount && tokenDecimals !== undefined) ? formatUnits(amount, tokenDecimals) : (isERC20Token ? '...' : formatUnits(amount, 18)); // Default to 18 for native if decimals not fetched
 
     if (isTokenSymbolLoading || isTokenDecimalsLoading) {
         return (
             <tr style={tableRowStyle}>
                 <td style={tableDataStyle}>{index + 1}</td>
-                <td style={tableDataStyle} colSpan={9}>Loading token details...</td>
+                <td style={tableDataStyle} colSpan={8}>Loading token details...</td>
             </tr>
         );
     }
@@ -223,7 +212,7 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
         console.error("Error fetching token details for", tokenAddress, tokenSymbolError || tokenDecimalsError);
         return (
             <tr style={tableRowStyle}>
-                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={9}>Error fetching token data.</td>
+                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={8}>Error fetching token data.</td>
             </tr>
         );
     }
@@ -265,134 +254,121 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
                     </button>
                 </div>
             </td>
-            <td style={tableDataStyle}>
-                {userAddress && pstContractAddress && chainId ? (
-                    <CancelTransferButton
-                        transferId={transferId}
-                        pstContractAddress={pstContractAddress}
-                        senderAddress={sender}
-                        transferStatus={status}
-                        chainId={chainId}
-                        onCancelSuccess={onCancelSuccess}
-                    />
-                ) : (
-                    <span style={{ color: '#888', fontSize: '12px' }}>Connect wallet for actions</span>
-                )}
-            </td>
+            {/* No Action or Password column in History */}
         </tr>
     );
 };
 
-// --- PENDING TRANSFERS MAIN COMPONENT ---
-interface PendingTransfersProps {
-    pstContractAddress: Address | undefined;
-    refetchTrigger: boolean;
-    onTransferActionCompleted: () => void;
-}
-
-const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress, refetchTrigger, onTransferActionCompleted }) => {
+// --- HISTORY MAIN COMPONENT ---
+const History: React.FC = () => {
     const { address: userAddress, chain, isConnected } = useAccount();
+    const pstContractAddress = getPSTContractAddress(chain?.id);
 
-    const pstContractAddressForChain = getPSTContractAddress(chain?.id);
-
-    const [localRefetchTrigger, setLocalRefetchTrigger] = useState<boolean>(false);
-
-
-    // 1. Fetch ALL transfer IDs associated with the connected user's address (sender or receiver)
-    const { data: allRelatedTransferIds = [], isLoading: isLoadingAllIds, error: allIdsError, refetch: refetchAllIds } = useReadContract({
-        address: pstContractAddressForChain,
+    // Fetch IDs for Canceled transfers
+    const { data: canceledIds = [], isLoading: isLoadingCanceled, error: canceledError } = useReadContract({
+        address: pstContractAddress,
         abi: PST_CONTRACT_ABI,
-        functionName: 'getPendingTransfersForAddress', // This function returns all IDs relevant to user
+        functionName: 'getCanceledTransfersForAddress',
         args: userAddress ? [userAddress] : undefined,
         chainId: chain?.id,
-        query: {
-            enabled: !!userAddress && !!pstContractAddressForChain && isConnected,
-            staleTime: 5000,
-        }
-    }) as { data?: bigint[], isLoading: boolean, error: Error | null, refetch: () => void };
+        query: { enabled: !!userAddress && !!pstContractAddress && isConnected, staleTime: 10000 },
+    }) as { data?: bigint[], isLoading: boolean, error: Error | null };
 
-    // 2. Fetch details for each transfer ID fetched in step 1
-    const transferDetailsQueries = allRelatedTransferIds.map((transferId) =>
+    // Fetch IDs for Expired and Refunded transfers
+    const { data: expiredIds = [], isLoading: isLoadingExpired, error: expiredError } = useReadContract({
+        address: pstContractAddress,
+        abi: PST_CONTRACT_ABI,
+        functionName: 'getExpiredAndRefundedTransfersForAddress',
+        args: userAddress ? [userAddress] : undefined,
+        chainId: chain?.id,
+        query: { enabled: !!userAddress && !!pstContractAddress && isConnected, staleTime: 10000 },
+    }) as { data?: bigint[], isLoading: boolean, error: Error | null };
+
+    // Fetch IDs for Claimed transfers
+    const { data: claimedIds = [], isLoading: isLoadingClaimed, error: claimedError } = useReadContract({
+        address: pstContractAddress,
+        abi: PST_CONTRACT_ABI,
+        functionName: 'getClaimedTransfersForAddress',
+        args: userAddress ? [userAddress] : undefined,
+        chainId: chain?.id,
+        query: { enabled: !!userAddress && !!pstContractAddress && isConnected, staleTime: 10000 },
+    }) as { data?: bigint[], isLoading: boolean, error: Error | null };
+
+    // Combine all unique transfer IDs
+    const allProcessedTransferIds = Array.from(new Set([
+        ...canceledIds,
+        ...expiredIds,
+        ...claimedIds,
+    ]));
+
+    // Fetch details for each of the combined transfer IDs
+    const transferDetailsQueries = allProcessedTransferIds.map((transferId) =>
         useReadContract({
-            address: pstContractAddressForChain,
+            address: pstContractAddress,
             abi: PST_CONTRACT_ABI,
             functionName: 'getTransferDetails',
             args: [transferId],
             chainId: chain?.id,
             query: {
-                enabled: !!pstContractAddressForChain && transferId !== undefined,
+                enabled: !!pstContractAddress && transferId !== undefined,
                 staleTime: 10000,
             },
         })
     );
 
-    // 3. Filter transfers to only include those where the current user is the SENDER and status is "Pending"
-    let filteredPendingTransfers = allRelatedTransferIds // Use 'let' to allow reassignment after sort
+    // Filter and prepare the final list of historical transfers
+    const historicalTransfers = allProcessedTransferIds
         .map((transferId, index) => {
             const queryResult = transferDetailsQueries[index];
             const details = queryResult.data as [Address, Address, Address, bigint, bigint, bigint, string] | undefined;
 
-            // Exclude if still loading, has an error, or details are not available
             if (queryResult.isLoading || queryResult.error || !details) {
-                return null;
+                return null; // Exclude if still loading, has an error, or details are not available
             }
 
-            const [sender, , , , , , status] = details; // Only care about sender and status here
-            // Filter criteria: user is the SENDER AND the transfer status is "Pending"
-            if (userAddress?.toLowerCase() === sender.toLowerCase() && status === "Pending") {
+            const [sender, receiver, , , , , status] = details;
+            // A transfer is considered "historical" if it's Canceled, Expired, or Claimed
+            // AND the current user was either the sender or the receiver
+            const isUserInvolved = userAddress?.toLowerCase() === sender.toLowerCase() || userAddress?.toLowerCase() === receiver.toLowerCase();
+            const isProcessedStatus = status === "Canceled" || status === "ExpiredAndRefunded" || status === "Claimed";
+
+            if (isUserInvolved && isProcessedStatus) {
                 return { transferId, details };
             }
             return null;
         })
         .filter(Boolean) as { transferId: bigint; details: [Address, Address, Address, bigint, bigint, bigint, string] }[];
 
-    // 4. Sort the filtered pending transfers by transferId
-    filteredPendingTransfers.sort((a, b) => {
+    // Sort the historical transfers by transferId
+    historicalTransfers.sort((a, b) => {
         if (a.transferId < b.transferId) return -1;
         if (a.transferId > b.transferId) return 1;
         return 0;
     });
 
-
-    // Determine overall loading and error states for the display messages
-    const isLoadingAnyDetails = transferDetailsQueries.some(query => query.isLoading);
-    const hasAnyErrorInDetails = transferDetailsQueries.some(query => query.error);
+    // Determine overall loading and error states for display messages
+    const isLoadingAny = isLoadingCanceled || isLoadingExpired || isLoadingClaimed || transferDetailsQueries.some(q => q.isLoading);
+    const hasAnyError = canceledError || expiredError || claimedError || transferDetailsQueries.some(q => q.error);
 
     let displayErrorMessage: string | null = null;
-    if (allIdsError) {
-        displayErrorMessage = allIdsError.message;
-    } else if (hasAnyErrorInDetails) {
+    if (canceledError || expiredError || claimedError) {
+        displayErrorMessage = (canceledError || expiredError || claimedError)?.message || "Error loading transfer history.";
+    } else if (hasAnyError) {
         const firstDetailError = transferDetailsQueries.find(query => query.error)?.error;
-        // Ensure firstDetailError is an Error object before accessing .message
         displayErrorMessage = (firstDetailError instanceof Error) ? firstDetailError.message : "One or more transfer details failed to load.";
     }
 
-    // Callback to trigger a refetch of the pending transfers list
-    const handleActionCompleted = useCallback(() => {
-        setLocalRefetchTrigger(prev => !prev);
-        onTransferActionCompleted();
-    }, [onTransferActionCompleted]);
-
-    // Effect to trigger refetch when refetchTrigger changes (from parent) or local trigger changes
-    useEffect(() => {
-        if (refetchTrigger || localRefetchTrigger) {
-            refetchAllIds();
-            setLocalRefetchTrigger(false);
-        }
-    }, [refetchTrigger, localRefetchTrigger, refetchAllIds]);
-
-
     return (
-        <div style={pendingTransfersContainerStyle}>
-            <h2 style={pendingTransfersTitleStyle}>Your Pending Transfers</h2>
+        <div style={historyContainerStyle}>
+            <h2 style={historyTitleStyle}>Your Transfer History</h2>
             {!isConnected || !userAddress ? (
-                <p style={disconnectedNetworkStyle}>Connect your wallet to see pending transfers.</p>
-            ) : isLoadingAllIds || isLoadingAnyDetails ? ( // Check for all loading states
-                <p style={{ textAlign: 'center', color: '#ccc' }}>Loading pending transfers...</p>
-            ) : displayErrorMessage ? ( // Show consolidated error message
-                <p style={{ textAlign: 'center', color: 'red' }}>Error loading transfers: {displayErrorMessage}</p>
-            ) : filteredPendingTransfers.length === 0 ? ( // Crucial: Check the *filtered* list length
-                <p style={{ textAlign: 'center', color: '#ccc' }}>No pending transfers found for your address.</p>
+                <p style={disconnectedNetworkStyle}>Connect your wallet to see your transfer history.</p>
+            ) : isLoadingAny ? (
+                <p style={{ textAlign: 'center', color: '#ccc' }}>Loading transfer history...</p>
+            ) : displayErrorMessage ? (
+                <p style={{ textAlign: 'center', color: 'red' }}>Error loading history: {displayErrorMessage}</p>
+            ) : historicalTransfers.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#ccc' }}>No processed transfers found for your address.</p>
             ) : (
                 <div style={tableContainerStyle}>
                     <table style={tableStyle}>
@@ -407,20 +383,17 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress,
                                 <th style={tableHeaderStyle}>Expiration Time</th>
                                 <th style={tableHeaderStyle}>Status</th>
                                 <th style={tableHeaderStyle}>Transfer ID</th>
-                                <th style={tableHeaderStyle}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredPendingTransfers.map((item, index) => (
-                                <PendingTransferRow
+                            {historicalTransfers.map((item, index) => (
+                                <HistoryRow
                                     key={item.transferId.toString()}
                                     index={index}
                                     transferId={item.transferId}
-                                    pstContractAddress={pstContractAddressForChain as Address}
+                                    pstContractAddress={pstContractAddress as Address}
                                     chainId={chain?.id as number}
-                                    userAddress={userAddress}
-                                    onCancelSuccess={handleActionCompleted}
-                                    initialTransferDetails={item.details} // Pass pre-fetched details
+                                    initialTransferDetails={item.details}
                                 />
                             ))}
                         </tbody>
@@ -431,4 +404,4 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress,
     );
 };
 
-export default PendingTransfers;
+export default History;

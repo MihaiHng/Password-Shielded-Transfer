@@ -57,8 +57,8 @@ contract PST_Store {
     uint256 internal constant MIN_AMOUNT_TO_SEND = 1e14; // 1 ether / 1e4 => 0.0001 ether
 
     uint256 public s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
-    uint256 public s_claimCooldownPeriod = 30 minutes;
-    uint256 public s_availabilityPeriod = 7 days;
+    uint256 public s_claimCooldownPeriod = 15 minutes; // 30 minutes;
+    uint256 public s_availabilityPeriod = 30 minutes; // 7 days;
     uint256 public s_cleanupInterval = 12 weeks;
     uint256 public s_inactivityThreshold = 12 weeks;
     uint256 public s_batchLimit = 50;
@@ -86,6 +86,9 @@ contract PST_Store {
         uint256 expiringTime;
         bytes32 encodedPassword;
     }
+
+    // Mapping to track the original amount for a transfer Id, before being processed and updated to "0" <- for UI history display
+    mapping(uint256 transferId => uint256) public s_originalAmounts;
 
     // Mapping to track if a transfer is pending
     mapping(uint256 transferId => bool) public s_isPending;
