@@ -98,31 +98,33 @@ contract PST is
         _;
     }
 
-    modifier onlyKeepers() {
-        require(
-            msg.sender == i_automationRegistry,
-            "Only Keepers can call this function"
-        );
-        _;
-    }
+    // modifier onlyKeepers() {
+    //     require(
+    //         msg.sender == i_automationRegistry,
+    //         "Only Keepers can call this function"
+    //     );
+    //     _;
+    // }
 
     /*//////////////////////////////////////////////////////////////
                             FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     /**
-     * @param _automationRegistry = 0x6593c7De001fC8542bB1703532EE1E5aA0D458fD -> for Ethereum;
+     * _automationRegistry = 0x6593c7De001fC8542bB1703532EE1E5aA0D458fD -> for Ethereum;
      *                              0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad -> for Sepolia;
      */
     constructor(
         uint256 _transferFeeLvlOne,
         uint256 _transferFeeLvlTwo,
-        uint256 _transferFeeLvlThree,
-        address _automationRegistry
-    ) Ownable(msg.sender) {
-        if (address(_automationRegistry) == address(0)) {
-            revert PST__InvalidAddress();
-        }
-        i_automationRegistry = _automationRegistry;
+        uint256 _transferFeeLvlThree
+    )
+        //address _automationRegistry
+        Ownable(msg.sender)
+    {
+        // if (address(_automationRegistry) == address(0)) {
+        //     revert PST__InvalidAddress();
+        // }
+        // i_automationRegistry = _automationRegistry;
 
         transferFee = TransferFeeLibrary.TransferFee({
             lvlOne: _transferFeeLvlOne,
@@ -331,7 +333,8 @@ contract PST is
     /**
      * @param transferId: The Id of the transfer that will be claimed
      * @param password: The password has to match the password set by sender when transfer was created via createTransfer
-     * @notice The receiver(i.e., the calling address) will receive the amount of token sent by sender when createTransfer was called
+     * @notice The receiver(i.e., the calling address) will receive the amount of token sent by sender when createTransfer
+     * was called, if the provided password is correct
      * @notice The new status of transferId will be "claimed"
      */
     function claimTransfer(
@@ -348,6 +351,10 @@ contract PST is
         address sender = transferToClaim.sender;
         address tokenToClaim = transferToClaim.token;
         uint256 amountToClaim = transferToClaim.amount;
+
+        if (block.timestamp > transferToClaim.expiringTime) {
+            revert PST__TransferExpired();
+        }
 
         if (transferToClaim.receiver != msg.sender) {
             revert PST__InvalidReceiver();
@@ -463,11 +470,13 @@ contract PST is
 
     /**
      * @dev This function will be called every time "checkUpkeep" returns true
-     * @dev This function will refund expired transfers in batches(ccurrently up to 50 transfer IDs)
+     * @dev This function will refund expired transfers in batches(currently up to 50 transfer IDs)
      */
-    function performUpkeep(
-        bytes calldata performData
-    ) external override onlyKeepers {
+    function performUpkeep(bytes calldata performData) external override {
+        if (msg.sender != s_forwarderAddress) {
+            revert PST__OnlyForwarderCanCallPerformUpkeep();
+        }
+
         uint256[] memory batchExpiredTransfers = abi.decode(
             performData,
             (uint256[])
@@ -530,6 +539,15 @@ contract PST is
      */
     function removeInactiveAddresses() external onlyOwner {
         _removeInactiveAddresses();
+    }
+
+    /**
+    @notice Set the address that `performUpkeep` is called from
+    @dev Only callable by the owner
+    @param forwarderAddress the address to set
+    */
+    function setForwarderAddress(address forwarderAddress) external onlyOwner {
+        s_forwarderAddress = forwarderAddress;
     }
 
     /**
@@ -1161,6 +1179,11 @@ contract PST is
     // Function that checks the ETH balance of the contract
     function getBalance() external view returns (uint256) {
         return address(this).balance;
+    }
+
+    // Function to get the current Forwarder Address used for Chainlink Automation
+    function getForwarderAddress() external view returns (address) {
+        return s_forwarderAddress;
     }
 
     // Function to get contract balance for a token

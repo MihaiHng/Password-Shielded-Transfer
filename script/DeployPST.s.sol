@@ -10,15 +10,15 @@ contract DeployPST is Script {
     uint256 transferFeeLvlTwo = 100;
     uint256 transferFeeLvlThree = 10;
 
-    address automationRegistry = 0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad;
+    //address automationRegistry = 0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad;
 
     function run() external returns (PST) {
         vm.startBroadcast();
         PST pST = new PST(
             transferFeeLvlOne,
             transferFeeLvlTwo,
-            transferFeeLvlThree,
-            automationRegistry
+            transferFeeLvlThree
+            //automationRegistry
         );
         vm.stopBroadcast();
         return pST;

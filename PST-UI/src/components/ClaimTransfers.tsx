@@ -1,23 +1,24 @@
 // src/components/ClaimTransfers.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAccount, useReadContract } from 'wagmi';
+import { useAccount, useReadContract, useConfig } from 'wagmi'; // Import useConfig
 import { formatUnits, Address } from 'viem';
 import type { Abi } from 'viem';
+import { useQueries } from '@tanstack/react-query'; // Import useQueries
+import { readContract } from '@wagmi/core'; // Import readContract from wagmi/core
 
 // Import ABIs
 import abiPstWrapper from '../lib/abis/abi_pst.json';
 import erc20AbiJson from '../lib/abis/abi_erc20.json';
 
 // Import pre-approved tokens list (needed for token decimals lookup)
-import { ALL_NETWORK_TOKENS } from '../lib/constants/tokenList';
+import { ALL_NETWORK_TOKENS } from '../lib/constants/tokenList'; // Ensure this import is present
 
 // Import React's CSSProperties type
 import type { CSSProperties } from 'react';
 
 // Import the new ClaimTransferButton component
 import ClaimTransferButton from './ClaimTransferButton';
-
 
 // Type assertions for ABIs
 const PST_CONTRACT_ABI = abiPstWrapper as unknown as Abi;
@@ -36,11 +37,11 @@ const getPSTContractAddress = (chainId: number | undefined): Address | undefined
 };
 
 // --- STYLES FOR CLAIMABLE TRANSFERS SECTION ---
-const claimableTransfersContainerStyle: CSSProperties = {
+const claimTransfersContainerStyle: CSSProperties = {
     background: '#1b1b1b',
     borderRadius: '20px',
     padding: '24px',
-    maxWidth: '1250px', // Adjusted width for better spacing
+    maxWidth: '1200px', // Adjusted width for table to accommodate new columns
     margin: '40px auto',
     boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
     backdropFilter: 'blur(4px)',
@@ -49,7 +50,7 @@ const claimableTransfersContainerStyle: CSSProperties = {
     fontFamily: 'Inter, sans-serif',
 };
 
-const claimableTransfersTitleStyle: CSSProperties = {
+const claimTransfersTitleStyle: CSSProperties = {
     fontSize: '24px',
     fontWeight: 'bold',
     marginBottom: '20px',
@@ -58,10 +59,9 @@ const claimableTransfersTitleStyle: CSSProperties = {
 };
 
 const tableContainerStyle: CSSProperties = {
-    // No maxHeight or overflowY to allow table to expand vertically,
-    // relying on the main container scroll.
     border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '12px',
+    overflowX: 'auto', // Added to ensure horizontal scrolling if content overflows
 };
 
 const tableStyle: CSSProperties = {
@@ -69,7 +69,7 @@ const tableStyle: CSSProperties = {
     borderCollapse: 'separate',
     borderSpacing: '0',
     backgroundColor: '#2c2c2c',
-    borderRadius: '12px',
+    borderRadius: '12px', // Ensure rounded corners for the table itself
 };
 
 const tableHeaderStyle: CSSProperties = {
@@ -173,30 +173,39 @@ const formatTimestamp = (timestamp: bigint | undefined): string => {
     return date.toLocaleString(); // Formats to local date and time string
 };
 
-// --- CLAIMABLE TRANSFER ROW COMPONENT ---
+// Define a type for the token objects expected in ALL_NETWORK_TOKENS
+interface TokenInfo {
+    address: Address;
+    symbol: string;
+    decimals: number;
+    name: string;
+    logoURI?: string;
+    isNative?: boolean;
+}
+
+// --- CLAIM TRANSFER ROW COMPONENT ---
 interface ClaimTransferRowProps {
     index: number;
     transferId: bigint;
-    pstContractAddress: Address;
+    contractAddress: Address; // Renamed from pstContractAddress
     chainId: number;
     userAddress: Address | undefined; // The connected user's address for filtering
-    onClaimActionCompleted: () => void; // Callback for when a claim action is completed
+    onClaimActionCompleted: (claimedTransferId: bigint) => void; // Corrected signature here
     initialTransferDetails: [Address, Address, Address, bigint, bigint, bigint, string]; // Now mandatory to pass pre-fetched details
 }
 
 const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
     index,
     transferId,
-    pstContractAddress,
+    contractAddress, // Renamed from pstContractAddress
     chainId,
     userAddress,
     onClaimActionCompleted,
-    initialTransferDetails, // Directly use initial details
+    initialTransferDetails,
 }) => {
     const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
     const [password, setPassword] = useState<string>(''); // State for password input - now defined here
 
-    // We no longer call useReadContract for details here, relying on initialTransferDetails
     const [
         sender,
         receiver,
@@ -205,33 +214,63 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
         creationTime,
         expiringTime,
         status,
-    ] = initialTransferDetails; // Destructure directly from prop
+    ] = initialTransferDetails;
 
-    // Fetch token symbol and decimals if it's an ERC20 token
-    const isERC20Token = tokenAddress !== '0x0000000000000000000000000000000000000000'; // Assuming 0x0 is native ETH
-    const { data: tokenSymbol, isLoading: isTokenSymbolLoading, error: tokenSymbolError } = useReadContract({
-        address: isERC20Token ? tokenAddress : undefined,
+    // --- Determine Token Decimals and Symbol ---
+    let localTokenSymbol: string | undefined;
+    let localTokenDecimals: number | undefined;
+    let isLoadingTokenData = false;
+    let tokenDataError: Error | undefined;
+
+    const isERC20Token = tokenAddress !== '0x0000000000000000000000000000000000000000';
+
+    // 1. Try to get from ALL_NETWORK_TOKENS first for ERC20s
+    if (isERC20Token && chainId) {
+        const networkConfig = ALL_NETWORK_TOKENS.find(net => net.chainId === chainId);
+        if (networkConfig && Array.isArray(networkConfig.tokens)) {
+            const foundToken = (networkConfig.tokens as TokenInfo[]).find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
+            if (foundToken) {
+                localTokenSymbol = foundToken.symbol;
+                localTokenDecimals = foundToken.decimals;
+            }
+        }
+    } else if (!isERC20Token) { // It's native ETH
+        localTokenSymbol = 'ETH';
+        localTokenDecimals = 18;
+    }
+
+    // 2. If ERC20 and not found in ALL_NETWORK_TOKENS, use useReadContract as fallback
+    // Only enable useReadContract if it's an ERC20 and we haven't found decimals/symbol yet
+    const { data: fetchedSymbol, isLoading: isSymbolLoading, error: symbolError } = useReadContract({
+        address: isERC20Token && localTokenSymbol === undefined ? tokenAddress : undefined,
         abi: ERC20_CONTRACT_ABI,
         functionName: 'symbol',
         chainId: chainId,
         query: {
-            enabled: isERC20Token,
-            staleTime: Infinity, // Token symbols usually don't change
+            enabled: isERC20Token && localTokenSymbol === undefined && !!tokenAddress, // Ensure tokenAddress is valid for query
+            staleTime: Infinity,
         }
     }) as { data?: string, isLoading: boolean, error?: Error };
 
-    const { data: tokenDecimals, isLoading: isTokenDecimalsLoading, error: tokenDecimalsError } = useReadContract({
-        address: isERC20Token ? tokenAddress : undefined,
+    const { data: fetchedDecimals, isLoading: isDecimalsLoading, error: decimalsError } = useReadContract({
+        address: isERC20Token && localTokenDecimals === undefined ? tokenAddress : undefined, // Check localTokenDecimals for fallback
         abi: ERC20_CONTRACT_ABI,
         functionName: 'decimals',
         chainId: chainId,
         query: {
-            enabled: isERC20Token,
+            enabled: isERC20Token && localTokenDecimals === undefined && !!tokenAddress, // Enable only if isERC20Token and chainId are valid
             staleTime: Infinity,
         }
     }) as { data?: number, isLoading: boolean, error?: Error };
 
-    const displayAmount = (amount && tokenDecimals !== undefined) ? formatUnits(amount, tokenDecimals) : (isERC20Token ? '...' : formatUnits(amount, 18)); // Default to 18 for native if decimals not fetched
+    // Update local variables if fetched data is available
+    if (fetchedSymbol !== undefined) localTokenSymbol = fetchedSymbol;
+    if (fetchedDecimals !== undefined) localTokenDecimals = fetchedDecimals;
+
+    isLoadingTokenData = isSymbolLoading || isDecimalsLoading;
+    tokenDataError = symbolError || decimalsError;
+
+    const displayAmount = (amount && localTokenDecimals !== undefined) ? formatUnits(amount, localTokenDecimals) : (isLoadingTokenData ? 'Loading...' : 'N/A');
 
     // Only render row if current user is the receiver and transfer is pending
     const isClaimableByCurrentUser = userAddress?.toLowerCase() === receiver.toLowerCase() && status === "Pending";
@@ -240,7 +279,7 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
         return null; // Don't render if not claimable by current user or not pending
     }
 
-    if (isTokenSymbolLoading || isTokenDecimalsLoading) {
+    if (isLoadingTokenData) {
         return (
             <tr style={tableRowStyle}>
                 <td style={tableDataStyle}>{index + 1}</td>
@@ -249,8 +288,8 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
         );
     }
 
-    if (tokenSymbolError || tokenDecimalsError) {
-        console.error("Error fetching token details for", tokenAddress, tokenSymbolError || tokenDecimalsError);
+    if (tokenDataError) {
+        console.error("Error fetching token details for", tokenAddress, tokenDataError);
         return (
             <tr style={tableRowStyle}>
                 <td style={{ ...tableDataStyle, color: 'red' }} colSpan={10}>Error fetching token data.</td> {/* Adjusted colspan */}
@@ -265,7 +304,7 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
             <td style={tableDataStyle}>{truncateAddress(receiver)}</td>
             <td style={tableDataStyle}>
                 <div style={tokenDisplayContainerStyle}>
-                    <span>{tokenSymbol || 'ETH'}</span>
+                    <span>{localTokenSymbol || 'ETH'}</span>
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -273,7 +312,7 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
                         }}
                         style={copyButtonStyle}
                     >
-                        {copiedAddress === tokenAddress ? 'Copied!' : '�'}
+                        {copiedAddress === tokenAddress ? 'Copied!' : '📋'}
                     </button>
                 </div>
             </td>
@@ -291,7 +330,7 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
                         }}
                         style={copyButtonStyle}
                     >
-                        {copiedAddress === transferId.toString() ? 'Copied!' : '📋'}
+                        {copiedAddress === transferId.toString() ? 'Copied!' : '?'}
                     </button>
                 </div>
             </td>
@@ -307,15 +346,19 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
             </td>
             {/* ClaimTransfer Button */}
             <td style={tableDataStyle}>
-                <ClaimTransferButton
-                    transferId={transferId}
-                    pstContractAddress={pstContractAddress}
-                    chainId={chainId}
-                    password={password}
-                    receiverAddress={receiver}
-                    transferStatus={status}
-                    onClaimSuccess={onClaimActionCompleted}
-                />
+                {userAddress && contractAddress && chainId ? (
+                    <ClaimTransferButton
+                        transferId={transferId}
+                        pstContractAddress={contractAddress}
+                        chainId={chainId}
+                        password={password}
+                        receiverAddress={receiver}
+                        transferStatus={status}
+                        onClaimActionCompleted={onClaimActionCompleted} // Pass the updated callback
+                    />
+                ) : (
+                    <span style={{ color: '#888', fontSize: '12px' }}>Connect wallet for actions</span>
+                )}
             </td>
         </tr>
     );
@@ -327,110 +370,149 @@ interface ClaimTransfersProps {
     // No specific props needed for now, it manages its own state
 }
 
+// Define a type for a claimable transfer item, including its details
+interface ClaimableTransferItem {
+    transferId: bigint;
+    details: [Address, Address, Address, bigint, bigint, bigint, string];
+}
+
 const ClaimTransfers: React.FC<ClaimTransfersProps> = () => {
     const { address: userAddress, chain, isConnected } = useAccount();
+    const config = useConfig(); // Get the wagmi config object
 
-    const pstContractAddress = getPSTContractAddress(chain?.id);
+    const pstContractAddressForChain = getPSTContractAddress(chain?.id);
 
     // State to trigger refetch of the list of transfer IDs
     const [refetchTrigger, setRefetchTrigger] = useState<boolean>(false);
+    // State to hold the currently displayed claimable transfers (for optimistic updates)
+    const [displayedClaimableTransfers, setDisplayedClaimableTransfers] = useState<ClaimableTransferItem[]>([]);
+
+    // New flag to track if initial data load is complete
+    const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+
+
+    // Determine if contract details and chain ID are ready for any read operations
+    const areContractDetailsReady = !!pstContractAddressForChain && !!chain?.id;
 
     // 1. Fetch ALL pending transfer IDs associated with the connected user's address
     const { data: allPendingTransferIds = [], isLoading: isLoadingAllPendingIds, error: allPendingIdsError, refetch: refetchAllPendingIds } = useReadContract({
-        address: pstContractAddress,
+        address: areContractDetailsReady ? pstContractAddressForChain : undefined,
         abi: PST_CONTRACT_ABI,
         functionName: 'getPendingTransfersForAddress',
         args: userAddress ? [userAddress] : undefined,
-        chainId: chain?.id,
+        chainId: areContractDetailsReady ? chain.id : undefined, // Safely access chain.id
         query: {
-            enabled: !!userAddress && !!pstContractAddress && isConnected,
+            enabled: !!userAddress && isConnected && areContractDetailsReady,
             staleTime: 5000, // Refresh every 5 seconds
         }
     }) as { data?: bigint[], isLoading: boolean, error: Error | null, refetch: () => void };
 
-    // 2. Fetch details for each transfer ID fetched in step 1
-    // This creates an array of objects from useReadContract, each with { data, isLoading, error }
-    const transferDetailsQueries = allPendingTransferIds.map((transferId) =>
-        useReadContract({
-            address: pstContractAddress,
-            abi: PST_CONTRACT_ABI,
-            functionName: 'getTransferDetails',
-            args: [transferId],
-            chainId: chain?.id,
-            query: {
-                enabled: !!pstContractAddress && transferId !== undefined,
-                staleTime: 10000,
+    // 2. Fetch details for each transfer ID fetched in step 1 using useQueries
+    const transferDetailsQueries = useQueries({
+        queries: allPendingTransferIds.map((transferId) => ({
+            queryKey: ['claimTransferDetails', transferId.toString(), chain?.id, pstContractAddressForChain], // Unique query key
+            queryFn: async () => {
+                if (!pstContractAddressForChain || transferId === undefined || !chain?.id) {
+                    throw new Error("Missing contract address, transfer ID, or chain ID for getTransferDetails.");
+                }
+                // Use readContract from @wagmi/core directly, passing config as the first argument
+                const result = await readContract(config, { // Pass config here
+                    address: pstContractAddressForChain,
+                    abi: PST_CONTRACT_ABI,
+                    functionName: 'getTransferDetails',
+                    args: [transferId],
+                    chainId: chain?.id,
+                });
+                return result;
             },
-        })
-    );
+            enabled: areContractDetailsReady, // Enable individual queries if contract details are ready
+            staleTime: 10000,
+        })),
+    });
 
-    // 3. Filter transfers to only include those claimable by the current user AND
-    //    are not currently loading their details and have no detail errors.
+    // 3. Filter transfers to only include those claimable by the current user
     const claimableTransfers = allPendingTransferIds
         .map((transferId, index) => {
             const queryResult = transferDetailsQueries[index];
+            if (!queryResult) {
+                return null;
+            }
             const details = queryResult.data as [Address, Address, Address, bigint, bigint, bigint, string] | undefined;
 
             if (queryResult.isLoading || queryResult.error || !details) {
-                return null; // Exclude if still loading, has an error, or details are not available
+                return null;
             }
 
-            const [, receiver, , , , , status] = details; // Destructure to check receiver and status
+            const [, receiver, , , , , status] = details;
             if (userAddress?.toLowerCase() === receiver.toLowerCase() && status === "Pending") {
-                return { transferId, details }; // Return object with ID and full details
+                return { transferId, details };
             }
             return null;
         })
-        .filter(Boolean) as { transferId: bigint; details: [Address, Address, Address, bigint, bigint, bigint, string] }[]; // Filter out nulls and type assert
+        .filter(Boolean) as ClaimableTransferItem[]; // Type assert to the new interface
 
     // Sort the claimable transfers by transferId
     claimableTransfers.sort((a, b) => {
-        // Compare BigInts directly
         if (a.transferId < b.transferId) return -1;
         if (a.transferId > b.transferId) return 1;
         return 0;
     });
 
-    // Determine overall loading and error states for the display messages
-    const isLoadingAnyDetails = transferDetailsQueries.some(query => query.isLoading);
-    const hasAnyErrorInDetails = transferDetailsQueries.some(query => query.error);
+    // Effect to update displayedClaimableTransfers ONLY on initial load or full data refresh
+    useEffect(() => {
+        const anyDetailsLoading = transferDetailsQueries.some(query => query?.isLoading);
+        const anyDetailsError = transferDetailsQueries.some(query => query?.error);
 
-    // Consolidated error message for display
+        if (!initialLoadComplete && !isLoadingAllPendingIds && !anyDetailsLoading && !allPendingIdsError && !anyDetailsError) {
+            setDisplayedClaimableTransfers(claimableTransfers);
+            setInitialLoadComplete(true); // Mark initial load as complete
+        }
+    }, [claimableTransfers, isLoadingAllPendingIds, allPendingIdsError, transferDetailsQueries, initialLoadComplete]);
+
+
+    // Determine overall loading and error states for the display messages
+    const isLoadingAnyDetails = transferDetailsQueries.some(query => query?.isLoading);
+    const hasAnyErrorInDetails = transferDetailsQueries.some(query => query?.error);
+
     let displayErrorMessage: string | null = null;
     if (allPendingIdsError) {
         displayErrorMessage = allPendingIdsError.message;
     } else if (hasAnyErrorInDetails) {
-        // Find the first error message from individual detail fetches, or provide a generic one
-        const firstDetailError = transferDetailsQueries.find(query => query.error)?.error;
-        displayErrorMessage = firstDetailError?.message || "One or more transfer details failed to load.";
+        const firstDetailError = transferDetailsQueries.find(query => query?.error)?.error;
+        displayErrorMessage = (firstDetailError instanceof Error) ? firstDetailError.message : "One or more transfer details failed to load.";
     }
 
-
-    // Callback to trigger a refetch of the pending transfers
-    const handleClaimActionCompleted = useCallback(() => {
-        setRefetchTrigger(prev => !prev); // Toggle to trigger useEffect and refetch
+    // Callback to trigger a refetch of the pending transfers, now accepting the claimed ID
+    const handleClaimActionCompleted = useCallback((claimedTransferId: bigint) => {
+        // Optimistically remove the claimed transfer from the displayed list
+        setDisplayedClaimableTransfers(prev =>
+            prev.filter(item => item.transferId !== claimedTransferId)
+        );
+        // Trigger a full refetch to reconcile after a short delay to allow UI to update
+        setTimeout(() => {
+            setRefetchTrigger(prev => !prev);
+        }, 100); // Small delay
     }, []);
 
     // Effect to trigger refetch when refetchTrigger changes
     useEffect(() => {
         if (refetchTrigger) {
             refetchAllPendingIds();
-            // Note: Individual transferDetailsQueries will also refetch due to their staleTime and 'enabled' condition
-            setRefetchTrigger(false); // Reset trigger
+            setRefetchTrigger(false);
         }
     }, [refetchTrigger, refetchAllPendingIds]);
 
 
     return (
-        <div style={claimableTransfersContainerStyle}>
-            <h2 style={claimableTransfersTitleStyle}>Transfers Waiting For You To Claim</h2>
+        <div style={claimTransfersContainerStyle}>
+            <h2 style={claimTransfersTitleStyle}>Transfers Waiting For You To Claim</h2>
             {!isConnected || !userAddress ? (
                 <p style={disconnectedNetworkStyle}>Connect your wallet to see transfers waiting to be claimed.</p>
-            ) : isLoadingAllPendingIds || isLoadingAnyDetails ? ( // Check for all loading states
+            ) : isLoadingAllPendingIds || isLoadingAnyDetails ? (
                 <p style={{ textAlign: 'center', color: '#ccc' }}>Loading claimable transfers...</p>
-            ) : displayErrorMessage ? ( // Show consolidated error message
+            ) : displayErrorMessage ? (
                 <p style={{ textAlign: 'center', color: 'red' }}>Error loading transfers: {displayErrorMessage}</p>
-            ) : claimableTransfers.length === 0 ? ( // Show "No transfers" message if filtered list is empty
+            ) : displayedClaimableTransfers.length === 0 ? ( // Use displayedClaimableTransfers here
                 <p style={{ textAlign: 'center', color: '#ccc' }}>No transfers to claim.</p>
             ) : (
                 <div style={tableContainerStyle}>
@@ -451,16 +533,16 @@ const ClaimTransfers: React.FC<ClaimTransfersProps> = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {claimableTransfers.map((item, index) => (
+                            {displayedClaimableTransfers.map((item, index) => ( // Use displayedClaimableTransfers here
                                 <ClaimTransferRow
                                     key={item.transferId.toString()}
                                     index={index}
                                     transferId={item.transferId}
-                                    pstContractAddress={pstContractAddress as Address}
+                                    contractAddress={pstContractAddressForChain as Address}
                                     chainId={chain?.id as number}
                                     userAddress={userAddress}
                                     onClaimActionCompleted={handleClaimActionCompleted}
-                                    initialTransferDetails={item.details} // Pass pre-fetched details
+                                    initialTransferDetails={item.details}
                                 />
                             ))}
                         </tbody>

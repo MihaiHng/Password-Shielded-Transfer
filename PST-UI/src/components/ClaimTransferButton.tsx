@@ -37,7 +37,6 @@ const disabledButtonStyle: CSSProperties = {
 };
 
 // Define a custom error interface to safely access 'cause'
-// Removed 'message?: string;' as it conflicts with Error interface's 'message: string'
 interface CustomError extends Error {
     cause?: unknown;
     shortMessage?: string;
@@ -52,7 +51,7 @@ interface ClaimTransferButtonProps {
     password: string; // Password from the input field
     receiverAddress: Address; // The receiver address of this specific transfer
     transferStatus: string; // Current status of the transfer
-    onClaimSuccess: () => void; // Callback to trigger parent refetch
+    onClaimActionCompleted: (claimedTransferId: bigint) => void; // Corrected signature here
 }
 
 const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
@@ -62,7 +61,7 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
     password,
     receiverAddress,
     transferStatus,
-    onClaimSuccess,
+    onClaimActionCompleted, // Destructure the new prop
 }) => {
     const { address: userAddress, isConnected } = useAccount();
 
@@ -99,9 +98,9 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
     // Trigger refetch on success
     useEffect(() => {
         if (isConfirmed) {
-            onClaimSuccess();
+            onClaimActionCompleted(transferId); // Pass the transferId here
         }
-    }, [isConfirmed, onClaimSuccess]);
+    }, [isConfirmed, onClaimActionCompleted, transferId]);
 
     // Function to get a user-friendly error message
     const getUserFriendlyErrorMessage = (error: Error | null): string => {

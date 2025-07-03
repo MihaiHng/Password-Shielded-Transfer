@@ -10,7 +10,7 @@ import {
 } from 'wagmi';
 import { parseUnits, isAddress, formatUnits } from 'viem';
 import type { Abi, Address } from 'viem';
-import type { SimulateContractReturnType } from 'wagmi/actions';
+//import type { SimulateContractReturnType } from 'wagmi/actions';
 
 // Import your ABIs
 import abiPstWrapper from '../lib/abis/abi_pst.json';
@@ -526,7 +526,10 @@ const CreateTransfer: React.FC = () => {
 
     useEffect(() => {
         if (isConfirmed) {
-            setPassword('');
+            // Reset amount and recipient address fields to empty string
+            setAmount(''); // Changed from '0.0' to ''
+            setRecipientAddress('');
+            setPassword(''); // Password field already clears
             setRefetchPendingTransfers(prev => !prev); // Toggle to trigger refetch in child
         }
     }, [isConfirmed]);

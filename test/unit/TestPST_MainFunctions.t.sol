@@ -1026,6 +1026,20 @@ contract TestPST_MainFunctions is Test {
     /*//////////////////////////////////////////////////////////////
                         CLAIM TRANSFER TESTS
     //////////////////////////////////////////////////////////////*/
+    function testClaimTransferRevertsIfTransferExpired()
+        public
+        transferCreated
+    {
+        // Arrange
+        vm.warp(block.timestamp + pst.s_availabilityPeriod() + 1);
+        vm.roll(block.number + 1);
+
+        // Act / Assert
+        vm.expectRevert(PST_Store.PST__TransferExpired.selector);
+        vm.prank(SENDER);
+        pst.claimTransfer(transferId, PASSWORD);
+    }
+
     function testClaimTransferRevertsIfClaimCooldownNotElapsed()
         public
         transferCreated

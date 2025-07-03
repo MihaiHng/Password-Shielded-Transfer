@@ -42,11 +42,14 @@ contract PST_Store {
     error PST__InvalidNewOwnerAddress();
     error PST__LimitLevelTwoMustBeGreaterThanLimitLevelOne();
     error PST__TransferIdNotFound();
+    error PST__OnlyForwarderCanCallPerformUpkeep();
+    error PST__TransferExpired();
 
     /*//////////////////////////////////////////////////////////////
                           STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    address internal immutable i_automationRegistry;
+    // address internal immutable i_automationRegistry;
+    address public s_forwarderAddress;
 
     uint256 internal constant REQ_MIN_PASSWORD_LENGTH = 7;
     uint256 internal constant MIN_CLAIM_COOLDOWN_PERIOD = 15 minutes;
@@ -57,8 +60,8 @@ contract PST_Store {
     uint256 internal constant MIN_AMOUNT_TO_SEND = 1e14; // 1 ether / 1e4 => 0.0001 ether
 
     uint256 public s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
-    uint256 public s_claimCooldownPeriod = 15 minutes; // 30 minutes;
-    uint256 public s_availabilityPeriod = 30 minutes; // 7 days;
+    uint256 public s_claimCooldownPeriod = 3 minutes; // 30 minutes;
+    uint256 public s_availabilityPeriod = 5 minutes; // 7 days;
     uint256 public s_cleanupInterval = 12 weeks;
     uint256 public s_inactivityThreshold = 12 weeks;
     uint256 public s_batchLimit = 50;

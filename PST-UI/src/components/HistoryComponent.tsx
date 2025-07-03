@@ -1,13 +1,20 @@
-// src/components/History.tsx
+// src/components/HistoryTransfers.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAccount, useReadContract } from 'wagmi';
-import { formatUnits, Address } from 'viem';
+import { useAccount, useReadContract, useConfig } from 'wagmi';
+import { useQueries } from '@tanstack/react-query';
+import { Address, formatUnits } from 'viem';
 import type { Abi } from 'viem';
+
+// Import wagmi's readContract action for use inside queryFn
+import { readContract } from '@wagmi/core';
 
 // Import ABIs
 import abiPstWrapper from '../lib/abis/abi_pst.json';
 import erc20AbiJson from '../lib/abis/abi_erc20.json';
+
+// Import pre-approved tokens list (needed for token decimals lookup)
+import { ALL_NETWORK_TOKENS } from '../lib/constants/tokenList';
 
 // Import React's CSSProperties type
 import type { CSSProperties } from 'react';
@@ -28,12 +35,12 @@ const getPSTContractAddress = (chainId: number | undefined): Address | undefined
     }
 };
 
-// --- STYLES FOR HISTORY SECTION ---
-const historyContainerStyle: CSSProperties = {
+// --- STYLES FOR HISTORY TRANSFERS SECTION (reusing from previous components for consistency) ---
+const historyTransfersContainerStyle: CSSProperties = {
     background: '#1b1b1b',
     borderRadius: '20px',
     padding: '24px',
-    maxWidth: '1100px', // Adjusted width for history table (no password/action column)
+    maxWidth: '1000px',
     margin: '40px auto',
     boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
     backdropFilter: 'blur(4px)',
@@ -42,7 +49,7 @@ const historyContainerStyle: CSSProperties = {
     fontFamily: 'Inter, sans-serif',
 };
 
-const historyTitleStyle: CSSProperties = {
+const historyTransfersTitleStyle: CSSProperties = {
     fontSize: '24px',
     fontWeight: 'bold',
     marginBottom: '20px',
@@ -53,6 +60,7 @@ const historyTitleStyle: CSSProperties = {
 const tableContainerStyle: CSSProperties = {
     border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '12px',
+    overflowX: 'auto', // Ensure table is scrollable on small screens
 };
 
 const tableStyle: CSSProperties = {
@@ -120,6 +128,7 @@ const disconnectedNetworkStyle: CSSProperties = {
     marginBottom: '20px',
 };
 
+
 // --- UTILITY FUNCTIONS ---
 const truncateAddress = (address: string): string => {
     if (!address || address.length < 10) return address;
@@ -145,77 +154,181 @@ const formatTimestamp = (timestamp: bigint | undefined): string => {
     return date.toLocaleString(); // Formats to local date and time string
 };
 
-// --- HISTORY TABLE ROW COMPONENT ---
-interface HistoryRowProps {
+// Define a type for the token objects expected in ALL_NETWORK_TOKENS
+interface TokenInfo {
+    address: Address;
+    symbol: string;
+    decimals: number;
+    name: string;
+    logoURI?: string;
+    isNative?: boolean;
+}
+
+// --- HISTORY TRANSFER ROW COMPONENT ---
+interface HistoryTransferRowProps {
     index: number;
     transferId: bigint;
     pstContractAddress: Address;
     chainId: number;
-    initialTransferDetails: [Address, Address, Address, bigint, bigint, bigint, string]; // Pre-fetched details
+    userAddress: Address | undefined; // The connected user's address for filtering
+    initialTransferDetails: [Address, Address, Address, bigint, bigint, bigint, string] | undefined; // Can be undefined if loading/error
+    isLoadingRow: boolean; // Indicates if this specific row's details are loading
+    errorRow: Error | null; // Indicates if this specific row's details had an error
 }
 
-const HistoryRow: React.FC<HistoryRowProps> = ({
+const HistoryTransferRow: React.FC<HistoryTransferRowProps> = ({
     index,
     transferId,
     pstContractAddress,
     chainId,
-    initialTransferDetails,
+    userAddress,
+    initialTransferDetails, // Directly use initial details
+    isLoadingRow,
+    errorRow,
 }) => {
     const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
 
+    // Handle initial loading/error states for the row itself
+    if (isLoadingRow) {
+        return (
+            <tr style={tableRowStyle}>
+                <td style={tableDataStyle}>{index + 1}</td>
+                <td style={tableDataStyle} colSpan={9}>Loading transfer details...</td>
+            </tr>
+        );
+    }
+
+    if (errorRow || !initialTransferDetails) {
+        console.error(`HistoryRow ${index}: Error or missing details for transferId: ${transferId}`, errorRow);
+        return (
+            <tr style={tableRowStyle}>
+                <td style={tableDataStyle}>{index + 1}</td>
+                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={9}>Error loading transfer details.</td>
+            </tr>
+        );
+    }
+
+    // Destructure only if initialTransferDetails is not null
     const [
         sender,
         receiver,
         tokenAddress,
-        amount,
+        amountFromDetails, // This is the 'amount' field from getTransferDetails
         creationTime,
         expiringTime,
         status,
     ] = initialTransferDetails;
 
-    // Fetch token symbol and decimals if it's an ERC20 token
+    // Fetch the originalAmount from s_originalAmounts mapping
+    const { data: originalAmount = 0n, isLoading: isLoadingOriginalAmount, error: originalAmountError } = useReadContract({
+        address: pstContractAddress,
+        abi: PST_CONTRACT_ABI,
+        functionName: 's_originalAmounts', // Function name for the public mapping
+        args: [transferId],
+        chainId: chainId,
+        query: {
+            enabled: !!pstContractAddress && transferId !== undefined,
+            staleTime: Infinity, // Original amount won't change
+        }
+    }) as { data?: bigint, isLoading: boolean, error?: Error };
+
+    console.log(`HistoryRow ${index}: Raw amount from getTransferDetails: ${amountFromDetails.toString()} (BigInt)`);
+    console.log(`HistoryRow ${index}: Fetched originalAmount: ${originalAmount.toString()} (BigInt), Loading: ${isLoadingOriginalAmount}, Error:`, originalAmountError);
+
+
+    // Determine if it's an ERC20 token (not native ETH)
     const isERC20Token = tokenAddress !== '0x0000000000000000000000000000000000000000'; // Assuming 0x0 is native ETH
-    const { data: tokenSymbol, isLoading: isTokenSymbolLoading, error: tokenSymbolError } = useReadContract({
-        address: isERC20Token ? tokenAddress : undefined,
+
+    // --- Determine Token Decimals and Symbol ---
+    let localTokenSymbol: string | undefined;
+    let localTokenDecimals: number | undefined;
+    let isLoadingTokenData = false;
+    let tokenDataError: Error | undefined;
+
+    // 1. Try to get from ALL_NETWORK_TOKENS first for ERC20s
+    if (isERC20Token && chainId) {
+        const networkConfig = ALL_NETWORK_TOKENS.find(net => net.chainId === chainId);
+        if (networkConfig && Array.isArray(networkConfig.tokens)) {
+            const foundToken = (networkConfig.tokens as TokenInfo[]).find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
+            if (foundToken) {
+                localTokenSymbol = foundToken.symbol;
+                localTokenDecimals = foundToken.decimals;
+            }
+        }
+    } else if (!isERC20Token) { // It's native ETH
+        localTokenSymbol = 'ETH';
+        localTokenDecimals = 18;
+    }
+
+    // 2. If ERC20 and not found in ALL_NETWORK_TOKENS, use useReadContract as fallback
+    const { data: fetchedSymbol, isLoading: isSymbolLoading, error: symbolError } = useReadContract({
+        address: isERC20Token && localTokenSymbol === undefined ? tokenAddress : undefined,
         abi: ERC20_CONTRACT_ABI,
         functionName: 'symbol',
         chainId: chainId,
         query: {
-            enabled: isERC20Token,
+            enabled: isERC20Token && localTokenSymbol === undefined && !!tokenAddress,
             staleTime: Infinity,
         }
     }) as { data?: string, isLoading: boolean, error?: Error };
 
-    const { data: tokenDecimals, isLoading: isTokenDecimalsLoading, error: tokenDecimalsError } = useReadContract({
-        address: isERC20Token ? tokenAddress : undefined,
+    const { data: fetchedDecimals, isLoading: isDecimalsLoading, error: decimalsError } = useReadContract({
+        address: isERC20Token && localTokenDecimals === undefined ? tokenAddress : undefined,
         abi: ERC20_CONTRACT_ABI,
         functionName: 'decimals',
         chainId: chainId,
         query: {
-            enabled: isERC20Token,
+            enabled: isERC20Token && localTokenDecimals === undefined && !!tokenAddress,
             staleTime: Infinity,
         }
     }) as { data?: number, isLoading: boolean, error?: Error };
 
-    const displayAmount = (amount && tokenDecimals !== undefined) ? formatUnits(amount, tokenDecimals) : (isERC20Token ? '...' : formatUnits(amount, 18)); // Default to 18 for native if decimals not fetched
+    // Update local variables if fetched data is available
+    if (fetchedSymbol !== undefined) localTokenSymbol = fetchedSymbol;
+    if (fetchedDecimals !== undefined) localTokenDecimals = fetchedDecimals;
 
-    if (isTokenSymbolLoading || isTokenDecimalsLoading) {
+    isLoadingTokenData = isSymbolLoading || isDecimalsLoading;
+    tokenDataError = symbolError || decimalsError;
+
+    // --- Display Amount Calculation ---
+    // Use originalAmount for display if available and not loading/erroring, otherwise fallback
+    const amountToDisplay = originalAmount; // Use the fetched originalAmount
+
+    const displayAmount = (localTokenDecimals !== undefined && !isLoadingOriginalAmount && !originalAmountError)
+        ? formatUnits(amountToDisplay, localTokenDecimals)
+        : (isLoadingTokenData || isLoadingOriginalAmount ? 'Loading...' : 'N/A');
+
+    // Determine if the current user is the sender or receiver for this transfer
+    const isRelatedToCurrentUser =
+        userAddress?.toLowerCase() === sender.toLowerCase() ||
+        userAddress?.toLowerCase() === receiver.toLowerCase();
+
+    if (!isRelatedToCurrentUser) {
+        return null;
+    }
+
+    // Now, handle loading/error states for token details, only if the row is actually going to render.
+    if (isLoadingTokenData || isLoadingOriginalAmount) {
         return (
             <tr style={tableRowStyle}>
                 <td style={tableDataStyle}>{index + 1}</td>
-                <td style={tableDataStyle} colSpan={8}>Loading token details...</td>
+                <td style={tableDataStyle} colSpan={9}>Loading token details...</td>
             </tr>
         );
     }
 
-    if (tokenSymbolError || tokenDecimalsError) {
-        console.error("Error fetching token details for", tokenAddress, tokenSymbolError || tokenDecimalsError);
+    if (tokenDataError || originalAmountError) {
+        console.error(`HistoryRow ${index}: Error fetching token or original amount details for ${tokenAddress}:`, tokenDataError || originalAmountError);
         return (
             <tr style={tableRowStyle}>
-                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={8}>Error fetching token data.</td>
+                <td style={tableDataStyle}>{index + 1}</td>
+                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={9}>Error fetching token data.</td>
             </tr>
         );
     }
+
+    console.log(`HistoryRow ${index}: Final - Token: ${localTokenSymbol}, Decimals: ${localTokenDecimals}, Formatted Original Amount: ${displayAmount}`);
+
 
     return (
         <tr style={tableRowStyle}>
@@ -224,7 +337,7 @@ const HistoryRow: React.FC<HistoryRowProps> = ({
             <td style={tableDataStyle}>{truncateAddress(receiver)}</td>
             <td style={tableDataStyle}>
                 <div style={tokenDisplayContainerStyle}>
-                    <span>{tokenSymbol || 'ETH'}</span>
+                    <span>{localTokenSymbol || 'N/A'}</span>
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -254,121 +367,137 @@ const HistoryRow: React.FC<HistoryRowProps> = ({
                     </button>
                 </div>
             </td>
-            {/* No Action or Password column in History */}
         </tr>
     );
 };
 
-// --- HISTORY MAIN COMPONENT ---
-const History: React.FC = () => {
+interface HistoryTransfersProps {
+}
+
+const HistoryTransfers: React.FC<HistoryTransfersProps> = (): React.ReactElement | null => {
     const { address: userAddress, chain, isConnected } = useAccount();
+    const config = useConfig();
+
     const pstContractAddress = getPSTContractAddress(chain?.id);
 
-    // Fetch IDs for Canceled transfers
-    const { data: canceledIds = [], isLoading: isLoadingCanceled, error: canceledError } = useReadContract({
+    const [refetchTrigger, setRefetchTrigger] = useState<boolean>(false);
+
+    const {
+        data: allTransfersData,
+        isLoading: isLoadingAllTransfers,
+        error: allTransfersError,
+        refetch: refetchAllTransfers
+    } = useReadContract({
         address: pstContractAddress,
         abi: PST_CONTRACT_ABI,
-        functionName: 'getCanceledTransfersForAddress',
+        functionName: 'getAllTransfersByAddress',
         args: userAddress ? [userAddress] : undefined,
         chainId: chain?.id,
-        query: { enabled: !!userAddress && !!pstContractAddress && isConnected, staleTime: 10000 },
-    }) as { data?: bigint[], isLoading: boolean, error: Error | null };
+        query: {
+            enabled: !!userAddress && !!pstContractAddress && isConnected,
+            staleTime: 5000,
+        }
+    }) as { data?: [bigint[], bigint[], bigint[], bigint[]], isLoading: boolean, error: Error | null, refetch: () => void };
 
-    // Fetch IDs for Expired and Refunded transfers
-    const { data: expiredIds = [], isLoading: isLoadingExpired, error: expiredError } = useReadContract({
-        address: pstContractAddress,
-        abi: PST_CONTRACT_ABI,
-        functionName: 'getExpiredAndRefundedTransfersForAddress',
-        args: userAddress ? [userAddress] : undefined,
-        chainId: chain?.id,
-        query: { enabled: !!userAddress && !!pstContractAddress && isConnected, staleTime: 10000 },
-    }) as { data?: bigint[], isLoading: boolean, error: Error | null };
-
-    // Fetch IDs for Claimed transfers
-    const { data: claimedIds = [], isLoading: isLoadingClaimed, error: claimedError } = useReadContract({
-        address: pstContractAddress,
-        abi: PST_CONTRACT_ABI,
-        functionName: 'getClaimedTransfersForAddress',
-        args: userAddress ? [userAddress] : undefined,
-        chainId: chain?.id,
-        query: { enabled: !!userAddress && !!pstContractAddress && isConnected, staleTime: 10000 },
-    }) as { data?: bigint[], isLoading: boolean, error: Error | null };
-
-    // Combine all unique transfer IDs
-    const allProcessedTransferIds = Array.from(new Set([
-        ...canceledIds,
-        ...expiredIds,
-        ...claimedIds,
+    const allUniqueTransferIds = Array.from(new Set([
+        ...(allTransfersData?.[0] || []),
+        ...(allTransfersData?.[1] || []),
+        ...(allTransfersData?.[2] || []),
+        ...(allTransfersData?.[3] || []),
     ]));
 
-    // Fetch details for each of the combined transfer IDs
-    const transferDetailsQueries = allProcessedTransferIds.map((transferId) =>
-        useReadContract({
-            address: pstContractAddress,
-            abi: PST_CONTRACT_ABI,
-            functionName: 'getTransferDetails',
-            args: [transferId],
-            chainId: chain?.id,
-            query: {
-                enabled: !!pstContractAddress && transferId !== undefined,
-                staleTime: 10000,
+    const transferDetailsQueries = useQueries({
+        queries: allUniqueTransferIds.map((transferId) => ({
+            queryKey: ['transferDetails', transferId.toString(), chain?.id, pstContractAddress],
+            queryFn: async () => {
+                if (!pstContractAddress || transferId === undefined || !chain?.id) {
+                    throw new Error("Missing contract address, transfer ID, or chain ID for getTransferDetails.");
+                }
+                const result = await readContract(config, {
+                    address: pstContractAddress,
+                    abi: PST_CONTRACT_ABI,
+                    functionName: 'getTransferDetails',
+                    args: [transferId],
+                    chainId: chain?.id,
+                });
+                return result;
             },
-        })
-    );
+            enabled: !!pstContractAddress && transferId !== undefined && !!chain?.id,
+            staleTime: 10000,
+        })),
+    });
 
-    // Filter and prepare the final list of historical transfers
-    const historicalTransfers = allProcessedTransferIds
+    const historyTransfers = allUniqueTransferIds
         .map((transferId, index) => {
             const queryResult = transferDetailsQueries[index];
-            const details = queryResult.data as [Address, Address, Address, bigint, bigint, bigint, string] | undefined;
+            const details = queryResult?.data as [Address, Address, Address, bigint, bigint, bigint, string] | undefined;
 
-            if (queryResult.isLoading || queryResult.error || !details) {
-                return null; // Exclude if still loading, has an error, or details are not available
+            if (queryResult?.isLoading || queryResult?.error || !details) {
+                return {
+                    transferId,
+                    details: undefined,
+                    isLoading: queryResult?.isLoading || false,
+                    error: queryResult?.error || null
+                };
             }
 
-            const [sender, receiver, , , , , status] = details;
-            // A transfer is considered "historical" if it's Canceled, Expired, or Claimed
-            // AND the current user was either the sender or the receiver
-            const isUserInvolved = userAddress?.toLowerCase() === sender.toLowerCase() || userAddress?.toLowerCase() === receiver.toLowerCase();
-            const isProcessedStatus = status === "Canceled" || status === "ExpiredAndRefunded" || status === "Claimed";
+            const [, receiver, , , , , status] = details;
 
-            if (isUserInvolved && isProcessedStatus) {
-                return { transferId, details };
+            const isRelatedToCurrentUser = userAddress?.toLowerCase() === details[0].toLowerCase() || userAddress?.toLowerCase() === details[1].toLowerCase();
+
+            if (status === "Pending" || !isRelatedToCurrentUser) {
+                return null;
             }
-            return null;
+
+            return { transferId, details, isLoading: false, error: null };
         })
-        .filter(Boolean) as { transferId: bigint; details: [Address, Address, Address, bigint, bigint, bigint, string] }[];
+        .filter(Boolean) as { transferId: bigint; details: [Address, Address, Address, bigint, bigint, bigint, string] | undefined; isLoading: boolean; error: Error | null }[];
 
-    // Sort the historical transfers by transferId
-    historicalTransfers.sort((a, b) => {
-        if (a.transferId < b.transferId) return -1;
-        if (a.transferId > b.transferId) return 1;
+    historyTransfers.sort((a, b) => {
+        if (a.details && b.details) {
+            const creationTimeA = a.details[4];
+            const creationTimeB = b.details[4];
+            if (creationTimeA < creationTimeB) return -1;
+            if (creationTimeA > creationTimeB) return 1;
+            return 0;
+        }
         return 0;
     });
 
-    // Determine overall loading and error states for display messages
-    const isLoadingAny = isLoadingCanceled || isLoadingExpired || isLoadingClaimed || transferDetailsQueries.some(q => q.isLoading);
-    const hasAnyError = canceledError || expiredError || claimedError || transferDetailsQueries.some(q => q.error);
+    const isLoadingAnyDetails = transferDetailsQueries.some(query => query.isLoading);
+    const hasAnyErrorInDetails = transferDetailsQueries.some(query => query.error);
 
     let displayErrorMessage: string | null = null;
-    if (canceledError || expiredError || claimedError) {
-        displayErrorMessage = (canceledError || expiredError || claimedError)?.message || "Error loading transfer history.";
-    } else if (hasAnyError) {
+    if (allTransfersError) {
+        displayErrorMessage = allTransfersError.message;
+    } else if (hasAnyErrorInDetails) {
         const firstDetailError = transferDetailsQueries.find(query => query.error)?.error;
-        displayErrorMessage = (firstDetailError instanceof Error) ? firstDetailError.message : "One or more transfer details failed to load.";
+        displayErrorMessage = firstDetailError?.message || "One or more transfer details failed to load.";
     }
 
+    const handleHistoryRefetch = useCallback(() => {
+        setRefetchTrigger(prev => !prev);
+    }, []);
+
+    useEffect(() => {
+        if (refetchTrigger) {
+            refetchAllTransfers();
+            setRefetchTrigger(false);
+        }
+    }, [refetchTrigger, refetchAllTransfers]);
+
+
     return (
-        <div style={historyContainerStyle}>
-            <h2 style={historyTitleStyle}>Your Transfer History</h2>
+        <div style={historyTransfersContainerStyle}>
+            <h2 style={historyTransfersTitleStyle}>Your Transfer History</h2>
             {!isConnected || !userAddress ? (
                 <p style={disconnectedNetworkStyle}>Connect your wallet to see your transfer history.</p>
-            ) : isLoadingAny ? (
+            ) : isLoadingAllTransfers || isLoadingAnyDetails ? (
                 <p style={{ textAlign: 'center', color: '#ccc' }}>Loading transfer history...</p>
             ) : displayErrorMessage ? (
                 <p style={{ textAlign: 'center', color: 'red' }}>Error loading history: {displayErrorMessage}</p>
-            ) : historicalTransfers.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#ccc' }}>No processed transfers found for your address.</p>
+            ) : historyTransfers.length === 0 ? (
+                <p style={{ textAlign: 'center', color: '#ccc' }}>No transfer history found for your address.</p>
             ) : (
                 <div style={tableContainerStyle}>
                     <table style={tableStyle}>
@@ -386,14 +515,17 @@ const History: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {historicalTransfers.map((item, index) => (
-                                <HistoryRow
+                            {historyTransfers.map((item, index) => (
+                                <HistoryTransferRow
                                     key={item.transferId.toString()}
                                     index={index}
                                     transferId={item.transferId}
                                     pstContractAddress={pstContractAddress as Address}
                                     chainId={chain?.id as number}
+                                    userAddress={userAddress}
                                     initialTransferDetails={item.details}
+                                    isLoadingRow={item.isLoading}
+                                    errorRow={item.error}
                                 />
                             ))}
                         </tbody>
@@ -404,4 +536,4 @@ const History: React.FC = () => {
     );
 };
 
-export default History;
+export default HistoryTransfers;
