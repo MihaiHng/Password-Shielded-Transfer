@@ -124,7 +124,7 @@ contract TestPST_MainFunctions is Test {
             PASSWORD
         );
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -691,7 +691,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -1014,7 +1014,7 @@ contract TestPST_MainFunctions is Test {
         transferCreated
     {
         // Arrange
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act / Assert
@@ -1040,12 +1040,12 @@ contract TestPST_MainFunctions is Test {
         pst.claimTransfer(transferId, PASSWORD);
     }
 
-    function testClaimTransferRevertsIfClaimCooldownNotElapsed()
+    function testClaimTransferRevertsIfCancelCooldownNotElapsed()
         public
         transferCreated
     {
         // Arrange / Act / Assert
-        vm.expectRevert(PST_Store.PST__CooldownPeriodNotElapsed.selector);
+        vm.expectRevert(PST_Store.PST__CannotClaimInCancelCooldown.selector);
         vm.prank(SENDER);
         pst.claimTransfer(transferId, PASSWORD);
     }
@@ -1055,12 +1055,12 @@ contract TestPST_MainFunctions is Test {
         transferCreatedAndCanceled
     {
         // Arrange
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act / Assert
         vm.expectRevert(PST_Store.PST__TransferNotPending.selector);
-        vm.prank(SENDER);
+        vm.prank(RECEIVER);
         pst.claimTransfer(transferId, PASSWORD);
     }
 
@@ -1069,7 +1069,7 @@ contract TestPST_MainFunctions is Test {
         transferCreated
     {
         // Arrange
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act / Assert
@@ -1083,7 +1083,7 @@ contract TestPST_MainFunctions is Test {
         transferCreated
     {
         // Arrange
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act / Assert
@@ -1100,7 +1100,7 @@ contract TestPST_MainFunctions is Test {
         uint256 MIN_PASSWORD_LENGTH = pst.s_minPasswordLength();
         string memory SHORT_PASSWORD = "NoGood";
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act // Assert
@@ -1121,7 +1121,7 @@ contract TestPST_MainFunctions is Test {
         // Arrange
         string memory INCORRECT_PASSWORD = "IncorrectPassword";
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act // Assert
@@ -1178,7 +1178,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -1224,7 +1224,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -1280,7 +1280,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -1327,7 +1327,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -1380,7 +1380,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -1398,7 +1398,7 @@ contract TestPST_MainFunctions is Test {
     {
         // Arrange / Act
         transferId = pst.s_transferCounter() - 1;
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.expectEmit(true, true, false, false);
@@ -1429,7 +1429,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act
@@ -1459,7 +1459,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act & Assert
@@ -1476,7 +1476,7 @@ contract TestPST_MainFunctions is Test {
         uint256 receiverBalanceBefore = mockERC20Token.balanceOf(RECEIVER);
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act
@@ -1517,7 +1517,7 @@ contract TestPST_MainFunctions is Test {
         );
         transferId = pst.s_transferCounter() - 1;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Assert

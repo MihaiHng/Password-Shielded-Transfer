@@ -254,7 +254,7 @@ contract TestFuzzPST is Test {
         );
         vm.stopPrank();
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Assert
@@ -351,7 +351,7 @@ contract TestFuzzPST is Test {
             "Receiver should not have funds before claiming"
         );
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(_receiver);

@@ -25,7 +25,8 @@ contract PST_Store {
     error PST__InvalidTransferId();
     error PST__TransferNotPending();
     error PST__InvalidReceiver();
-    error PST__CooldownPeriodNotElapsed();
+    error PST__CannotClaimInCancelCooldown();
+    error PST__CannotClaimYet();
     error PST__CooldownPeriodElapsed();
     error PST__InvalidClaimCooldownPeriod(uint256 minRequired);
     error PST__InvalidAvailabilityPeriod(uint256 minRequired);
@@ -48,7 +49,6 @@ contract PST_Store {
     /*//////////////////////////////////////////////////////////////
                           STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
-    // address internal immutable i_automationRegistry;
     address public s_forwarderAddress;
 
     uint256 internal constant REQ_MIN_PASSWORD_LENGTH = 7;
@@ -60,7 +60,8 @@ contract PST_Store {
     uint256 internal constant MIN_AMOUNT_TO_SEND = 1e14; // 1 ether / 1e4 => 0.0001 ether
 
     uint256 public s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
-    uint256 public s_claimCooldownPeriod = 3 minutes; // 30 minutes;
+    uint256 public s_cancelCooldownPeriod = 3 minutes; // 30 minutes;
+    uint256 public s_claimAttemptTimeLimit = 1 minutes; // 10 minutes
     uint256 public s_availabilityPeriod = 5 minutes; // 7 days;
     uint256 public s_cleanupInterval = 12 weeks;
     uint256 public s_inactivityThreshold = 12 weeks;
@@ -127,7 +128,7 @@ contract PST_Store {
     mapping(uint256 transferId => Transfer transfer) public s_transfersById;
     // Mapping of transfer Id to last failed claim attempt time
     mapping(uint256 transfrId => uint256 lastFailedClaimAttemptTime)
-        public s_lastFailedClaimAttempt;
+        public s_lastClaimAttempt;
     // Mapping to track active addresses
     mapping(address user => bool) public s_trackedAddresses;
     // Mapping to track an address to its last cleanup time

@@ -37,7 +37,7 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
     address public SENDER = makeAddr("sender");
     address public ANOTHER_SENDER = makeAddr("another sender");
     address public RECEIVER = makeAddr("receiver");
-    address public KEEPER = 0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad;
+    address public FORWARDER;
     uint256 public constant SENDER_BALANCE = 100 ether;
     uint256 public constant RECEIVER_BALANCE = 100 ether;
 
@@ -53,7 +53,10 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         vm.startPrank(pst.owner());
         pst.addTokenToAllowList(address(mockERC20Token));
         pst.addTokenToAllowList(address(0));
+        pst.setForwarderAddress(makeAddr("forwarder"));
         vm.stopPrank();
+
+        FORWARDER = pst.s_forwarderAddress();
 
         vm.deal(SENDER, SENDER_BALANCE);
         mockERC20Token.transfer(SENDER, 100 ether);
@@ -116,7 +119,7 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         );
 
         transferId = pst.s_transferCounter() - 1;
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -172,7 +175,7 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         // Assert upkeep is needed
         assertTrue(upkeepNeeded, "Upkeep should be needed");
 
-        vm.prank(KEEPER);
+        vm.prank(FORWARDER);
         pst.performUpkeep(performData);
 
         // Assert
@@ -217,7 +220,7 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         );
 
         transferId = pst.s_transferCounter() - 1;
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -227,7 +230,7 @@ contract TestPST_IntegrationChainlinkAutomation is Test {
         vm.roll(block.number + 1);
 
         // Act
-        vm.prank(KEEPER);
+        vm.prank(FORWARDER);
         pst.performMaintenance();
 
         // Assert

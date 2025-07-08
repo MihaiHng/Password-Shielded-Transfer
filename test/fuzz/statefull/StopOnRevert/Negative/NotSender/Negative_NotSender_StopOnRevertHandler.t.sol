@@ -130,7 +130,7 @@ contract Negative_NotSender_StopOnRevertHandler is Test {
 
         if (pendingTransfers.length == 0) return;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
 
         index = bound(index, 0, pendingTransfers.length - 1);
         uint256 transferId = pendingTransfers[index];

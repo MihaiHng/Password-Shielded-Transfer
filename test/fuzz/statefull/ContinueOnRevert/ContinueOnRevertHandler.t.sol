@@ -91,7 +91,7 @@ contract ContinueOnRevertHandler is Test {
             if (sender != address(this) || !pst.s_isPending(transferId)) return;
         }
 
-        if (block.timestamp < creationTime + pst.s_claimCooldownPeriod()) {
+        if (block.timestamp < creationTime + pst.s_cancelCooldownPeriod()) {
             pst.cancelTransfer(transferId);
 
             removeFromPendingTransfers(transferId);
@@ -100,14 +100,12 @@ contract ContinueOnRevertHandler is Test {
         }
     }
 
-    function claimTransfer(
-        uint256 index /*, bool useValidPassword, string memory invalidPassword*/
-    ) public {
+    function claimTransfer(uint256 index) public {
         console.log("Handler: claimTransfer called");
 
         if (pendingTransfers.length == 0) return;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
 
         index = bound(index, 0, pendingTransfers.length - 1);
         uint256 transferId = pendingTransfers[index];
@@ -133,7 +131,20 @@ contract ContinueOnRevertHandler is Test {
         console.log("Password: ", password);
 
         vm.startPrank(receiver);
-        pst.claimTransfer(transferId, password);
+        try pst.claimTransfer(transferId, password) {
+            // Only remove from pendingTransfers if the claim was successful
+            removeFromPendingTransfers(transferId);
+        } catch Error(string memory reason) {
+            console.log(
+                "Claim failed for transfer ",
+                transferId,
+                " reason: ",
+                reason
+            );
+            // If claim fails (e.g., expired, incorrect password), it's still considered
+            // "pending" in the handler's context until it's refunded or successfully claimed.
+            // So, do not remove from pendingTransfers here.
+        }
         vm.stopPrank();
 
         removeFromPendingTransfers(transferId);

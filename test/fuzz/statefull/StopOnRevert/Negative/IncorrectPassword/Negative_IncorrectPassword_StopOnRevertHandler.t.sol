@@ -91,7 +91,7 @@ contract Negative_IncorrectPassword_StopOnRevertHandler is Test {
             if (sender != address(this) || !pst.s_isPending(transferId)) return;
         }
 
-        if (block.timestamp < creationTime + pst.s_claimCooldownPeriod()) {
+        if (block.timestamp < creationTime + pst.s_cancelCooldownPeriod()) {
             pst.cancelTransfer(transferId);
 
             removeFromPendingTransfers(transferId);
@@ -105,7 +105,7 @@ contract Negative_IncorrectPassword_StopOnRevertHandler is Test {
 
         if (pendingTransfers.length == 0) return;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
 
         index = bound(index, 0, pendingTransfers.length - 1);
         uint256 transferId = pendingTransfers[index];
@@ -141,7 +141,7 @@ contract Negative_IncorrectPassword_StopOnRevertHandler is Test {
 
         if (pendingTransfers.length == 0) return;
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
 
         index = bound(index, 0, pendingTransfers.length - 1);
         uint256 transferId = pendingTransfers[index];

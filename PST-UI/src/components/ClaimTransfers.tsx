@@ -1,18 +1,18 @@
 // src/components/ClaimTransfers.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAccount, useReadContract, useConfig } from 'wagmi'; // Import useConfig
+import { useAccount, useReadContract, useConfig } from 'wagmi';
 import { formatUnits, Address } from 'viem';
 import type { Abi } from 'viem';
-import { useQueries } from '@tanstack/react-query'; // Import useQueries
-import { readContract } from '@wagmi/core'; // Import readContract from wagmi/core
+import { useQueries } from '@tanstack/react-query';
+import { readContract } from '@wagmi/core';
 
 // Import ABIs
 import abiPstWrapper from '../lib/abis/abi_pst.json';
 import erc20AbiJson from '../lib/abis/abi_erc20.json';
 
 // Import pre-approved tokens list (needed for token decimals lookup)
-import { ALL_NETWORK_TOKENS } from '../lib/constants/tokenList'; // Ensure this import is present
+import { ALL_NETWORK_TOKENS } from '../lib/constants/tokenList';
 
 // Import React's CSSProperties type
 import type { CSSProperties } from 'react';
@@ -190,14 +190,14 @@ interface ClaimTransferRowProps {
     contractAddress: Address; // Renamed from pstContractAddress
     chainId: number;
     userAddress: Address | undefined; // The connected user's address for filtering
-    onClaimActionCompleted: (claimedTransferId: bigint) => void; // Corrected signature here
+    onClaimActionCompleted: (claimedTransferId: bigint) => void;
     initialTransferDetails: [Address, Address, Address, bigint, bigint, bigint, string]; // Now mandatory to pass pre-fetched details
 }
 
 const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
     index,
     transferId,
-    contractAddress, // Renamed from pstContractAddress
+    contractAddress,
     chainId,
     userAddress,
     onClaimActionCompleted,
@@ -211,7 +211,7 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
         receiver,
         tokenAddress,
         amount,
-        creationTime,
+        creationTime, // <-- Extracted here
         expiringTime,
         status,
     ] = initialTransferDetails;
@@ -283,7 +283,7 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
         return (
             <tr style={tableRowStyle}>
                 <td style={tableDataStyle}>{index + 1}</td>
-                <td style={tableDataStyle} colSpan={10}>Loading token details...</td> {/* Adjusted colspan */}
+                <td style={tableDataStyle} colSpan={10}>Loading token details...</td>
             </tr>
         );
     }
@@ -292,7 +292,7 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
         console.error("Error fetching token details for", tokenAddress, tokenDataError);
         return (
             <tr style={tableRowStyle}>
-                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={10}>Error fetching token data.</td> {/* Adjusted colspan */}
+                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={10}>Error fetching token data.</td>
             </tr>
         );
     }
@@ -354,7 +354,8 @@ const ClaimTransferRow: React.FC<ClaimTransferRowProps> = ({
                         password={password}
                         receiverAddress={receiver}
                         transferStatus={status}
-                        onClaimActionCompleted={onClaimActionCompleted} // Pass the updated callback
+                        creationTime={creationTime} // <-- PASS THE creationTime PROP
+                        onClaimActionCompleted={onClaimActionCompleted}
                     />
                 ) : (
                     <span style={{ color: '#888', fontSize: '12px' }}>Connect wallet for actions</span>
@@ -512,7 +513,7 @@ const ClaimTransfers: React.FC<ClaimTransfersProps> = () => {
                 <p style={{ textAlign: 'center', color: '#ccc' }}>Loading claimable transfers...</p>
             ) : displayErrorMessage ? (
                 <p style={{ textAlign: 'center', color: 'red' }}>Error loading transfers: {displayErrorMessage}</p>
-            ) : displayedClaimableTransfers.length === 0 ? ( // Use displayedClaimableTransfers here
+            ) : displayedClaimableTransfers.length === 0 ? (
                 <p style={{ textAlign: 'center', color: '#ccc' }}>No transfers to claim.</p>
             ) : (
                 <div style={tableContainerStyle}>
@@ -528,12 +529,12 @@ const ClaimTransfers: React.FC<ClaimTransfersProps> = () => {
                                 <th style={tableHeaderStyle}>Expiration Time</th>
                                 <th style={tableHeaderStyle}>Status</th>
                                 <th style={tableHeaderStyle}>Transfer ID</th>
-                                <th style={tableHeaderStyle}>Password</th> {/* New Header */}
-                                <th style={tableHeaderStyle}>Action</th> {/* Header for Claim Button */}
+                                <th style={tableHeaderStyle}>Password</th>
+                                <th style={tableHeaderStyle}>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {displayedClaimableTransfers.map((item, index) => ( // Use displayedClaimableTransfers here
+                            {displayedClaimableTransfers.map((item, index) => (
                                 <ClaimTransferRow
                                     key={item.transferId.toString()}
                                     index={index}

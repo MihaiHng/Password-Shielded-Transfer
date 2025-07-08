@@ -127,7 +127,7 @@ contract TestPST_UtilityFunctions is Test {
         );
 
         transferId = pst.s_transferCounter() - 1;
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -302,7 +302,7 @@ contract TestPST_UtilityFunctions is Test {
         // Act
         vm.prank(pst.owner());
         pst.setNewClaimCooldownPeriod(NEW_CLAIM_COOLDOWN_PERIOD);
-        uint256 claimCooldownPeriod = pst.s_claimCooldownPeriod();
+        uint256 claimCooldownPeriod = pst.s_cancelCooldownPeriod();
 
         // Assert
         assertEq(
@@ -696,7 +696,7 @@ contract TestPST_UtilityFunctions is Test {
             PASSWORD
         );
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         transferId = pst.s_transferCounter() - 1;

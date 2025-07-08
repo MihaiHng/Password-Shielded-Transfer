@@ -95,7 +95,7 @@ Slither
 
 ## Frontend 
 
-## Future Improvements 
+## Future Improvements (Under Consideration)
 
 1. Improve password encryption mechanism
 2. Make claims free of charge, by refunding the gas cost to the receiver, using a % percentage of the transfer fees

@@ -90,60 +90,23 @@ contract PST is
         _;
     }
 
-    modifier claimCooldownElapsed(uint256 transferId) {
-        uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
-        if (block.timestamp < lastAttempt + s_claimCooldownPeriod) {
-            revert PST__CooldownPeriodNotElapsed();
-        }
-        _;
-    }
-
-    // modifier onlyKeepers() {
-    //     require(
-    //         msg.sender == i_automationRegistry,
-    //         "Only Keepers can call this function"
-    //     );
-    //     _;
-    // }
-
     /*//////////////////////////////////////////////////////////////
                             FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     /**
      * _automationRegistry = 0x6593c7De001fC8542bB1703532EE1E5aA0D458fD -> for Ethereum;
-     *                              0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad -> for Sepolia;
+     *                       0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad -> for Sepolia;
      */
     constructor(
         uint256 _transferFeeLvlOne,
         uint256 _transferFeeLvlTwo,
         uint256 _transferFeeLvlThree
-    )
-        //address _automationRegistry
-        Ownable(msg.sender)
-    {
-        // if (address(_automationRegistry) == address(0)) {
-        //     revert PST__InvalidAddress();
-        // }
-        // i_automationRegistry = _automationRegistry;
-
+    ) Ownable(msg.sender) {
         transferFee = TransferFeeLibrary.TransferFee({
             lvlOne: _transferFeeLvlOne,
             lvlTwo: _transferFeeLvlTwo,
             lvlThree: _transferFeeLvlThree
         });
-
-        // /**
-        //  * @dev Initializing an ERC20 list of preapproved tokens
-        //  */
-        // address[] memory tokens = PreApprovedTokensLibrary
-        //     .getPreApprovedTokens();
-
-        // for (uint256 i = 0; i < tokens.length; i++) {
-        //     address token = tokens[i];
-        //     s_allowedTokens[token] = true;
-        //     s_feeBalances[token] = 0;
-        //     s_tokenList.push(token);
-        // }
     }
 
     receive() external payable {}
@@ -291,7 +254,7 @@ contract PST is
 
         if (
             block.timestamp <
-            transferToCancel.creationTime + s_claimCooldownPeriod
+            transferToCancel.creationTime + s_cancelCooldownPeriod
         ) {
             s_isPending[transferId] = false;
             s_isCanceled[transferId] = true;
@@ -343,7 +306,6 @@ contract PST is
     )
         external
         nonReentrant
-        claimCooldownElapsed(transferId)
         onlyPendingTransfers(transferId)
         onlyValidTransferIds(transferId)
     {
@@ -351,6 +313,14 @@ contract PST is
         address sender = transferToClaim.sender;
         address tokenToClaim = transferToClaim.token;
         uint256 amountToClaim = transferToClaim.amount;
+
+        // 1. Cooldown for sender's cancellation window (initial claim cooldown)
+        if (
+            block.timestamp <
+            transferToClaim.creationTime + s_cancelCooldownPeriod
+        ) {
+            revert PST__CannotClaimInCancelCooldown();
+        }
 
         if (block.timestamp > transferToClaim.expiringTime) {
             revert PST__TransferExpired();
@@ -371,7 +341,6 @@ contract PST is
         }
 
         if (!checkPassword(transferId, password)) {
-            s_lastFailedClaimAttempt[transferId] = block.timestamp;
             revert PST__IncorrectPassword();
         }
 
@@ -675,7 +644,7 @@ contract PST is
             });
         }
 
-        s_claimCooldownPeriod = newClaimCooldownPeriod;
+        s_cancelCooldownPeriod = newClaimCooldownPeriod;
 
         emit ClaimCooldownPeriodChanged(newClaimCooldownPeriod);
     }
@@ -1236,11 +1205,11 @@ contract PST is
     function getClaimCooldownStatus(
         uint256 transferId
     ) external view returns (bool isCoolDownActive, uint256 timeRemaining) {
-        uint256 lastAttempt = s_lastFailedClaimAttempt[transferId];
-        if (lastAttempt + s_claimCooldownPeriod >= block.timestamp) {
+        uint256 creationTime = s_transfersById[transferId].creationTime;
+        if (creationTime + s_cancelCooldownPeriod >= block.timestamp) {
             return (
                 true,
-                (lastAttempt + s_claimCooldownPeriod) - block.timestamp
+                (creationTime + s_cancelCooldownPeriod) - block.timestamp
             );
         }
         return (false, 0);

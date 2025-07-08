@@ -147,7 +147,7 @@ contract TestPST_Events is Test {
             PASSWORD
         );
 
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         vm.prank(RECEIVER);
@@ -204,7 +204,7 @@ contract TestPST_Events is Test {
     function testEmitTransferCompleted() public transferCreated {
         // Arrange
         uint256 expectedTransferIndex = pst.s_transferCounter() - 1;
-        vm.warp(block.timestamp + pst.s_claimCooldownPeriod() + 1);
+        vm.warp(block.timestamp + pst.s_cancelCooldownPeriod() + 1);
         vm.roll(block.number + 1);
 
         // Act & Assert

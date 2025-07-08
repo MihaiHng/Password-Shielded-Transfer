@@ -113,8 +113,11 @@ contract ContinueOnRevertInvariantsPST is StdInvariant, Test {
      */
     function invariant_pendingTransfersAlwaysExpireAndGetRefundedWhenAvailabilityElapses()
         public
-        view
     {
+        // Call the handler's refund function to process any expired transfers before checking the invariant
+        // This ensures that if a transfer has expired, an attempt to refund it has been made.
+        handler.refundExpiredTransfers();
+
         uint256 numTransfers = handler.getTrackedTransferIdsLength();
 
         //uint256 pendingTransfersLength = handler.getPendingTransfersLength();

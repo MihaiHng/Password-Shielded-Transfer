@@ -10,7 +10,6 @@ import {
 } from 'wagmi';
 import { parseUnits, isAddress, formatUnits } from 'viem';
 import type { Abi, Address } from 'viem';
-//import type { SimulateContractReturnType } from 'wagmi/actions';
 
 // Import your ABIs
 import abiPstWrapper from '../lib/abis/abi_pst.json';
@@ -738,20 +737,6 @@ const CreateTransfer: React.FC = () => {
         simulateError !== null || // If simulateError is NOT null (meaning there is an error object), keep disabled
         (!selectedToken?.isNative && !isAllowanceSufficient) || // For ERC20, if allowance is not sufficient, disable.
         !isSimulationReadyForTransfer; // The most important check for enabling the button to send the actual transaction
-
-    // Debugging logs:
-    console.log("--- Button State Debug ---");
-    console.log("isBasicInputValid:", isBasicInputValid);
-    console.log("isContractParamsLoaded:", isContractParamsLoaded);
-    console.log("isPending (includes isSimulating):", isPending); // isSimulating is now implicitly shown here
-    console.log("isConfirming:", isConfirming);
-    console.log("simulateError:", simulateError);
-    console.log("simulateData:", simulateData);
-    console.log("simulateData?.request:", simulateData?.request);
-    console.log("isAllowanceSufficient (if ERC20):", isAllowanceSufficient);
-    console.log("isSimulationReadyForTransfer:", isSimulationReadyForTransfer);
-    console.log("isTransferButtonDisabled:", isTransferButtonDisabled);
-    console.log("--------------------------");
 
     return (
         <>
