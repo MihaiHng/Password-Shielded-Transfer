@@ -667,7 +667,7 @@ const CreateTransfer: React.FC = () => {
                 causeAsAny.shortMessage,
                 causeAsAny.message,
                 causeAsAny.reason, // specific to some viem errors
-                causeAsAny.data?.message // for nested data structures
+                causeAsAny.data?.message
             ].filter(Boolean) as string[]; // Filter out undefined/null and ensure strings
 
             for (const msg of causeMessages) {
@@ -893,6 +893,7 @@ const CreateTransfer: React.FC = () => {
             <PendingTransfers
                 pstContractAddress={pstContractAddress}
                 refetchTrigger={refetchPendingTransfers}
+                type="sent" // <--- ADDED THIS PROP
                 onTransferActionCompleted={() => setRefetchPendingTransfers(prev => !prev)} // Callback for when a transfer action (like cancel) is completed
             />
         </>

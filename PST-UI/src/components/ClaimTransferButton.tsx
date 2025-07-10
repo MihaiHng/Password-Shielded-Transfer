@@ -54,6 +54,7 @@ interface ClaimTransferButtonProps {
     receiverAddress: Address; // The receiver address of this specific transfer
     transferStatus: string; // Current status of the transfer
     creationTime: bigint; // creationTime from the transfer details
+    // --- CHANGE 1: Update the type to accept transferId ---
     onClaimActionCompleted: (claimedTransferId: bigint) => void;
 }
 
@@ -144,9 +145,10 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
     // Trigger refetch on success
     useEffect(() => {
         if (isConfirmed) {
+            // --- CHANGE 2: Pass transferId when calling the callback ---
             onClaimActionCompleted(transferId);
         }
-    }, [isConfirmed, onClaimActionCompleted, transferId]);
+    }, [isConfirmed, onClaimActionCompleted, transferId]); // Added transferId to dependencies
 
     // Function to get a user-friendly error message
     const getUserFriendlyErrorMessage = (error: Error | null): string => {

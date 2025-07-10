@@ -23,7 +23,7 @@ Testnet:
   3. At this point there is a pending transfer created in the system, waiting to be claimed
   4. [Receiver] can claim the pending transfer if:
       - the [password] entered matches the [password] set by [Sender] 
-      - the claim is done after claim cooldown period has elapsed
+      - the claim is done after the cancel cooldown period has elapsed
 
 ## Properties
 
@@ -31,7 +31,7 @@ Additional properties:
 
 - A PST has a few additional abilities, in regards to traditional transfers:
 
-  1. Claim cooldown period - sender can change its mind and cancel the transfer
+  1. Cancel cooldown period - sender can change its mind and cancel the transfer
   2. Transfer expiring time - if the receiver doesn't claim the transfer before expiring the sender is refunded
     
 - The system charges a [fee] for every transfer. The [fee] is dynamically adjusted in relation with the amount sent  
@@ -40,14 +40,10 @@ Additional properties:
 
 - New ERC20 tokens can be approved and added by the owner
 
-- The system removes periodically and automatically old transfers from tracking
-
-- The system removes periodically and automatically inactive users from tracking
-
 - Functions ready to be automatically called with Chainlink Automation:
     - Refunding of expired transfers(custom-logic)
-    - Removing of inactive users(time-based)
-    - Cleaning of user history(time-based)
+    - Removing of inactive users(time-based) <- automation not active
+    - Cleaning of user history(time-based) <- automation not active
 
 # Getting Started
 
@@ -98,6 +94,6 @@ Slither
 ## Future Improvements (Under Consideration)
 
 1. Improve password encryption mechanism
-2. Make claims free of charge, by refunding the gas cost to the receiver, using a % percentage of the transfer fees
-3. Improve fee calculation 
+2. Increase password complexity requirements to prevent brute force attacks
+3. Make claims free of charge, by refunding the gas cost to the receiver, using a percentage of the transfer fees
 4. Use a different solution to restrict access to important functions. Multi-sig Wallet instead of onlyOwner <- centralization risk

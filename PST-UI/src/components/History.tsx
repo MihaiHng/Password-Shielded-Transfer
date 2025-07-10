@@ -6,6 +6,10 @@ import { useQueries } from '@tanstack/react-query';
 import { Address, formatUnits } from 'viem';
 import type { Abi } from 'viem';
 
+// Import Font Awesome icons
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCopy } from '@fortawesome/free-solid-svg-icons'; // For the overlapping squares icon
+
 // Import wagmi's readContract action for use inside queryFn
 import { readContract } from '@wagmi/core';
 
@@ -77,7 +81,7 @@ const tableHeaderStyle: CSSProperties = {
     fontSize: '14px',
     fontWeight: 'bold',
     padding: '12px 15px',
-    textAlign: 'left',
+    textAlign: 'center',
     position: 'sticky',
     top: 0,
     zIndex: 1,
@@ -97,7 +101,7 @@ const tableDataStyle: CSSProperties = {
 const tokenDisplayContainerStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '1px',
 };
 
 const tokenAddressStyle: CSSProperties = {
@@ -333,8 +337,14 @@ const HistoryTransferRow: React.FC<HistoryTransferRowProps> = ({
     return (
         <tr style={tableRowStyle}>
             <td style={tableDataStyle}>{index + 1}</td>
-            <td style={tableDataStyle}>{truncateAddress(sender)}</td>
-            <td style={tableDataStyle}>{truncateAddress(receiver)}</td>
+            {/* Sender Column: Show 'You' if sender matches userAddress */}
+            <td style={tableDataStyle}>
+                {userAddress?.toLowerCase() === sender.toLowerCase() ? "You" : truncateAddress(sender)}
+            </td>
+            {/* Receiver Column: Show 'You' if receiver matches userAddress */}
+            <td style={tableDataStyle}>
+                {userAddress?.toLowerCase() === receiver.toLowerCase() ? "You" : truncateAddress(receiver)}
+            </td>
             <td style={tableDataStyle}>
                 <div style={tokenDisplayContainerStyle}>
                     <span>{localTokenSymbol || 'N/A'}</span>
@@ -345,7 +355,7 @@ const HistoryTransferRow: React.FC<HistoryTransferRowProps> = ({
                         }}
                         style={copyButtonStyle}
                     >
-                        {copiedAddress === tokenAddress ? 'Copied!' : '📋'}
+                        {copiedAddress === tokenAddress ? 'Copied!' : <FontAwesomeIcon icon={faCopy} />}
                     </button>
                 </div>
             </td>
@@ -356,15 +366,6 @@ const HistoryTransferRow: React.FC<HistoryTransferRowProps> = ({
             <td style={tableDataStyle}>
                 <div style={tokenDisplayContainerStyle}>
                     <span>{transferId.toString()}</span>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(transferId.toString(), setCopiedAddress);
-                        }}
-                        style={copyButtonStyle}
-                    >
-                        {copiedAddress === transferId.toString() ? 'Copied!' : '📋'}
-                    </button>
                 </div>
             </td>
         </tr>
@@ -457,8 +458,8 @@ const HistoryTransfers: React.FC<HistoryTransfersProps> = (): React.ReactElement
         if (a.details && b.details) {
             const creationTimeA = a.details[4];
             const creationTimeB = b.details[4];
-            if (creationTimeA < creationTimeB) return -1;
-            if (creationTimeA > creationTimeB) return 1;
+            if (creationTimeA > creationTimeB) return -1;
+            if (creationTimeA < creationTimeB) return 1;
             return 0;
         }
         return 0;
@@ -511,7 +512,7 @@ const HistoryTransfers: React.FC<HistoryTransfersProps> = (): React.ReactElement
                                 <th style={tableHeaderStyle}>Creation Time</th>
                                 <th style={tableHeaderStyle}>Expiration Time</th>
                                 <th style={tableHeaderStyle}>Status</th>
-                                <th style={tableHeaderStyle}>Transfer ID</th>
+                                <th style={tableHeaderStyle}>ID</th>
                             </tr>
                         </thead>
                         <tbody>

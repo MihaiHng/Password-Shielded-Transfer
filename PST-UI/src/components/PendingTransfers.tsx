@@ -1,19 +1,22 @@
 // src/components/PendingTransfers.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useAccount, useReadContract } from 'wagmi';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useAccount, useReadContract, useConfig, useToken } from 'wagmi';
 import { Address, formatUnits } from 'viem';
 import type { Abi } from 'viem';
+
+// Import Font Awesome icons
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCopy } from '@fortawesome/free-solid-svg-icons'; // For the overlapping squares icon
 
 // Import ABIs
 import abiPstWrapper from '../lib/abis/abi_pst.json';
 import erc20AbiJson from '../lib/abis/abi_erc20.json';
 
-// Import pre-approved tokens list (needed for token decimals lookup)
-import { ALL_NETWORK_TOKENS } from '../lib/constants/tokenList';
-
 // Import the new CancelTransferButton component
 import CancelTransferButton from './CancelTransferButton';
+// Import the ClaimTransferButton component
+import ClaimTransferButton from './ClaimTransferButton'; // Make sure this path is correct
 
 // Import React's CSSProperties type
 import type { CSSProperties } from 'react';
@@ -39,7 +42,7 @@ const pendingTransfersContainerStyle: CSSProperties = {
     background: '#1b1b1b',
     borderRadius: '20px',
     padding: '24px',
-    maxWidth: '1000px', // Wider for table to accommodate new columns
+    maxWidth: '1000px',
     margin: '40px auto',
     boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
     backdropFilter: 'blur(4px)',
@@ -59,6 +62,7 @@ const pendingTransfersTitleStyle: CSSProperties = {
 const tableContainerStyle: CSSProperties = {
     border: '1px solid rgba(255, 255, 255, 0.1)',
     borderRadius: '12px',
+    overflowX: 'auto',
 };
 
 const tableStyle: CSSProperties = {
@@ -75,7 +79,7 @@ const tableHeaderStyle: CSSProperties = {
     fontSize: '14px',
     fontWeight: 'bold',
     padding: '12px 15px',
-    textAlign: 'left',
+    textAlign: 'center',
     position: 'sticky',
     top: 0,
     zIndex: 1,
@@ -95,7 +99,7 @@ const tableDataStyle: CSSProperties = {
 const tokenDisplayContainerStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '1px',
 };
 
 const tokenAddressStyle: CSSProperties = {
@@ -126,6 +130,18 @@ const disconnectedNetworkStyle: CSSProperties = {
     marginBottom: '20px',
 };
 
+const passwordInputStyle: CSSProperties = {
+    width: '100px', // Adjusted width for password input
+    padding: '8px 12px',
+    background: '#3a3a3a',
+    border: '1px solid #555',
+    borderRadius: '8px',
+    color: '#fff',
+    fontSize: '12px', // Adjusted font size
+    outline: 'none',
+    marginTop: '8px', // Added some top margin for spacing
+};
+
 // --- UTILITY FUNCTIONS ---
 const truncateAddress = (address: string): string => {
     if (!address || address.length < 10) return address;
@@ -152,14 +168,14 @@ const formatTimestamp = (timestamp: bigint | undefined): string => {
 };
 
 // --- PENDING TRANSFER ROW COMPONENT ---
-// This component will now fetch its own details
 interface PendingTransferRowProps {
     index: number;
     transferId: bigint;
-    pstContractAddress: Address | undefined; // Make it optional
-    chainId: number | undefined; // Make it optional
+    pstContractAddress: Address | undefined;
+    chainId: number | undefined;
     userAddress: Address | undefined;
-    onCancelSuccess: () => void;
+    onActionSuccess: (transferId: bigint) => void;
+    type: "sent" | "received" | "all"; // This type determines filtering and action visibility
 }
 
 const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
@@ -168,12 +184,18 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
     pstContractAddress,
     chainId,
     userAddress,
-    onCancelSuccess,
+    onActionSuccess,
+    type,
 }) => {
     const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+    const [password, setPassword] = useState<string>(''); // State for password input
+    const config = useConfig();
+    const { chain } = useAccount(); // Get current chain from useAccount for native currency info
 
     // Determine if contract details and chain ID are ready for any read operations in this row
-    const areRowContractDetailsReady = !!pstContractAddress && !!chainId;
+    const areRowContractDetailsReady = !!pstContractAddress && !!chainId && !!config;
+
+    type ContractTransferDetails = [Address, Address, Address, bigint, bigint, bigint, string];
 
     // Fetch transfer details within the row component
     const { data: transferDetails, isLoading: isDetailsLoading, error: detailsError } = useReadContract({
@@ -183,10 +205,10 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
         args: [transferId],
         chainId: areRowContractDetailsReady ? chainId : undefined,
         query: {
-            enabled: areRowContractDetailsReady && transferId !== undefined, // Ensure all params are valid
-            staleTime: 10000,
+            enabled: areRowContractDetailsReady && transferId !== undefined,
+            staleTime: 10_000,
         },
-    }) as { data?: [Address, Address, Address, bigint, bigint, bigint, string], isLoading: boolean, error?: Error };
+    }) as { data?: ContractTransferDetails, isLoading: boolean, error?: Error };
 
     // Derive values from transferDetails, providing fallbacks for initial loading state
     const sender = transferDetails?.[0];
@@ -194,92 +216,146 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
     const tokenAddress = transferDetails?.[2];
     const amount = transferDetails?.[3];
     const creationTime = transferDetails?.[4];
-    const expiringTime = transferDetails?.[5];
-    const status = transferDetails?.[6];
+    const cancelationCooldown = transferDetails?.[5];
+    const statusFromContract = transferDetails?.[6];
 
-    // Determine if it's an ERC20 token (not native ETH)
-    const isERC20Token = tokenAddress !== '0x0000000000000000000000000000000000000000' && !!tokenAddress;
+    let statusString: string = "Unknown";
+    if (typeof statusFromContract === 'string' &&
+        ['Pending', 'Claimed', 'Canceled', 'Expired'].includes(statusFromContract)) {
+        statusString = statusFromContract;
+    }
 
-    // Fetch token symbol and decimals if it's an ERC20 token and row details are ready
-    const { data: tokenSymbol, isLoading: isTokenSymbolLoading, error: tokenSymbolError } = useReadContract({
-        address: isERC20Token && areRowContractDetailsReady ? tokenAddress : undefined,
-        abi: ERC20_CONTRACT_ABI,
-        functionName: 'symbol',
-        chainId: areRowContractDetailsReady ? chainId : undefined,
+    const isNativeToken = tokenAddress?.toLowerCase() === '0x0000000000000000000000000000000000000000';
+
+    // Using useToken hook for ERC20 token details
+    const { data: erc20TokenData, isLoading: isErc20TokenLoading, error: erc20TokenError } = useToken({
+        address: (!isNativeToken && tokenAddress) ? tokenAddress : undefined,
+        chainId: chainId,
         query: {
-            enabled: isERC20Token && areRowContractDetailsReady,
-            staleTime: Infinity,
+            enabled: !isNativeToken && !!tokenAddress && !!chainId,
+            staleTime: 10_000,
         }
-    }) as { data?: string, isLoading: boolean, error?: Error };
+    });
 
-    const { data: tokenDecimals, isLoading: isTokenDecimalsLoading, error: tokenDecimalsError } = useReadContract({
-        address: isERC20Token && areRowContractDetailsReady ? tokenAddress : undefined,
-        abi: ERC20_CONTRACT_ABI,
-        functionName: 'decimals',
-        chainId: areRowContractDetailsReady ? chainId : undefined,
-        query: {
-            enabled: isERC20Token && areRowContractDetailsReady,
-            staleTime: Infinity,
+    // Determine the final tokenInfo to display
+    const tokenInfo = useMemo(() => {
+        if (isNativeToken) {
+            const currentChain = config.chains.find(c => c.id === chainId);
+            if (currentChain) {
+                return {
+                    symbol: currentChain.nativeCurrency.symbol || 'ETH',
+                    decimals: currentChain.nativeCurrency.decimals || 18,
+                    isNative: true
+                };
+            }
+        } else if (erc20TokenData) {
+            return {
+                symbol: erc20TokenData.symbol,
+                decimals: erc20TokenData.decimals,
+                isNative: false
+            };
+        } else if (erc20TokenError) {
+            console.error(`Error fetching ERC20 token data for ${tokenAddress}:`, erc20TokenError);
+            return null;
         }
-    }) as { data?: number, isLoading: boolean, error?: Error };
+        return null;
+    }, [isNativeToken, erc20TokenData, erc20TokenError, config, chainId, tokenAddress]);
 
-    // Now, handle loading/error states for the row's primary data (transferDetails)
+    const isTokenInfoLoading = isErc20TokenLoading || (isNativeToken && !tokenInfo);
+    const tokenInfoError = erc20TokenError || (isNativeToken && !tokenInfo && !!tokenAddress ? new Error("Native token details unavailable") : null);
+
+
+    // Client-side filtering based on `type` prop and current status
+    const shouldRender = useMemo(() => {
+        // If details are still loading, we can't decide if it should render yet.
+        // It will be handled by the specific loading state return below.
+        if (isDetailsLoading || !transferDetails) return true; // Assume true during loading, then filter once data is there.
+
+        // Only show "Pending" transfers in this list
+        if (statusString !== "Pending") {
+            return false;
+        }
+
+        if (!userAddress) return false;
+
+        // Apply filtering based on the 'type' prop passed to PendingTransfers
+        if (type === "sent") {
+            return userAddress.toLowerCase() === sender?.toLowerCase();
+        } else if (type === "received") {
+            return userAddress.toLowerCase() === receiver?.toLowerCase();
+        } else if (type === "all") {
+            return true; // Show all pending transfers
+        }
+        return false;
+    }, [type, userAddress, sender, receiver, statusString, isDetailsLoading, transferDetails]);
+
+
+    // --- CONDITIONAL RENDERING STARTS HERE ---
+    // All hooks MUST be called before any conditional returns.
+
+    // Handle initial loading of transfer details
     if (isDetailsLoading) {
         return (
             <tr style={tableRowStyle}>
                 <td style={tableDataStyle}>{index + 1}</td>
-                <td style={tableDataStyle} colSpan={9}>Loading transfer details...</td>
+                <td style={tableDataStyle} colSpan={10}>Loading transfer details...</td>
             </tr>
         );
     }
 
-    if (detailsError || !transferDetails) {
-        console.error("Error fetching transfer details for ID", transferId, detailsError);
+    // Handle errors fetching transfer details or invalid data
+    if (detailsError || !transferDetails || statusString === "Unknown") {
+        console.error("Error fetching transfer details for ID", transferId, detailsError || "Transfer details missing/invalid.");
         return (
             <tr style={tableRowStyle}>
-                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={9}>Error loading transfer details.</td>
+                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={10}>Error loading transfer details.</td>
             </tr>
         );
     }
 
-    // Filter criteria: user is the SENDER AND the transfer status is "Pending"
-    const isPendingAndSender = userAddress?.toLowerCase() === sender?.toLowerCase() && status === "Pending";
-
-    // IMPORTANT: Only render the full row content (and call subsequent hooks) if it meets the criteria
-    // This moves the conditional return AFTER all hooks have been called.
-    if (!isPendingAndSender) {
-        return null; // Don't render this row if it's not a pending transfer by the current sender
+    // IMPORTANT: Only return null if the row should not be rendered AFTER all hooks are called and
+    // initial data fetching for this specific row is done, and the filtering condition is met.
+    if (!shouldRender) {
+        return null;
     }
 
     // Now, handle loading/error states for token details, only if the row is actually going to render.
-    if (isTokenSymbolLoading || isTokenDecimalsLoading) {
+    if (isTokenInfoLoading) {
         return (
             <tr style={tableRowStyle}>
                 <td style={tableDataStyle}>{index + 1}</td>
-                <td style={tableDataStyle} colSpan={9}>Loading token details...</td>
+                <td style={tableDataStyle} colSpan={10}>Loading token details...</td>
             </tr>
         );
     }
 
-    if (tokenSymbolError || tokenDecimalsError) {
-        console.error("Error fetching token details for", tokenAddress, tokenSymbolError || tokenDecimalsError);
+    if (tokenInfoError || !tokenInfo) {
+        console.error("Error fetching token details for", tokenAddress, tokenInfoError);
         return (
             <tr style={tableRowStyle}>
-                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={9}>Error fetching token data.</td>
+                <td style={{ ...tableDataStyle, color: 'red' }} colSpan={10}>Error fetching token data.</td>
             </tr>
         );
     }
 
-    const displayAmount = (amount && tokenDecimals !== undefined) ? formatUnits(amount, tokenDecimals) : (isERC20Token ? '...' : formatUnits(amount || 0n, 18)); // Ensure amount is BigInt for formatUnits
+    const displayAmount = (amount && tokenInfo.decimals !== undefined) ? formatUnits(amount, tokenInfo.decimals) : 'N/A';
+
+    // Determine which actions are relevant for this row based on 'type' prop and user address
+    const showCancelButton = type === "sent" && userAddress?.toLowerCase() === sender?.toLowerCase();
+    const showClaimButton = type === "received" && userAddress?.toLowerCase() === receiver?.toLowerCase();
 
     return (
         <tr style={tableRowStyle}>
             <td style={tableDataStyle}>{index + 1}</td>
-            <td style={tableDataStyle}>{truncateAddress(sender || 'N/A')}</td>
-            <td style={tableDataStyle}>{truncateAddress(receiver || 'N/A')}</td>
+            <td style={tableDataStyle}>
+                {userAddress?.toLowerCase() === sender?.toLowerCase() ? "You" : truncateAddress(sender || 'N/A')}
+            </td>
+            <td style={tableDataStyle}>
+                {userAddress?.toLowerCase() === receiver?.toLowerCase() ? "You" : truncateAddress(receiver || 'N/A')}
+            </td>
             <td style={tableDataStyle}>
                 <div style={tokenDisplayContainerStyle}>
-                    <span>{tokenSymbol || 'ETH'}</span>
+                    <span>{tokenInfo.symbol || 'ETH'}</span>
                     <button
                         onClick={(e) => {
                             e.stopPropagation();
@@ -287,38 +363,61 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
                         }}
                         style={copyButtonStyle}
                     >
-                        {copiedAddress === tokenAddress ? 'Copied!' : '📋'}
+                        {copiedAddress === tokenAddress ? 'Copied!' : <FontAwesomeIcon icon={faCopy} />}
                     </button>
                 </div>
             </td>
             <td style={tableDataStyle}>{displayAmount}</td>
             <td style={tableDataStyle}>{formatTimestamp(creationTime)}</td>
-            <td style={tableDataStyle}>{formatTimestamp(expiringTime)}</td>
-            <td style={tableDataStyle}>{status}</td>
+            <td style={tableDataStyle}>{formatTimestamp(cancelationCooldown)}</td>
+            <td style={tableDataStyle}>{statusString}</td>
             <td style={tableDataStyle}>
                 <div style={tokenDisplayContainerStyle}>
                     <span>{transferId.toString()}</span>
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(transferId.toString(), setCopiedAddress);
-                        }}
-                        style={copyButtonStyle}
-                    >
-                        {copiedAddress === transferId.toString() ? 'Copied!' : '📋'}
-                    </button>
                 </div>
             </td>
+            {/* Conditional Password Input and Action Buttons */}
             <td style={tableDataStyle}>
                 {userAddress && pstContractAddress && chainId ? (
-                    <CancelTransferButton
-                        transferId={transferId}
-                        pstContractAddress={pstContractAddress}
-                        senderAddress={sender || '0x0'} // Provide fallback for senderAddress
-                        transferStatus={status || 'Unknown'} // Provide fallback for status
-                        chainId={chainId}
-                        onCancelSuccess={onCancelSuccess}
-                    />
+                    <>
+                        {showCancelButton && (
+                            <CancelTransferButton
+                                transferId={transferId}
+                                pstContractAddress={pstContractAddress}
+                                chainId={chainId}
+                                senderAddress={sender || '0x0'}
+                                transferStatus={statusString}
+                                creationTime={creationTime || 0n}
+                                cancelationCooldown={cancelationCooldown || 0n}
+                                onCancelActionCompleted={() => onActionSuccess(transferId)}
+                            />
+                        )}
+
+                        {showClaimButton && (
+                            <>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    placeholder="Enter password"
+                                    style={passwordInputStyle}
+                                />
+                                <ClaimTransferButton
+                                    transferId={transferId}
+                                    pstContractAddress={pstContractAddress}
+                                    chainId={chainId}
+                                    password={password}
+                                    receiverAddress={receiver || '0x0'}
+                                    transferStatus={statusString}
+                                    creationTime={creationTime || 0n}
+                                    onClaimActionCompleted={() => onActionSuccess(transferId)}
+                                />
+                            </>
+                        )}
+                        {!showCancelButton && !showClaimButton && (
+                            <span style={{ color: '#888', fontSize: '12px' }}>No action</span>
+                        )}
+                    </>
                 ) : (
                     <span style={{ color: '#888', fontSize: '12px' }}>Connect wallet for actions</span>
                 )}
@@ -327,69 +426,167 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
     );
 };
 
+
 // --- PENDING TRANSFERS MAIN COMPONENT ---
 interface PendingTransfersProps {
-    pstContractAddress: Address | undefined;
-    refetchTrigger: boolean;
-    onTransferActionCompleted: () => void;
+    pstContractAddress: Address | undefined; // Passed from parent
+    refetchTrigger: boolean; // Trigger to force a refetch from parent
+    type: "sent" | "received" | "all"; // New prop: "sent", "received", or "all"
+    onTransferActionCompleted: (transferId: bigint) => void; // Callback after claim/cancel
 }
 
-const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress, refetchTrigger, onTransferActionCompleted }) => {
+const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress, refetchTrigger, type, onTransferActionCompleted }) => {
     const { address: userAddress, chain, isConnected } = useAccount();
+    const config = useConfig();
 
-    const pstContractAddressForChain = getPSTContractAddress(chain?.id);
+    const pstContractAddressForChain = useMemo(() => getPSTContractAddress(chain?.id), [chain?.id]);
 
-    const [localRefetchTrigger, setLocalRefetchTrigger] = useState<boolean>(false);
+    const [transferIds, setTransferIds] = useState<bigint[]>([]);
+    const [idsFetchError, setIdsFetchError] = useState<Error | null>(null);
 
-    // Determine if contract details and chain ID are ready for any read operations
-    const areContractDetailsReady = !!pstContractAddressForChain && !!chain?.id;
-
-    // 1. Fetch ALL transfer IDs associated with the connected user's address
-    const { data: allRelatedTransferIds = [], isLoading: isLoadingAllIds, error: allIdsError, refetch: refetchAllIds } = useReadContract({
-        address: areContractDetailsReady ? pstContractAddressForChain : undefined,
-        abi: PST_CONTRACT_ABI,
-        functionName: 'getPendingTransfersForAddress',
-        args: userAddress ? [userAddress] : undefined,
-        chainId: areContractDetailsReady ? chain.id : undefined, // Safely access chain.id
-        query: {
-            enabled: !!userAddress && isConnected && areContractDetailsReady,
-            staleTime: 5000,
+    // 1. Fetch ALL transfer IDs associated with the connected user's address OR all system pending transfers
+    // The function name changes based on the 'type' prop.
+    const getFunctionName = useCallback(() => {
+        if (type === "all") {
+            return 'getPendingTransfers';
         }
-    }) as { data?: bigint[], isLoading: boolean, error: Error | null, refetch: () => void };
+        return 'getAllTransfersByAddress'; // Or 'getPendingTransfersForAddress' if that's what you intend for user-specific pending
+    }, [type]);
+
+    const getFunctionArgs = useCallback(() => {
+        if (type === "all") {
+            return undefined;
+        }
+        return userAddress ? [userAddress] : undefined;
+    }, [type, userAddress]);
 
 
-    // Callback to trigger a refetch of the pending transfers list
-    const handleActionCompleted = useCallback(() => {
-        setLocalRefetchTrigger(prev => !prev);
-        onTransferActionCompleted();
+    const {
+        data: fetchedIdsData,
+        isLoading: isLoadingIds,
+        error: fetchIdsError,
+        refetch: refetchIds
+    } = useReadContract({
+        address: pstContractAddressForChain,
+        abi: PST_CONTRACT_ABI,
+        functionName: getFunctionName(),
+        args: getFunctionArgs(),
+        chainId: chain?.id,
+        query: {
+            enabled: isConnected && !!pstContractAddressForChain && (type === "all" || !!userAddress),
+            staleTime: 5_000, // Reduced stale time for more frequent updates
+            refetchOnWindowFocus: false,
+            // Select logic to extract the correct array from the contract's return
+            select: (data: any) => {
+                if (type === "all") {
+                    if (!Array.isArray(data)) {
+                        console.error("[PendingTransfers:select] Expected array for 'getPendingTransfers', got:", data);
+                        throw new Error("Invalid data format from getPendingTransfers");
+                    }
+                    return data as bigint[];
+                }
+                // For 'sent' or 'received' (via 'getAllTransfersByAddress'), we get a tuple.
+                // We want the first element of the tuple, which is the 'pending' array.
+                if (!Array.isArray(data) || data.length < 1 || !Array.isArray(data[0])) {
+                    console.error("[PendingTransfers:select] Expected array of arrays for 'getAllTransfersByAddress', got:", data);
+                    throw new Error("Invalid data format from getAllTransfersByAddress");
+                }
+                return data[0] as bigint[]; // Return the 'pending' transfers array from the tuple
+            }
+        },
+    });
+
+    useEffect(() => {
+        if (fetchIdsError) {
+            console.error("[PendingTransfers] Error fetching transfer IDs from contract:", fetchIdsError);
+            setIdsFetchError(fetchIdsError);
+            setTransferIds([]); // Clear IDs on error
+        } else if (fetchedIdsData !== undefined) {
+            console.log("[PendingTransfers] fetchedIdsData updated:", fetchedIdsData);
+            setTransferIds(fetchedIdsData);
+            setIdsFetchError(null);
+        }
+    }, [fetchedIdsData, fetchIdsError]);
+
+    // Effect to trigger refetch when refetchTrigger changes (from parent) or user/chain/type changes
+    useEffect(() => {
+        console.log("[PendingTransfers] refetch useEffect triggered. Current state:", { refetchTrigger, userAddress, isConnected, pstContractAddressForChain, type });
+        if (isConnected && userAddress && pstContractAddressForChain) {
+            console.log("[PendingTransfers] Calling refetchIds()");
+            refetchIds();
+        } else {
+            console.log("[PendingTransfers] Skipping refetchIds - not connected or missing info.");
+        }
+    }, [refetchTrigger, userAddress, isConnected, pstContractAddressForChain, refetchIds, type]);
+
+    // Callback for child components (Cancel/Claim Button) to trigger a refetch
+    const handleActionCompleted = useCallback((transferId: bigint) => {
+        console.log(`[PendingTransfers] handleActionCompleted called for ID: ${transferId}. Notifying parent and initiating refetch.`);
+        onTransferActionCompleted(transferId); // Notify parent
+        // Instead of immediate refetch, let's rely on the parent's refetchTrigger or a direct refetch
+        // if this component needs to update itself independently quickly.
+        // For now, onActionSuccess from button will trigger parent's onTransferActionCompleted,
+        // which then toggles the refetchTrigger for THIS component.
     }, [onTransferActionCompleted]);
 
-    // Effect to trigger refetch when refetchTrigger changes (from parent) or local trigger changes
-    useEffect(() => {
-        if (refetchTrigger || localRefetchTrigger) {
-            refetchAllIds();
-            setLocalRefetchTrigger(false);
-        }
-    }, [refetchTrigger, localRefetchTrigger, refetchAllIds]);
+    // Sort the transfer IDs before mapping to ensure stable order
+    const sortedTransferIds = useMemo(() => {
+        // Filter out 0n IDs if your contract can return them as placeholders
+        const validIds = transferIds.filter(id => id !== 0n);
+        console.log("[PendingTransfers] Sorted transfer IDs after filter:", validIds);
+        return [...validIds].sort((a, b) => {
+            // Sort in ascending order of ID, or adjust based on your preference (e.g., newest first)
+            if (a > b) return -1;
+            if (a < b) return 1;
+            return 0;
+        });
+    }, [transferIds]);
 
-    // Sort the transfer IDs before mapping to ensure stable order for child components
-    const sortedTransferIds = [...allRelatedTransferIds].sort((a, b) => {
-        if (a < b) return -1;
-        if (a > b) return 1;
-        return 0;
-    });
+
+    const titleText = useMemo(() => {
+        switch (type) {
+            case "sent": return "Your Sent Pending Transfers";
+            case "received": return "";
+            case "all": return "All System Pending Transfers";
+            default: return "Pending Transfers";
+        }
+    }, [type]);
+
+
+    if (!isConnected || !userAddress) {
+        return (
+            <div style={pendingTransfersContainerStyle}>
+                <h2 style={pendingTransfersTitleStyle}>{titleText}</h2>
+                <p style={disconnectedNetworkStyle}>Connect your wallet to see pending transfers.</p>
+            </div>
+        );
+    }
+
+    if (isLoadingIds) {
+        return (
+            <div style={pendingTransfersContainerStyle}>
+                <h2 style={pendingTransfersTitleStyle}>{titleText}</h2>
+                <p style={{ textAlign: 'center', color: '#ccc' }}>Loading transfer IDs...</p>
+            </div>
+        );
+    }
+
+    if (idsFetchError) {
+        return (
+            <div style={pendingTransfersContainerStyle}>
+                <h2 style={pendingTransfersTitleStyle}>{titleText}</h2>
+                <p style={{ textAlign: 'center', color: 'red' }}>Error loading transfers: {idsFetchError.message}</p>
+            </div>
+        );
+    }
+
+    const hasTransfersToRender = sortedTransferIds.length > 0;
 
     return (
         <div style={pendingTransfersContainerStyle}>
-            <h2 style={pendingTransfersTitleStyle}>Your Pending Transfers</h2>
-            {!isConnected || !userAddress ? (
-                <p style={disconnectedNetworkStyle}>Connect your wallet to see pending transfers.</p>
-            ) : isLoadingAllIds ? (
-                <p style={{ textAlign: 'center', color: '#ccc' }}>Loading pending transfers...</p>
-            ) : allIdsError ? (
-                <p style={{ textAlign: 'center', color: 'red' }}>Error loading transfers: {allIdsError.message}</p>
-            ) : sortedTransferIds.length === 0 ? (
-                <p style={{ textAlign: 'center', color: '#ccc' }}>No pending transfers found for your address.</p>
+            <h2 style={pendingTransfersTitleStyle}>{titleText}</h2>
+            {!hasTransfersToRender ? (
+                <p style={{ textAlign: 'center', color: '#ccc' }}>No pending transfers found.</p>
             ) : (
                 <div style={tableContainerStyle}>
                     <table style={tableStyle}>
@@ -403,21 +600,22 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({ pstContractAddress,
                                 <th style={tableHeaderStyle}>Creation Time</th>
                                 <th style={tableHeaderStyle}>Expiration Time</th>
                                 <th style={tableHeaderStyle}>Status</th>
-                                <th style={tableHeaderStyle}>Transfer ID</th>
-                                <th style={tableHeaderStyle}>Action</th>
+                                <th style={tableHeaderStyle}>ID</th>
+                                <th style={tableHeaderStyle}>Action</th> {/* This column now includes password input and buttons */}
                             </tr>
                         </thead>
                         <tbody>
-                            {/* Map over sorted IDs and let each row fetch its own details */}
+                            {/* Map over sorted IDs and let each row fetch its own details and filter */}
                             {sortedTransferIds.map((transferId, index) => (
                                 <PendingTransferRow
                                     key={transferId.toString()}
                                     index={index}
                                     transferId={transferId}
-                                    pstContractAddress={pstContractAddressForChain} // Pass as undefined if not ready
-                                    chainId={chain?.id} // Pass as undefined if not ready
+                                    pstContractAddress={pstContractAddressForChain}
+                                    chainId={chain?.id}
                                     userAddress={userAddress}
-                                    onCancelSuccess={handleActionCompleted}
+                                    onActionSuccess={handleActionCompleted}
+                                    type={type}
                                 />
                             ))}
                         </tbody>

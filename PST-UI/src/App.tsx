@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import './App.css'
-import CreateTransfer from './components/CreateTransfer';
+import CreateTransfer from './components/CreateTransfers';
 import ClaimTransfers from './components/ClaimTransfers';
-import History from './components/HistoryComponent';
+import History from './components/History';
 import { headerButtonStyle } from './styles/buttonStyles'
-import { ethers } from "ethers"
-import abi_pst from './lib/abis/abi_pst.json'
 
 function App() {
   const [activeTab, setActiveTab] = useState<'send' | 'receive' | 'history'>('send')
@@ -60,7 +58,7 @@ function App() {
             onClick={() => setActiveTab('send')}
             style={{
               ...headerButtonStyle,
-              backgroundColor: activeTab === 'send' ? '#4CAF50' : '#1e1e1e',
+              backgroundColor: activeTab === 'send' ? '#2196F3' : '#1e1e1e',
               color: activeTab === 'send' ? '#fff' : '#ccc',
             }}
           >
@@ -70,11 +68,11 @@ function App() {
             onClick={() => setActiveTab('receive')}
             style={{
               ...headerButtonStyle,
-              backgroundColor: activeTab === 'receive' ? '#2196F3' : '#1e1e1e',
+              backgroundColor: activeTab === 'receive' ? '#4CAF50' : '#1e1e1e',
               color: activeTab === 'receive' ? '#fff' : '#ccc',
             }}
           >
-            RECEIVE
+            CLAIM
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -100,3 +98,4 @@ function App() {
 }
 
 export default App
+
