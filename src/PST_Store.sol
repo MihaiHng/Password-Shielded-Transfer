@@ -61,7 +61,6 @@ contract PST_Store {
 
     uint256 public s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
     uint256 public s_cancelCooldownPeriod = 3 minutes; // 30 minutes;
-    uint256 public s_claimAttemptTimeLimit = 1 minutes; // 10 minutes
     uint256 public s_availabilityPeriod = 5 minutes; // 7 days;
     uint256 public s_cleanupInterval = 12 weeks;
     uint256 public s_inactivityThreshold = 12 weeks;

@@ -24,6 +24,10 @@ import PendingTransfers from './PendingTransfers';
 // Import React's CSSProperties type
 import type { CSSProperties } from 'react';
 
+// Import Font Awesome icons - No longer needed here for the info icon, but might be for other components.
+// import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+// import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
+
 // Define a custom error interface to safely access 'cause'
 interface CustomError extends Error {
     cause?: unknown; // 'cause' can be of any type
@@ -78,6 +82,8 @@ const cardTitleStyle: CSSProperties = {
     textAlign: 'center',
     color: '#fff',
 };
+
+// Removed informativeTextStyle from here.
 
 const connectedNetworkStyle: CSSProperties = {
     fontSize: '14px',
@@ -348,6 +354,8 @@ const copyToClipboard = async (text: string, setCopiedAddress: React.Dispatch<Re
     }
 };
 
+// Removed formatSecondsToMinutes from here.
+
 // --- MAIN REACT COMPONENT STARTS HERE ---
 const CreateTransfer: React.FC = () => {
     const { address: userAddress, chain, isConnected } = useAccount();
@@ -370,6 +378,22 @@ const CreateTransfer: React.FC = () => {
 
     const pstContractAddress = getPSTContractAddress(chain?.id);
 
+    // Fetch s_cancelCooldownPeriod - kept here to pass to PendingTransfers
+    const {
+        data: cancelCooldownPeriod,
+        isLoading: isLoadingCancelCooldown,
+        error: cancelCooldownError
+    } = useReadContract({
+        address: pstContractAddress,
+        abi: PST_CONTRACT_ABI,
+        functionName: 's_cancelCooldownPeriod',
+        chainId: chain?.id,
+        query: {
+            enabled: isConnected && !!pstContractAddress,
+            staleTime: Infinity, // This value is unlikely to change
+        },
+    }) as { data?: bigint; isLoading: boolean; error?: Error };
+
     // Frontend calculated values for simulation arguments
     const parsedAmountForCalculation = amount && selectedToken ? parseUnits(amount, selectedToken.decimals) : 0n;
 
@@ -389,7 +413,7 @@ const CreateTransfer: React.FC = () => {
         functionName: 'getTransferFees',
         chainId: chain?.id,
         query: { enabled: !!pstContractAddress }
-    });
+    }) as { data?: { lvlOne: bigint, lvlTwo: bigint, lvlThree: bigint }; isLoading: boolean };
 
     const transferFees: TransferFee = {
         lvlOne: (contractTransferFees as any)?.lvlOne || 0n,
@@ -425,7 +449,9 @@ const CreateTransfer: React.FC = () => {
             enabled: !!userAddress && !!selectedToken && !selectedToken.isNative && !!pstContractAddress,
             staleTime: 5000,
         },
-    });
+    }) as { data?: bigint; refetch: () => void };
+
+
     const allowance: bigint = (rawAllowance as bigint | undefined) || 0n;
     const isAllowanceSufficient = selectedToken?.isNative || allowance >= totalTransferCost;
 
@@ -738,6 +764,7 @@ const CreateTransfer: React.FC = () => {
         (!selectedToken?.isNative && !isAllowanceSufficient) || // For ERC20, if allowance is not sufficient, disable.
         !isSimulationReadyForTransfer; // The most important check for enabling the button to send the actual transaction
 
+
     return (
         <>
             <div style={uniswapCardStyle}>
@@ -889,12 +916,16 @@ const CreateTransfer: React.FC = () => {
                 {displayError && <p style={{ ...transactionStatusStyle, color: 'red' }}>{displayErrorMessage}</p>}
             </div>
 
-            {/* NEW: Render the PendingTransfers component */}
+            {/* NEW: Render the PendingTransfers component with new props */}
             <PendingTransfers
                 pstContractAddress={pstContractAddress}
                 refetchTrigger={refetchPendingTransfers}
-                type="sent" // <--- ADDED THIS PROP
-                onTransferActionCompleted={() => setRefetchPendingTransfers(prev => !prev)} // Callback for when a transfer action (like cancel) is completed
+                type="sent"
+                onTransferActionCompleted={() => setRefetchPendingTransfers(prev => !prev)}
+                componentTitle="Your Sent Pending Transfers" // Set a specific title for this instance
+                cancelCooldownPeriod={cancelCooldownPeriod} // Pass data
+                isLoadingCancelCooldown={isLoadingCancelCooldown} // Pass loading state
+                cancelCooldownError={cancelCooldownError} // Pass error state
             />
         </>
     );

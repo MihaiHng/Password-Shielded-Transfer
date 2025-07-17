@@ -4,60 +4,79 @@ import React, { useState, useEffect } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt, useSimulateContract, useAccount } from 'wagmi';
 import type { Address, Abi } from 'viem';
 
-// Import ABIs (assuming they are correctly path-configured or available globally in your project)
-import abiPstWrapper from '../lib/abis/abi_pst.json'; // Ensure this path is correct
+import abiPstWrapper from '../lib/abis/abi_pst.json';
 
-// Type assertion for PST ABI
 const PST_CONTRACT_ABI = abiPstWrapper as unknown as Abi;
 
-// Re-using styles from CreateTransfer/PendingTransfers for consistency
 interface CSSProperties {
     [key: string]: string | number | undefined;
 }
 
+// NEW: Style for the root container of the button component
+const rootContainerStyle: CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column', // Stack children (button and message) vertically
+    alignItems: 'center',    // Center children horizontally
+    width: '100%',           // Take full width of its parent (the actionButtonWrapperStyle div in PendingTransfers)
+    // No specific height needed here, let content dictate
+};
+
 const formButtonStyle: CSSProperties = {
     padding: '8px 12px',
-    borderRadius: '12樺px',
+    borderRadius: '12px',
     border: 'none',
-    background: 'linear-gradient(to right, #ff4d4f, #cc0000)', // More red for cancel
+    background: 'linear-gradient(to right, #ff4d4f, #cc0000)',
     color: 'white',
     fontSize: '14px',
     fontWeight: 'bold',
     cursor: 'pointer',
     transition: 'background 0.3s ease',
     boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.2)',
-    width: '100%',
-    textAlign: 'center',
+    width: '100px',
+    flexShrink: 0,
+    height: '40px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
 };
 
 const disabledButtonStyle: CSSProperties = {
     ...formButtonStyle,
-    background: '#555', // Darker gray for disabled
+    background: '#555',
     color: '#aaa',
     cursor: 'not-allowed',
     boxShadow: 'none',
 };
 
+// NEW: Style for the error message paragraph
+const errorMessageStyle: CSSProperties = {
+    color: 'red',
+    fontSize: '10px',
+    marginTop: '5px',
+    textAlign: 'center', // Ensure text itself is centered
+    wordBreak: 'break-word',
+    maxWidth: '120px', // Constrain width slightly more than button if needed
+};
+
 interface CustomError extends Error {
-    cause?: unknown; // 'cause' can be of any type
-    shortMessage?: string; // wagmi/viem often adds this
-    details?: string; // another common detail field
-    data?: { // sometimes viem errors include a 'data' field
+    cause?: unknown;
+    shortMessage?: string;
+    details?: string;
+    data?: {
         message?: string;
-        data?: unknown; // nested data
+        data?: unknown;
     };
 }
 
-// ** THIS IS THE CORRECTED INTERFACE DEFINITION **
 interface CancelTransferButtonProps {
     transferId: bigint;
     pstContractAddress: Address;
-    senderAddress: Address; // The sender of the transfer
-    transferStatus: string; // The current status of the transfer (e.g., "Pending", "Claimed", "Canceled")
-    creationTime: bigint; // Time when the transfer was created
-    cancelationCooldown: bigint; // Cooldown period during which cancellation is allowed
+    senderAddress: Address;
+    transferStatus: string;
+    creationTime: bigint;
+    cancelationCooldown: bigint;
     chainId: number;
-    onCancelActionCompleted: (transferId: bigint) => void; // CORRECTED: Callback to trigger parent refetch with the ID
+    onCancelActionCompleted: (transferId: bigint) => void;
 }
 
 const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
@@ -65,29 +84,22 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
     pstContractAddress,
     senderAddress,
     transferStatus,
-    creationTime,       // Destructure new props
-    cancelationCooldown, // Destructure new props
+    creationTime,
+    cancelationCooldown,
     chainId,
-    // ** THIS IS THE CORRECTED PROP DESTRUCTURING **
-    onCancelActionCompleted, // Destructure the correctly named prop
+    onCancelActionCompleted,
 }) => {
     const { address: userAddress, isConnected } = useAccount();
 
-    // Determine if the connected user is the sender of this transfer
     const isCurrentUserSender = userAddress?.toLowerCase() === senderAddress.toLowerCase();
-
-    // Determine if the transfer is in a cancellable state ("Pending")
     const isPendingStatus = transferStatus === "Pending";
 
-    // Calculate if the cancellation cooldown period has elapsed
     const now = BigInt(Math.floor(Date.now() / 1000));
     const cooldownPeriodEnd = creationTime + cancelationCooldown;
     const isCooldownElapsed = now > cooldownPeriodEnd;
 
-    // Combined condition for button enablement logic BEFORE simulation
     const canAttemptCancellation = isConnected && isCurrentUserSender && isPendingStatus && !isCooldownElapsed && !!pstContractAddress;
 
-    // Use simulateContract for pre-flight check
     const { data: simulateData, error: simulateError, isLoading: isSimulating } = useSimulateContract({
         address: pstContractAddress,
         abi: PST_CONTRACT_ABI,
@@ -95,7 +107,7 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
         args: [transferId],
         chainId: chainId,
         query: {
-            enabled: canAttemptCancellation, // Only enable simulation if basic conditions are met
+            enabled: canAttemptCancellation,
             staleTime: 5000,
             refetchOnWindowFocus: false,
         }
@@ -109,15 +121,12 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
         }
     });
 
-    // Handle success: trigger refetch and clear any local states
     useEffect(() => {
         if (isConfirmed) {
-            // ** THIS IS THE CORRECTED PROP CALL **
-            onCancelActionCompleted(transferId); // Call the correctly named prop
+            onCancelActionCompleted(transferId);
         }
-    }, [isConfirmed, onCancelActionCompleted, transferId]); // Ensure dependencies are correct
+    }, [isConfirmed, onCancelActionCompleted, transferId]);
 
-    // Function to get a user-friendly error message for this component
     const getUserFriendlyErrorMessage = (error: Error | null): string => {
         if (!error) return '';
 
@@ -139,9 +148,9 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
                     return "Error: Password not provided.";
                 case "PST__PasswordTooShort()":
                     return "Error: Password too short.";
-                case "PST__CooldownPeriodElapsed()": // Handle this specific error
+                case "PST__CooldownPeriodElapsed()":
                     return "Error: Cancellation period elapsed.";
-                case "PST__TransferNotPending()": // Handle case if status changed
+                case "PST__TransferNotPending()":
                     return "Error: Transfer is no longer pending.";
                 default:
                     return `Contract Error: ${customErrorName.replace(/PST__/g, '').replace(/\(\)/g, '')}`;
@@ -197,22 +206,17 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
         return `Error: ${extractedMessage}`;
     };
 
-    // Error handling for general errors to be displayed below the button
     const displayErrorForMessage = simulateError || writeError || confirmError;
 
-    // Check for explicit cooldown elapsed or transfer not pending errors from simulation/contract
     const isExplicitCooldownElapsedError = (displayErrorForMessage as CustomError)?.shortMessage?.includes("PST__CooldownPeriodElapsed()") || (displayErrorForMessage as CustomError)?.message?.includes("PST__CooldownPeriodElapsed()");
     const isTransferNotPendingError = (displayErrorForMessage as CustomError)?.shortMessage?.includes("PST__TransferNotPending()") || (displayErrorForMessage as CustomError)?.message?.includes("PST__TransferNotPending()");
 
-    // Only show a generic error message if it's not one of our specifically handled statuses/errors
     const errorMessage = (displayErrorForMessage && !isExplicitCooldownElapsedError && !isTransferNotPendingError)
         ? getUserFriendlyErrorMessage(displayErrorForMessage)
         : '';
 
-
     const handleCancel = async () => {
         if (!canAttemptCancellation) {
-            // Provide more specific alerts here based on which condition failed
             if (!isConnected) alert('Please connect your wallet.');
             else if (!isCurrentUserSender) alert('Only the sender can cancel this transfer.');
             else if (!isPendingStatus) alert('This transfer is not in a pending state.');
@@ -234,23 +238,21 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
         }
     };
 
-    // Determine button text and style based on all conditions
     let buttonText = "Cancel";
     let currentButtonStyle = formButtonStyle;
-    let isDisabled = true; // Default to disabled
+    let isDisabled = true;
 
     if (!isConnected) {
         buttonText = "Connect Wallet";
     } else if (!isCurrentUserSender) {
         buttonText = "Not Your Transfer";
     } else if (!isPendingStatus) {
-        buttonText = `Status: ${transferStatus}`; // Show current status if not pending
-    } else if (isCooldownElapsed) { // Check cooldown *before* simulation logic for immediate feedback
+        buttonText = `Status: ${transferStatus}`;
+    } else if (isCooldownElapsed) {
         buttonText = "Cancellation Period Elapsed";
     } else if (isSimulating) {
         buttonText = "Pre-checking...";
     } else if (simulateError) {
-        // If simulation failed, and it's not a known, handled-by-text error, then button shows "Cannot Cancel"
         buttonText = "Cannot Cancel";
     } else if (isWritePending) {
         buttonText = "Confirm Wallet...";
@@ -258,17 +260,16 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
         buttonText = "Cancelling...";
     } else if (isConfirmed) {
         buttonText = "Canceled!";
-        currentButtonStyle = { ...formButtonStyle, background: '#4CAF50' }; // Green for success
-    } else if (simulateData?.request) { // If simulation passed and no other states are active
+        currentButtonStyle = { ...formButtonStyle, background: '#4CAF50' };
+    } else if (simulateData?.request) {
         buttonText = "Cancel";
-        isDisabled = false; // Enable the button!
+        isDisabled = false;
     }
 
-    // Apply disabled style if isDisabled is true, otherwise use currentButtonStyle
     const finalButtonStyle = isDisabled ? disabledButtonStyle : currentButtonStyle;
 
     return (
-        <div>
+        <div style={rootContainerStyle}> {/* Apply the new root container style here */}
             <button
                 onClick={handleCancel}
                 style={finalButtonStyle}
@@ -276,8 +277,8 @@ const CancelTransferButton: React.FC<CancelTransferButtonProps> = ({
             >
                 {buttonText}
             </button>
-            {errorMessage && ( // Only show general error message if it's not the cooldown elapsed error
-                <p style={{ color: 'red', fontSize: '10px', marginTop: '5px' }}>
+            {errorMessage && (
+                <p style={errorMessageStyle}> {/* Apply the new error message style here */}
                     {errorMessage.includes("User rejected") ? "User rejected transaction." : `Error: ${errorMessage}`}
                 </p>
             )}

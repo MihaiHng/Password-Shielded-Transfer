@@ -1,14 +1,21 @@
 // src/components/ClaimTransfers.tsx
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { useAccount } from 'wagmi'; // Only useAccount is needed here now
+import { useAccount, useReadContract } from 'wagmi';
 import { Address } from 'viem';
+import type { Abi } from 'viem';
 
 // Import the PendingTransfers component
 import PendingTransfers from './PendingTransfers';
 
 // Import React's CSSProperties type
 import type { CSSProperties } from 'react';
+
+// Import the ABI for PSTWrapper
+import abiPstWrapper from '../lib/abis/abi_pst.json';
+
+// Type assertion for ABI
+const PST_CONTRACT_ABI = abiPstWrapper as unknown as Abi;
 
 // Define your contract address for the PSTWrapper (this will vary by network)
 const PST_CONTRACT_ADDRESS_SEPOLIA = import.meta.env.VITE_PST_ETH_SEPOLIA_ADDRESS as `0x${string}`;
@@ -23,27 +30,11 @@ const getPSTContractAddress = (chainId: number | undefined): Address | undefined
 };
 
 // --- STYLES FOR CLAIMABLE TRANSFERS SECTION ---
-// These styles are specific to the container of the ClaimTransfers page content.
-// Note: The table styles are now encapsulated within PendingTransfers.tsx
 const claimTransfersContainerStyle: CSSProperties = {
-    background: '#1b1b1b',
-    borderRadius: '20px',
-    padding: '24px',
     maxWidth: '1200px', // Adjust as needed for your layout
     margin: '40px auto',
-    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-    backdropFilter: 'blur(4px)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
     color: '#fff',
     fontFamily: 'Inter, sans-serif',
-};
-
-const claimTransfersTitleStyle: CSSProperties = {
-    fontSize: '24px',
-    fontWeight: 'bold',
-    marginBottom: '20px',
-    textAlign: 'center',
-    color: '#fff',
 };
 
 const disconnectedNetworkStyle: CSSProperties = {
@@ -68,6 +59,19 @@ const ClaimTransfers: React.FC<ClaimTransfersProps> = () => {
     // State to trigger a refetch of the PendingTransfers component when an action (like claim) is completed
     const [refetchPendingTrigger, setRefetchPendingTrigger] = useState<boolean>(false);
 
+    // --- NEW: Fetch the cancelationCooldown from the contract ---
+    const { data: cancelCooldownPeriod, isLoading: isLoadingCancelCooldown, error: cancelCooldownError } = useReadContract({
+        address: pstContractAddressForChain,
+        abi: PST_CONTRACT_ABI,
+        // FIX: Changed functionName to 's_cancelCooldownPeriod'
+        functionName: 's_cancelCooldownPeriod',
+        chainId: chain?.id,
+        query: {
+            enabled: isConnected && !!pstContractAddressForChain,
+            staleTime: Infinity, // This value is usually constant, so fetch once
+        },
+    }) as { data?: bigint, isLoading: boolean, error?: Error };
+
     // Callback function to be passed to PendingTransfers.
     // When an action (e.g., claiming a transfer) is completed within PendingTransfers,
     // this function will be called, triggering a re-render and re-fetch of the list.
@@ -77,11 +81,8 @@ const ClaimTransfers: React.FC<ClaimTransfersProps> = () => {
         setRefetchPendingTrigger(prev => !prev);
     }, []);
 
-
     return (
         <div style={claimTransfersContainerStyle}>
-            <h2 style={claimTransfersTitleStyle}>Transfers Waiting For You To Claim</h2>
-
             {!isConnected || !userAddress ? (
                 <p style={disconnectedNetworkStyle}>Connect your wallet to see transfers waiting to be claimed.</p>
             ) : (
@@ -92,6 +93,12 @@ const ClaimTransfers: React.FC<ClaimTransfersProps> = () => {
                     refetchTrigger={refetchPendingTrigger}
                     type="received" // CRITICAL: This prop tells PendingTransfers to filter for received transfers
                     onTransferActionCompleted={handleTransferActionCompleted}
+                    // NEW: Pass the title string to PendingTransfers
+                    componentTitle="Transfers Waiting To Be Claimed"
+                    // --- NEW: Pass the cancelCooldownPeriod and its states ---
+                    cancelCooldownPeriod={cancelCooldownPeriod}
+                    isLoadingCancelCooldown={isLoadingCancelCooldown}
+                    cancelCooldownError={cancelCooldownError}
                 />
             )}
         </div>

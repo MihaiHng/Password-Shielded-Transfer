@@ -14,6 +14,15 @@ interface CSSProperties {
     [key: string]: string | number | undefined;
 }
 
+// NEW: Style for the root container of the button component
+const rootContainerStyle: CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column', // Stack children (button and message) vertically
+    alignItems: 'center',    // Center children horizontally
+    width: '100%',           // Take full width of its parent (the actionButtonWrapperStyle div in PendingTransfers)
+    // No specific height needed here, let content dictate
+};
+
 const buttonStyle: CSSProperties = {
     padding: '8px 12px',
     borderRadius: '12px',
@@ -25,8 +34,12 @@ const buttonStyle: CSSProperties = {
     cursor: 'pointer',
     transition: 'background 0.3s ease',
     boxShadow: '0px 2px 5px rgba(0, 0, 0, 0.2)',
-    width: '100%',
-    textAlign: 'center',
+    width: '140px', // Fixed width
+    flexShrink: 0,  // Prevents shrinking if container is too small
+    height: '34px', // Fixed height
+    display: 'flex', // Enable flexbox for centering content
+    alignItems: 'center', // Center content vertically
+    justifyContent: 'center', // Center content horizontally
 };
 
 const disabledButtonStyle: CSSProperties = {
@@ -36,15 +49,24 @@ const disabledButtonStyle: CSSProperties = {
     boxShadow: 'none',
 };
 
+// NEW: Style for the error message paragraph
+const errorMessageStyle: CSSProperties = {
+    color: 'red',
+    fontSize: '10px',
+    marginTop: '5px',
+    textAlign: 'center', // Ensure text itself is centered
+    wordBreak: 'break-word',
+    maxWidth: '150px', // Constrain width to prevent excessive horizontal growth
+};
+
 // Define a custom error interface to safely access 'cause' and potential nested messages
 interface CustomError extends Error {
     cause?: { shortMessage?: string; message?: string; reason?: string; data?: { message?: string } } | Error;
-    shortMessage?: string; // Sometimes available directly from Wagmi/Viem
-    message: string; // Always available
-    details?: string; // From Wagmi/Viem if present
-    data?: { message?: string; data?: unknown; }; // From Wagmi/Viem if present
+    shortMessage?: string;
+    message: string;
+    details?: string;
+    data?: { message?: string; data?: unknown; };
 }
-
 
 interface ClaimTransferButtonProps {
     transferId: bigint;
@@ -54,7 +76,6 @@ interface ClaimTransferButtonProps {
     receiverAddress: Address; // The receiver address of this specific transfer
     transferStatus: string; // Current status of the transfer
     creationTime: bigint; // creationTime from the transfer details
-    // --- CHANGE 1: Update the type to accept transferId ---
     onClaimActionCompleted: (claimedTransferId: bigint) => void;
 }
 
@@ -74,7 +95,6 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
     const isTransferPending = transferStatus === "Pending";
     const isPasswordProvided = password.length > 0;
 
-    // --- Read s_cancelCooldownPeriod ---
     const { data: cancelCooldownPeriod, isLoading: isLoadingCooldownPeriod } = useReadContract({
         address: pstContractAddress,
         abi: PST_CONTRACT_ABI,
@@ -86,13 +106,11 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
         }
     }) as { data?: bigint, isLoading: boolean };
 
-    // --- Calculate if during cancel cooldown ---
     const currentTime = BigInt(Math.floor(Date.now() / 1000));
     const isDuringCancelCooldown =
-        cancelCooldownPeriod !== undefined && // Ensure cooldown period is loaded
+        cancelCooldownPeriod !== undefined &&
         creationTime + cancelCooldownPeriod > currentTime;
 
-    // Condition to enable simulation query
     const shouldEnableSimulation =
         isConnected &&
         isCurrentUserReceiver &&
@@ -109,14 +127,13 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
         args: [transferId, password],
         chainId: chainId,
         query: {
-            enabled: shouldEnableSimulation, // Only run simulation if conditions met
+            enabled: shouldEnableSimulation,
             staleTime: 5000,
             refetchOnWindowFocus: false,
             refetchInterval: false,
         }
     });
 
-    // --- Managed state for simulateError to prevent stale errors ---
     const [displaySimulateError, setDisplaySimulateError] = useState<CustomError | null>(null);
 
     useEffect(() => {
@@ -129,7 +146,6 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
         }
     }, [shouldEnableSimulation, rawSimulateError, displaySimulateError]);
 
-    // Destructure write and wait for transaction hooks once
     const { writeContract, data: txHash, isPending: isWritePending, error: rawWriteError } = useWriteContract();
     const { isLoading: isConfirming, isSuccess: isConfirmed, error: rawConfirmError } = useWaitForTransactionReceipt({
         hash: txHash,
@@ -138,19 +154,15 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
         }
     });
 
-    // Cast raw errors for consistency
     const writeError = rawWriteError as CustomError | null;
     const confirmError = rawConfirmError as CustomError | null;
 
-    // Trigger refetch on success
     useEffect(() => {
         if (isConfirmed) {
-            // --- CHANGE 2: Pass transferId when calling the callback ---
             onClaimActionCompleted(transferId);
         }
-    }, [isConfirmed, onClaimActionCompleted, transferId]); // Added transferId to dependencies
+    }, [isConfirmed, onClaimActionCompleted, transferId]);
 
-    // Function to get a user-friendly error message
     const getUserFriendlyErrorMessage = (error: Error | null): string => {
         if (!error) return '';
         const customError = error as CustomError;
@@ -217,10 +229,8 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
         return `${extractedMessage}`;
     };
 
-    // Determine the error message to display below the button.
     const displayErrorForMessage = writeError || confirmError || displaySimulateError;
 
-    // Check if the error is one that should be handled by the button's primary message
     const isErrorHandledByButtonLogic = (err: CustomError | null) => {
         if (!err) return false;
         const msg = getUserFriendlyErrorMessage(err);
@@ -231,11 +241,9 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
             msg === "Password not provided.";
     };
 
-    // Only show the red error message if there's an actual error AND it's not handled by the button's primary text.
     const errorMessage = (displayErrorForMessage && !isErrorHandledByButtonLogic(displayErrorForMessage))
         ? getUserFriendlyErrorMessage(displayErrorForMessage)
         : '';
-
 
     const handleClaim = async () => {
         if (!isConnected) { alert("Please connect your wallet."); return; }
@@ -257,12 +265,10 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
         }
     };
 
-    // Determine button text and style
     let buttonText = "Claim";
     let currentButtonStyle = buttonStyle;
-    let isDisabled = true; // Default to disabled
+    let isDisabled = true;
 
-    // ORDER OF PRECEDENCE FOR BUTTON TEXT IS CRITICAL
     if (!isConnected) {
         buttonText = "Connect Wallet";
     } else if (!isCurrentUserReceiver) {
@@ -273,7 +279,6 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
     else if (!isPasswordProvided) {
         buttonText = "Enter Password";
     }
-    // Updated message here
     else if (isDuringCancelCooldown) {
         buttonText = "Claim Not Yet Active";
     }
@@ -298,20 +303,18 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
         buttonText = "Claim";
     }
 
-    // Final decision on disabled state:
     if (buttonText === "Claim" && simulateData?.request && !isWritePending && !isConfirming) {
         isDisabled = false;
     } else {
         isDisabled = true;
     }
 
-    // Override button style if disabled
     if (isDisabled) {
         currentButtonStyle = disabledButtonStyle;
     }
 
     return (
-        <div>
+        <div style={rootContainerStyle}> {/* Apply the new root container style here */}
             <button
                 onClick={handleClaim}
                 style={currentButtonStyle}
@@ -319,9 +322,8 @@ const ClaimTransferButton: React.FC<ClaimTransferButtonProps> = ({
             >
                 {buttonText}
             </button>
-            {/* Display error message only if a relevant error exists and it's not handled by button text */}
             {errorMessage && (
-                <p style={{ color: 'red', fontSize: '10px', marginTop: '5px' }}>
+                <p style={errorMessageStyle}> {/* Apply the new error message style here */}
                     Error: {errorMessage.includes("User rejected") ? "User rejected transaction." : errorMessage}
                 </p>
             )}
