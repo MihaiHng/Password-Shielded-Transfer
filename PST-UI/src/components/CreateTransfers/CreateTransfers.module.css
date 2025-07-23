@@ -1,0 +1,327 @@
+/* src/components/CreateTransfers/CreateTransfers.module.css */
+
+/* Main container for the Uniswap-like card */
+.uniswapCard {
+    background: #1b1b1b;
+    border-radius: 20px;
+    padding: 24px;
+    max-width: 480px;
+    margin: 40px auto;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    /* Consider moving this to global styles if consistent */
+}
+
+/* Card title */
+.cardTitle {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    text-align: center;
+    color: #fff;
+}
+
+/* Connected network status text */
+.connectedNetwork {
+    font-size: 14px;
+    color: #aaa;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* Disconnected network status text */
+.disconnectedNetwork {
+    composes: connectedNetwork;
+    /* Inherit styles from connectedNetwork */
+    color: red;
+}
+
+/* Input group container (amount, token select) */
+.inputGroup {
+    background: #2c2c2c;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    /* For positioning the token dropdown */
+}
+
+/* Wrapper for amount input and total cost text */
+.amountAndCostWrapper {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+}
+
+/* Amount input field */
+.amountInput {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 48px;
+    font-weight: bold;
+    width: 100%;
+    padding: 0;
+    -webkit-appearance: none;
+    /* Remove arrows for number input in Chrome */
+    -moz-appearance: textfield;
+    /* Remove arrows for number input in Firefox */
+    appearance: none;
+}
+
+/* Total cost text */
+.totalCost {
+    font-size: 14px;
+    color: #aaa;
+    margin-top: 8px;
+    text-align: left;
+    width: 100%;
+}
+
+/* Container for the token select button/dropdown */
+.tokenSelectContainer {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 10;
+}
+
+/* Token select button */
+.tokenSelectButton {
+    background: rgba(50, 50, 50, 0.7);
+    border-radius: 16px;
+    padding: 8px 12px;
+    border: none;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s ease;
+}
+
+.tokenSelectButton:hover {
+    background: rgba(60, 60, 60, 0.8);
+}
+
+.tokenSelectButton:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Content inside token select button */
+.tokenButtonContent {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Token logo image */
+.tokenLogo {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+}
+
+/* Token symbol text */
+.tokenSymbol {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+/* Dropdown arrow icon */
+.dropdownArrow {
+    margin-left: 4px;
+    font-size: 12px;
+    transform: translateY(-1px);
+}
+
+/* Token dropdown menu */
+.tokenDropdownMenu {
+    position: absolute;
+    top: calc(100% + 8px);
+    /* Position below the button */
+    right: 0;
+    background: #2c2c2c;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    min-width: 240px;
+}
+
+/* Individual item in the token dropdown */
+.tokenDropdownItem {
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.tokenDropdownItem:hover {
+    background-color: #3a3a3a;
+}
+
+/* Token address display within dropdown item */
+.tokenAddress {
+    font-size: 12px;
+    color: #888;
+    font-family: monospace;
+}
+
+/* Copy button for token addresses in dropdown */
+.copyButton {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    border-radius: 4px;
+    margin-left: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+}
+
+.copyButton:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* General field container (for recipient address, password) */
+.fieldContainer {
+    margin-bottom: 20px;
+    background: #2c2c2c;
+    border-radius: 16px;
+    padding: 16px;
+}
+
+/* Label for input fields */
+.label {
+    display: block;
+    font-size: 14px;
+    color: #aaa;
+    margin-bottom: 8px;
+}
+
+/* General input field styling */
+.inputField {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid #444;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s ease;
+    box-sizing: border-box;
+    /* Include padding in width calculation */
+}
+
+.inputField:focus {
+    border-color: #9900ff;
+    /* Highlight on focus */
+}
+
+/* Approval section */
+.approvalSection {
+    background: rgba(0, 123, 255, 0.1);
+    border: 1px solid #007bff;
+    border-radius: 16px;
+    padding: 16px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+/* Text within the approval section */
+.approvalText {
+    font-size: 14px;
+    color: #ccc;
+    margin-bottom: 10px;
+}
+
+/* Specific styling for the approval needed message */
+.approvalText.warning {
+    color: orange;
+    font-weight: bold;
+}
+
+/* General button styling for form actions */
+.formButton {
+    width: 100%;
+    padding: 16px 20px;
+    border-radius: 20px;
+    border: none;
+    background: linear-gradient(to right, #ff007a, #9900ff);
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    margin-top: 20px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.formButton:hover:not(:disabled) {
+    background: linear-gradient(to right, #e0006c, #8000d0);
+}
+
+/* Disabled button styling */
+.formButton:disabled {
+    background: #E0E0E0;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+    /* Indicate disabled state more clearly */
+}
+
+/* Specific style for the Approved! state of the approve button */
+.formButton.approved {
+    background: #4CAF50;
+    /* Green */
+    box-shadow: none;
+}
+
+/* Transaction status messages */
+.transactionStatus {
+    font-size: 12px;
+    color: #ccc;
+    margin-top: 15px;
+    text-align: center;
+}
+
+/* Success status message */
+.transactionStatus.success {
+    color: #4CAF50;
+    /* Green */
+}
+
+/* Error status message */
+.transactionStatus.error {
+    color: red;
+}
+
+/* Link styling */
+.link {
+    color: #9900ff;
+    text-decoration: none;
+}
+
+.link:hover {
+    text-decoration: underline;
+}

@@ -21,6 +21,9 @@ contract PositiveStopOnRevertInvariantsPST is StdInvariant, Test {
     // Mapping from token address to total pending amount
     mapping(address => uint256) public totalPendingPerToken;
 
+    uint256 private constant OFFSET = 0;
+    uint256 private constant LIMIT = 20;
+
     function setUp() external {
         DeployPST deployer = new DeployPST();
         pst = deployer.run();
@@ -118,7 +121,7 @@ contract PositiveStopOnRevertInvariantsPST is StdInvariant, Test {
             pst.getCanceledTransfersForAddress(user);
             pst.getExpiredAndRefundedTransfersForAddress(user);
             pst.getClaimedTransfersForAddress(user);
-            pst.getAllTransfersByAddress(user);
+            pst.getAllTransfersByAddress(user, OFFSET, LIMIT);
         }
     }
 }

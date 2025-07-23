@@ -1,0 +1,76 @@
+/* src/components/ClaimTransferButton/ClaimTransferButton.module.css */
+
+/* Root container for the button component and its messages */
+.rootContainer {
+    display: flex;
+    flex-direction: column;
+    /* Stack children (button and message) vertically */
+    align-items: center;
+    /* Center children horizontally */
+    width: 100%;
+    /* Take full width of its parent */
+}
+
+/* Main button style */
+.button {
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(to right, #6EE7B7, #3B82F6);
+    /* Green-blue gradient for Claim */
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+    width: 140px;
+    /* Fixed width */
+    flex-shrink: 0;
+    /* Prevents shrinking if container is too small */
+    height: 34px;
+    /* Fixed height */
+    display: flex;
+    /* Enable flexbox for centering content */
+    align-items: center;
+    /* Center content vertically */
+    justify-content: center;
+    /* Center content horizontally */
+}
+
+.button:hover:not(:disabled) {
+    background: linear-gradient(to right, #5AD1A0, #316DD0);
+    /* Slightly darker on hover */
+}
+
+/* Disabled button style */
+.disabledButton {
+    composes: button;
+    /* Inherit styles from button */
+    background: #E0E0E0;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+    /* Indicate disabled state more clearly */
+}
+
+/* Specific style for the "Claimed!" state button */
+.buttonClaimed {
+    background: #4CAF50;
+    /* Green */
+    cursor: default;
+    box-shadow: none;
+}
+
+
+/* Style for the error message paragraph */
+.errorMessage {
+    color: red;
+    font-size: 10px;
+    margin-top: 5px;
+    text-align: center;
+    /* Ensure text itself is centered */
+    word-break: break-word;
+    max-width: 150px;
+    /* Constrain width to prevent excessive horizontal growth */
+}

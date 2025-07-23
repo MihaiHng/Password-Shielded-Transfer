@@ -924,21 +924,6 @@ contract PST is
 
     /**
      * @param user: Address associated with the transfer
-     * @param transferId: ID of the pending transfer to add
-     * @notice This function will add for user, a transfer ID with status "pending" to "s_pendingTransfersByAddress" array
-     */
-    function addToPendingTransfersByAddress(
-        address user,
-        uint256 transferId
-    ) internal {
-        s_pendingTransfersByAddress[user].push(transferId);
-        s_pendingTransferIndexByAddress[user][
-            transferId
-        ] = s_pendingTransfersByAddress[user].length; // 1-based
-    }
-
-    /**
-     * @param user: Address associated with the transfer
      * @param transferId: ID of the pending transfer to remove
      * @notice This function will remove for user, a transfer ID with status "pending" from "s_pendingTransfersByAddress" array
      */
@@ -1006,6 +991,67 @@ contract PST is
     /*//////////////////////////////////////////////////////////////
                         PRIVATE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
+
+    function _sliceArrayForPagination(
+        uint256[] memory _source,
+        uint256 _offset,
+        uint256 _limit
+    ) internal pure returns (uint256[] memory) {
+        uint256 totalLength = _source.length;
+
+        // Ensure offset is within bounds
+        if (_offset >= totalLength) {
+            return new uint256[](0); // Return an empty array if offset is too large
+        }
+
+        // Calculate the effective end index
+        uint256 end = _offset + _limit;
+        if (end > totalLength) {
+            end = totalLength; // Adjust end if it goes beyond the array's actual length
+        }
+
+        uint256 currentLength = end - _offset; // Calculate the length of the slice
+        uint256[] memory slicedArray = new uint256[](currentLength);
+
+        // Copy elements from the source array to the new sliced array
+        for (uint256 i = 0; i < currentLength; i++) {
+            slicedArray[i] = _source[_offset + i];
+        }
+
+        return slicedArray;
+    }
+
+    // Helper function to concatenate two dynamic uint256 arrays
+    function _concatenateArrays(
+        uint256[] memory a,
+        uint256[] memory b
+    ) internal pure returns (uint256[] memory) {
+        uint256 aLen = a.length;
+        uint256 bLen = b.length;
+        uint256[] memory c = new uint256[](aLen + bLen);
+        for (uint256 i = 0; i < aLen; i++) {
+            c[i] = a[i];
+        }
+        for (uint256 i = 0; i < bLen; i++) {
+            c[aLen + i] = b[i];
+        }
+        return c;
+    }
+
+    /**
+     * @param user: Address associated with the transfer
+     * @param transferId: ID of the pending transfer to add
+     * @notice This function will add for user, a transfer ID with status "pending" to "s_pendingTransfersByAddress" array
+     */
+    function addToPendingTransfersByAddress(
+        address user,
+        uint256 transferId
+    ) internal {
+        s_pendingTransfersByAddress[user].push(transferId);
+        s_pendingTransferIndexByAddress[user][
+            transferId
+        ] = s_pendingTransfersByAddress[user].length; // 1-based
+    }
 
     /**
      * @param token: Address of ERC20 token that will be added to allow list "s_allowedTokens"
@@ -1333,24 +1379,40 @@ contract PST is
         return s_claimedTransfersByAddress[user].length;
     }
 
-    // Function to get all transfers for an address
-    function getAllTransfersByAddress(
+    // Function to get the total number of transfers for an address
+    function getTotalTransfersByAddress(
         address user
-    )
-        external
-        view
-        onlyValidAddress(user)
-        returns (
-            uint256[] memory pending,
-            uint256[] memory canceled,
-            uint256[] memory expired,
-            uint256[] memory claimed
-        )
-    {
-        pending = s_pendingTransfersByAddress[user];
-        canceled = s_canceledTransfersByAddress[user];
-        expired = s_expiredAndRefundedTransfersByAddress[user];
-        claimed = s_claimedTransfersByAddress[user];
+    ) external view onlyValidAddress(user) returns (uint256) {
+        // Sum the lengths of all relevant transfer ID arrays for the user
+        uint256 total = s_canceledTransfersByAddress[user].length +
+            s_expiredAndRefundedTransfersByAddress[user].length +
+            s_claimedTransfersByAddress[user].length;
+        return total;
+    }
+
+    // Function to get all processed transfers for an address
+    function getAllTransfersByAddress(
+        address user,
+        uint256 _offset, // Starting index for the batch
+        uint256 _limit // Maximum number of items to return in the batch
+    ) external view onlyValidAddress(user) returns (uint256[] memory) {
+        // 1. Gather all raw IDs from the different status arrays
+        uint256[] memory canceledIds = s_canceledTransfersByAddress[user];
+        uint256[] memory expiredIds = s_expiredAndRefundedTransfersByAddress[
+            user
+        ];
+        uint256[] memory claimedIds = s_claimedTransfersByAddress[user];
+
+        // 2. Combine all IDs into a single temporary array
+        uint256[] memory combinedIds = _concatenateArrays(
+            canceledIds,
+            expiredIds
+        );
+        combinedIds = _concatenateArrays(combinedIds, claimedIds);
+
+        // 3. Apply pagination (slice the merged, unsorted list)
+
+        return _sliceArrayForPagination(combinedIds, _offset, _limit);
     }
 
     // Function to get transfer details for a specific transfer Id

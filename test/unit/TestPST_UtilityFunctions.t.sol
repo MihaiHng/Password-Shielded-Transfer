@@ -21,6 +21,8 @@ contract TestPST_UtilityFunctions is Test {
     uint256 public transferId;
 
     // Constants for fee levels
+    uint256 private constant OFFSET = 0;
+    uint256 private constant LIMIT = 20;
     uint8 private constant LVL1 = 1;
     uint8 private constant LVL2 = 2;
     uint8 private constant LVL3 = 3;
@@ -810,20 +812,12 @@ contract TestPST_UtilityFunctions is Test {
 
         // Act
         (
-            uint256[] memory pending,
             uint256[] memory canceled,
             uint256[] memory expired,
             uint256[] memory claimed
-        ) = pst.getAllTransfersByAddress(SENDER);
-
-        //console.log("All Transfers:", pending[0], canceled[0], expired[0], claimed[0]);
+        ) = pst.getAllTransfersByAddress(SENDER, OFFSET, LIMIT);
 
         // Assert
-        assertEq(
-            pending.length,
-            expectedPending.length,
-            "Pending transfers array length should match"
-        );
         assertEq(
             canceled.length,
             expectedCanceled.length,
@@ -839,14 +833,6 @@ contract TestPST_UtilityFunctions is Test {
             expectedClaimed.length,
             "Claimed transfers array length should match"
         );
-
-        for (uint256 i = 0; i < pending.length; i++) {
-            assertEq(
-                pending[i],
-                expectedPending[i],
-                "Pending transfer ID mismatch"
-            );
-        }
 
         for (uint256 i = 0; i < canceled.length; i++) {
             assertEq(

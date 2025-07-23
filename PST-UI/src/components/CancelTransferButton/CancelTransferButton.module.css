@@ -1,0 +1,74 @@
+/* src/components/CancelTransferButton/CancelTransferButton.module.css */
+
+/* NEW: Style for the root container of the button component */
+.rootContainer {
+    display: flex;
+    flex-direction: column;
+    /* Stack children (button and message) vertically */
+    align-items: center;
+    /* Center children horizontally */
+    width: 100%;
+    /* Take full width of its parent (the actionButtonWrapperStyle div in PendingTransfers) */
+    /* No specific height needed here, let content dictate */
+}
+
+.formButton {
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(to right, #ff4d4f, #cc0000);
+    /* Red gradient for Cancel */
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s ease;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.2);
+    width: 100px;
+    /* Fixed width */
+    flex-shrink: 0;
+    height: 40px;
+    /* Fixed height */
+    display: flex;
+    /* Enable flexbox for centering content */
+    align-items: center;
+    /* Center content vertically */
+    justify-content: center;
+    /* Center content horizontally */
+}
+
+.formButton:hover:not(:disabled) {
+    background: linear-gradient(to right, #e04446, #b30000);
+    /* Slightly darker on hover */
+}
+
+.disabledButton {
+    composes: formButton;
+    /* Inherit styles from formButton */
+    background: #555;
+    color: #aaa;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.7;
+    /* Indicate disabled state more clearly */
+}
+
+/* Specific style for the "Canceled!" state button */
+.formButtonCanceled {
+    background: #4CAF50;
+    /* Green */
+    cursor: default;
+    box-shadow: none;
+}
+
+/* NEW: Style for the error message paragraph */
+.errorMessage {
+    color: red;
+    font-size: 10px;
+    margin-top: 5px;
+    text-align: center;
+    /* Ensure text itself is centered */
+    word-break: break-word;
+    max-width: 120px;
+    /* Constrain width slightly more than button if needed */
+}

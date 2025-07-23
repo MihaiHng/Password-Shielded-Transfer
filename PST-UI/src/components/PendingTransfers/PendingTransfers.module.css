@@ -1,0 +1,240 @@
+/* Container for the entire PendingTransfers section */
+.pendingTransfersContainer {
+    background: #1b1b1b;
+    border-radius: 20px;
+    padding: 24px;
+    max-width: 1000px;
+    margin: 40px auto;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+    /* Consider moving this to global styles if consistent */
+}
+
+/* Title for the PendingTransfers section */
+.pendingTransfersTitle {
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 20px;
+    text-align: center;
+    color: #fff;
+}
+
+/* Informative text / alert messages */
+.informativeText {
+    font-size: 13px;
+    color: #00FF00;
+    text-align: center;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 15px;
+    background-color: rgba(0, 255, 0, 0.1);
+    border-radius: 8px;
+    border: 1px solid rgba(0, 255, 0, 0.3);
+    width: fit-content;
+    margin: 0 auto 15px auto;
+    /* Centering */
+}
+
+/* Styles for error messages on the main component level */
+.informativeText.error {
+    color: red;
+    background-color: rgba(255, 0, 0, 0.1);
+    border-color: rgba(255, 0, 0, 0.3);
+}
+
+/* Container for the table, handles overflow */
+.tableContainer {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    overflow-x: auto;
+    /* Allows horizontal scrolling on small screens */
+}
+
+/* Main table styling */
+.styledTable {
+    width: 100%;
+    border-collapse: separate;
+    /* Required for border-spacing and border-radius on table */
+    border-spacing: 0;
+    background-color: #2c2c2c;
+    border-radius: 12px;
+}
+
+/* Table header cells */
+.tableHeader {
+    background-color: #3a3a3a;
+    color: #fff;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 12px 15px;
+    text-align: center;
+    position: sticky;
+    /* Makes headers stick when scrolling vertically */
+    top: 0;
+    z-index: 1;
+}
+
+/* Message for disconnected state */
+.disconnectedNetworkMessage {
+    font-size: 14px;
+    color: red;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* Message when no transfers are found */
+.noTransfersMessage {
+    text-align: center;
+    color: #ccc;
+}
+
+/* Global copied popup */
+.copiedPopup {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    /* Position it from top-left */
+    transform: none;
+    /* Reset any previous transform */
+    background-color: #E0E0E0;
+    color: #333;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 10000;
+    opacity: 0;
+    /* Default hidden */
+    visibility: hidden;
+    /* Default hidden */
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    text-align: center;
+}
+
+.copiedPopup.show {
+    /* Class added by JS to show it */
+    opacity: 1;
+    visibility: visible;
+}
+
+/* --- Styles for PendingTransferRow (nested component) --- */
+
+.tableRow {
+    border-bottom: 1px solid #3a3a3a;
+}
+
+/* Last row shouldn't have a bottom border if you want a clean table bottom */
+.tableRow:last-child {
+    border-bottom: none;
+}
+
+.tableData {
+    padding: 12px 15px;
+    font-size: 14px;
+    color: #eee;
+    vertical-align: middle;
+    text-align: center;
+    /* Generally align table data to center */
+}
+
+/* For error cells within a row */
+.tableData.error {
+    color: red;
+}
+
+/* Container for token symbol and copy button */
+.tokenDisplayContainer {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    justify-content: center;
+    /* Center the content within the cell */
+}
+
+/* Password input field */
+.passwordInput {
+    width: 110px;
+    padding: 8px 12px;
+    background: #3a3a3a;
+    border: 1px solid #555;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 12px;
+    outline: none;
+    margin-bottom: 10px;
+    /* Added from inline style */
+}
+
+/* Copy button for addresses/IDs */
+.copyButton {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    border-radius: 4px;
+    margin-left: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, outline 0.1s ease;
+    outline: none;
+    /* Remove default focus outline */
+    box-shadow: none;
+    /* Remove default focus shadow */
+}
+
+.copyButton:hover,
+.copyButton:focus-visible {
+    /* Add focus-visible for accessibility */
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Table cell specifically for action buttons */
+.actionTableCell {
+    padding: 12px 15px;
+    /* Inherit base padding */
+    font-size: 14px;
+    color: #eee;
+    vertical-align: middle;
+    display: flex;
+    /* Make it a flex container */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 80px;
+    /* Ensure consistent height for action cells */
+    text-align: center;
+}
+
+/* Wrapper for individual action buttons (to manage spacing/layout) */
+.actionButtonWrapper {
+    display: flex;
+    flex-direction: column;
+    /* Stack buttons if needed */
+    align-items: center;
+    width: 100%;
+    /* Take full width of parent flex item */
+}
+
+/* Styles for claim countdown text */
+.claimableCountdown {
+    color: #FFD700;
+    /* Gold */
+    font-size: 13px;
+    font-weight: bold;
+}
+
+/* Style for "No action" text */
+.noActionText {
+    color: #888;
+    font-size: 12px;
+}

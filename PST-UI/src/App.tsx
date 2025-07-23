@@ -104,9 +104,9 @@
 
 import { useState } from 'react'
 import './App.css'
-import CreateTransfer from './components/CreateTransfers';
-import ClaimTransfers from './components/ClaimTransfers';
-import History from './components/History';
+import CreateTransfer from './components/CreateTransfers/CreateTransfers';
+import ClaimTransfers from './components/ClaimTransfers/ClaimTransfers';
+import History from './components/History/History';
 import { headerButtonStyle } from './styles/buttonStyles'
 
 const FIXED_WALLET_HEADER_HEIGHT = '72px';

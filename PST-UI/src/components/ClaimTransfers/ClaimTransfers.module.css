@@ -1,0 +1,18 @@
+/* src/components/ClaimTransfers/ClaimTransfers.module.css */
+
+/* Container for the Claimable Transfers section */
+.claimTransfersContainer {
+    max-width: 1200px;
+    /* Adjust as needed for your layout */
+    margin: 40px auto;
+    color: #fff;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Disconnected network status text */
+.disconnectedNetwork {
+    font-size: 14px;
+    color: red;
+    text-align: center;
+    margin-bottom: 20px;
+}
