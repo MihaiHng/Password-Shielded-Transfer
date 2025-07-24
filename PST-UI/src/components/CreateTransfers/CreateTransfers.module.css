@@ -4,9 +4,9 @@
 .uniswapCard {
     background: #1b1b1b;
     border-radius: 20px;
-    padding: 24px;
+    padding: 20px;
     max-width: 480px;
-    margin: 40px auto;
+    margin: 25px auto;
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     backdrop-filter: blur(4px);
     border: 1px solid rgba(255, 255, 255, 0.18);
@@ -43,8 +43,8 @@
 .inputGroup {
     background: #2c2c2c;
     border-radius: 16px;
-    padding: 16px;
-    margin-bottom: 20px;
+    padding: 12px;
+    margin-bottom: 15px;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -156,7 +156,6 @@
     max-height: 200px;
     overflow-y: auto;
     z-index: 100;
-    min-width: 240px;
 }
 
 /* Individual item in the token dropdown */
@@ -165,7 +164,9 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    /* CHANGE THIS BACK TO SPACE-BETWEEN */
     gap: 8px;
+    /* This gap is still valid, but will primarily apply if you had more items between symbol and button */
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
@@ -190,7 +191,6 @@
     font-size: 14px;
     padding: 4px;
     border-radius: 4px;
-    margin-left: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -203,10 +203,10 @@
 
 /* General field container (for recipient address, password) */
 .fieldContainer {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     background: #2c2c2c;
     border-radius: 16px;
-    padding: 16px;
+    padding: 12px;
 }
 
 /* Label for input fields */
@@ -264,7 +264,7 @@
 /* General button styling for form actions */
 .formButton {
     width: 100%;
-    padding: 16px 20px;
+    padding: 12px 20px;
     border-radius: 20px;
     border: none;
     background: linear-gradient(to right, #ff007a, #9900ff);
@@ -273,7 +273,7 @@
     font-weight: bold;
     cursor: pointer;
     transition: background 0.3s ease;
-    margin-top: 20px;
+    margin-top: 15px;
     box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.2);
 }
 

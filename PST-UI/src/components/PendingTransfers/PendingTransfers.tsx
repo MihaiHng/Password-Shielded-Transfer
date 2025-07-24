@@ -1288,7 +1288,7 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({
 
     if (!isConnected || (!userAddress && type !== "all")) {
         return (
-            <div className={styles.pendingTransfersContainer}>
+            <div className={styles.pendingpendingTransfersContainer}>
                 <h2 className={styles.pendingTransfersTitle}>{displayedTitle}</h2>
                 <p className={styles.disconnectedNetworkMessage}>Connect your wallet to see pending transfers.</p>
             </div>
@@ -1336,11 +1336,10 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({
                 {type === "sent" && userAddress && !isLoadingCancelCooldown && cancelCooldownPeriod !== undefined && (
                     <p className={styles.informativeText}>
                         <FontAwesomeIcon icon={faInfoCircle} />
-                        You have **{cancelCooldownMinutes} minutes** from **Creation Time**
-                        to **CANCEL** your transfer.
+                        You have <strong>{cancelCooldownMinutes} minutes</strong> from <strong>Creation Time</strong>
+                        to <strong>CANCEL</strong> your transfer.
                     </p>
                 )}
-
                 {!hasTransfersToRender ? (
                     <p className={styles.noTransfersMessage}>No pending transfers found.</p>
                 ) : (

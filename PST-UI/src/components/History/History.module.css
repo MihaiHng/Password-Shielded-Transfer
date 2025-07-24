@@ -100,10 +100,12 @@
     font-size: 14px;
     color: #eee;
     vertical-align: middle;
+    text-align: center;
 }
 
 /* Container for token display (symbol + copy button) */
 .tokenDisplayContainer {
+    justify-content: center;
     display: flex;
     align-items: center;
     gap: 1px;

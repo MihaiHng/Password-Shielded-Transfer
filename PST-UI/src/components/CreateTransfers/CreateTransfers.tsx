@@ -1672,6 +1672,10 @@ import { parseUnits, isAddress, formatUnits } from 'viem';
 import type { Abi, Address } from 'viem';
 import { useQueryClient } from '@tanstack/react-query';
 
+// Import Font Awesome icons
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCopy, faSyncAlt } from '@fortawesome/free-solid-svg-icons';
+
 // Import your ABIs
 import abiPstWrapper from '../../lib/abis/abi_pst.json';
 import erc20AbiJson from '../../lib/abis/abi_erc20.json';
@@ -2233,11 +2237,11 @@ const CreateTransfer: React.FC = () => {
     return (
         <>
             <div className={styles.uniswapCard}>
-                <h2 className={styles.cardTitle}>Create Token Transfer</h2>
+                <h2 className={styles.cardTitle}>Create Transfer</h2>
 
                 {isConnected && chain ? (
                     <p className={styles.connectedNetwork}>
-                        Connected to: <strong>{chain.name}</strong> (Chain ID: {chain.id})
+                        Connected to: <strong>{chain.name}</strong> {/*(Chain ID: {chain.id})*/}
                     </p>
                 ) : (
                     <p className={styles.disconnectedNetwork}>Please connect your wallet.</p>
@@ -2294,9 +2298,9 @@ const CreateTransfer: React.FC = () => {
                                         </div>
 
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}> {/* Inline style for this specific flex container */}
-                                            <span className={styles.tokenAddress}>
+                                            {/* <span className={styles.tokenAddress}>
                                                 {token.address ? truncateAddress(token.address) : ''}
-                                            </span>
+                                            </span> */}
                                             <button
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -2304,7 +2308,7 @@ const CreateTransfer: React.FC = () => {
                                                 }}
                                                 className={styles.copyButton}
                                             >
-                                                {copiedAddressGlobal === token.address ? 'Copied!' : '📋'}
+                                                {copiedAddressGlobal === token.address ? 'Copied!' : <FontAwesomeIcon icon={faCopy} />}
                                             </button>
                                         </div>
                                     </div>
