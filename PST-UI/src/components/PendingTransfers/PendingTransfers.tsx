@@ -9,7 +9,6 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCopy, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 import abiPstWrapper from '../../lib/abis/abi_pst.json'; // Adjusted path if needed
-import erc20AbiJson from '../../lib/abis/abi_erc20.json'; // Adjusted path if needed
 
 import CancelTransferButton from '../CancelTransferButton/CancelTransferButton'; // Adjusted path if needed
 import ClaimTransferButton from '../ClaimTransferButton/ClaimTransferButton'; // Adjusted path if needed
@@ -111,7 +110,7 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
 }) => {
     const [password, setPassword] = useState<string>('');
     const config = useConfig();
-    const [isCopyButtonHovered, setIsCopyButtonHovered] = useState(false);
+    const [, setIsCopyButtonHovered] = useState(false);
 
     const areRowContractDetailsReady = !!pstContractAddress && !!chainId && !!config;
     type ContractTransferDetails = [Address, Address, Address, bigint, bigint, bigint, string];
@@ -392,7 +391,7 @@ const PendingTransferRow: React.FC<PendingTransferRowProps> = ({
 
 // --- PENDING TRANSFERS MAIN COMPONENT ---
 const PendingTransfers: React.FC<PendingTransfersProps> = ({
-    pstContractAddress,
+    //pstContractAddress,
     // refetchTrigger, // Removed from props
     type,
     onTransferActionCompleted,
@@ -402,7 +401,7 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({
     cancelCooldownError
 }) => {
     const { address: userAddress, chain, isConnected } = useAccount();
-    const config = useConfig();
+    //const config = useConfig();
     const queryClient = useQueryClient(); // Initialize useQueryClient
     const [transferIds, setTransferIds] = useState<bigint[]>([]);
     const [idsFetchError, setIdsFetchError] = useState<Error | null>(null);
@@ -432,7 +431,7 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({
         data: fetchedIdsData,
         isLoading: isLoadingIds,
         error: fetchIdsError,
-        refetch: refetchIds // Still available if needed for internal, non-action-based refetch
+        //refetch: refetchIds // Still available if needed for internal, non-action-based refetch
     } = useReadContract({
         address: pstContractAddressForChain,
         abi: PST_CONTRACT_ABI,
