@@ -12,3 +12,78 @@ body {
   margin: 0 auto;
   padding: 2rem;
 }
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #1e1e1e;
+  color: #fff;
+  font-family: "'Inter', sans-serif";
+}
+
+.app-header-fixed {
+  width: 100%;
+  padding: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 1000;
+  background: #1e1e1e;
+  border-bottom: none;
+  box-sizing: border-box;
+}
+
+.app-nav-buttons-fixed {
+  display: flex;
+  gap: 5rem;
+  background: #1e1e1e;
+  padding: 1rem;
+  width: 100%;
+  justify-content: center;
+  position: fixed;
+  left: 0;
+  z-index: 999;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.app-spacer-div {
+  flex-shrink: 0;
+}
+
+.app-main-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-grow: 1;
+  overflow-y: auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 2rem;
+}
+
+.app-main-content-inner-wrapper {
+  width: 100%;
+  max-width: 1300px;
+  padding: 0 20px;
+  box-sizing: border-box;
+}
+
+/* Style for the main navigation/tab buttons in App.tsx */
+.header-button-style {
+  width: 150px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  font-weight: bold;
+  font-family: 'Inter';
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}

@@ -156,6 +156,52 @@ contract TestPST_UtilityFunctions is Test {
     }
 
     /*//////////////////////////////////////////////////////////////
+                        HELPER FUNCTIONS 
+    //////////////////////////////////////////////////////////////*/
+
+    // Helper function to concatenate two uint256 arrays
+    function _testConcatenateArrays(
+        uint256[] memory arr1,
+        uint256[] memory arr2
+    ) internal pure returns (uint256[] memory) {
+        uint256 len1 = arr1.length;
+        uint256 len2 = arr2.length;
+        uint256[] memory result = new uint256[](len1 + len2);
+        for (uint256 i = 0; i < len1; i++) {
+            result[i] = arr1[i];
+        }
+        for (uint256 i = 0; i < len2; i++) {
+            result[len1 + i] = arr2[i];
+        }
+        return result;
+    }
+
+    // Helper function to slice an array for pagination
+    function _testSliceArrayForPagination(
+        uint256[] memory arr,
+        uint256 _offset,
+        uint256 _limit
+    ) internal pure returns (uint256[] memory) {
+        uint256 arrLength = arr.length;
+        if (_offset >= arrLength) {
+            return new uint256[](0); // Return empty if offset is out of bounds
+        }
+
+        uint256 endIndex = _offset + _limit;
+        if (endIndex > arrLength) {
+            endIndex = arrLength;
+        }
+
+        uint256 resultLength = endIndex - _offset;
+        uint256[] memory result = new uint256[](resultLength);
+
+        for (uint256 i = 0; i < resultLength; i++) {
+            result[i] = arr[_offset + i];
+        }
+        return result;
+    }
+
+    /*//////////////////////////////////////////////////////////////
                         UTILITY FUNCTIONS TESTS
     //////////////////////////////////////////////////////////////*/
     function testTransferOwnership() public {
@@ -376,6 +422,46 @@ contract TestPST_UtilityFunctions is Test {
 
         // Assert
         assertEq(batchLimit, NEW_BATCH_LIMIT, "New batch limit is not correct");
+    }
+
+    function testSetForwarderAddress_OwnerCanSet() public {
+        // Arrange
+        address newForwarder = makeAddr("new_forwarder_address");
+
+        // Act
+        vm.prank(pst.owner());
+        pst.setForwarderAddress(newForwarder);
+
+        // Assert
+        assertEq(
+            pst.getForwarderAddress(),
+            newForwarder,
+            "Forwarder address should be updated successfully by the owner."
+        );
+    }
+
+    function testSetForwarderAddress_NonOwnerCannotSet() public {
+        // Arrange
+        address nonOwner = RANDOM_USER;
+        address originalForwarder = pst.getForwarderAddress(); // Get the current address
+        address attemptedNewForwarder = makeAddr("malicious_attempt"); // An address to try and set
+
+        // Act & Assert
+        vm.prank(nonOwner); // Impersonate the non-owner
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                OwnableUnauthorizedAccount.selector,
+                nonOwner
+            )
+        );
+        pst.setForwarderAddress(attemptedNewForwarder);
+
+        // Assert that the forwarder address remains unchanged after the failed attempt
+        assertEq(
+            pst.getForwarderAddress(),
+            originalForwarder,
+            "Forwarder address should remain unchanged when called by a non-owner."
+        );
     }
 
     function testRefundExpiredTransferCorrectlyRefundsSenderForEth() public {
@@ -784,6 +870,69 @@ contract TestPST_UtilityFunctions is Test {
         );
     }
 
+    function testGetClaimedTransfersForAddressCount()
+        public
+        transferCreatedAndClaimed
+        transferCreatedAndCanceled
+        transferCreatedThenExpiredAndRefunded
+        transferCreated
+    {
+        // Arrange
+        // Get the expected count by directly querying the underlying array's length
+        // using the existing getter function.
+        uint256 expectedCount = pst
+            .getClaimedTransfersForAddress(SENDER)
+            .length;
+
+        // Act
+        // Call the function under test
+        uint256 actualCount = pst.getClaimedTransfersForAddressCount(SENDER);
+
+        // Assert
+        // Verify that the returned count matches the expected length
+        assertEq(
+            actualCount,
+            expectedCount,
+            "The count of claimed transfers for the address should match the actual array length."
+        );
+    }
+
+    function testGetTotalTransfersByAddress()
+        public
+        // Ensure these fixtures create transfers in various states for the SENDER
+        transferCreatedAndClaimed // Ensures at least one claimed transfer
+        transferCreatedAndCanceled // Ensures at least one canceled transfer
+        transferCreatedThenExpiredAndRefunded // Ensures at least one expired transfer
+        transferCreated // Optional: if this creates a PENDING transfer, it will NOT be counted by the function.
+    {
+        // Arrange
+        // Get the lengths of the individual transfer status arrays for the SENDER
+        // These reflect the state set up by the test fixtures.
+        uint256 canceledCount = pst
+            .getCanceledTransfersForAddress(SENDER)
+            .length;
+        uint256 expiredCount = pst
+            .getExpiredAndRefundedTransfersForAddress(SENDER)
+            .length;
+        uint256 claimedCount = pst.getClaimedTransfersForAddress(SENDER).length;
+
+        // Calculate the expected total based on the contract's logic
+        // The function sums canceled, expired, and claimed transfers.
+        uint256 expectedTotal = canceledCount + expiredCount + claimedCount;
+
+        // Act
+        // Call the function being tested
+        uint256 actualTotal = pst.getTotalTransfersByAddress(SENDER);
+
+        // Assert
+        // Verify that the returned total matches the expected sum
+        assertEq(
+            actualTotal,
+            expectedTotal,
+            "Total transfers count for address should match the sum of canceled, expired, and claimed."
+        );
+    }
+
     function testGetAllTransfersByAddress()
         public
         transferCreated
@@ -792,69 +941,61 @@ contract TestPST_UtilityFunctions is Test {
         transferCreatedThenExpiredAndRefunded
     {
         // Arrange
-        uint256[] memory expectedPending = pst.getPendingTransfersForAddress(
-            SENDER
-        );
-        uint256[] memory expectedCanceled = pst.getCanceledTransfersForAddress(
-            SENDER
-        );
-        uint256[] memory expectedExpired = pst
+
+        // 1. Fetch raw IDs for processed transfers from individual getters
+        //    Ensure the order matches how your contract's _concatenateArrays combines them:
+        //    (canceledIds, expiredIds), then (combined, claimedIds)
+        uint256[] memory expectedCanceledRaw = pst
+            .getCanceledTransfersForAddress(SENDER);
+        uint256[] memory expectedExpiredRaw = pst
             .getExpiredAndRefundedTransfersForAddress(SENDER);
-        uint256[] memory expectedClaimed = pst.getClaimedTransfersForAddress(
+        uint256[] memory expectedClaimedRaw = pst.getClaimedTransfersForAddress(
             SENDER
         );
 
-        // Log stored transfer IDs
-        console.log("Pending:", expectedPending[0]);
-        console.log("Canceled:", expectedCanceled[0]);
-        console.log("Expired:", expectedExpired[0]);
-        console.log("Claimed:", expectedClaimed[0]);
+        // 2. Simulate the contract's internal combination logic using our test helpers
+        uint256[] memory combinedExpectedRaw = _testConcatenateArrays(
+            expectedCanceledRaw,
+            expectedExpiredRaw
+        );
+        combinedExpectedRaw = _testConcatenateArrays(
+            combinedExpectedRaw,
+            expectedClaimedRaw
+        );
+
+        // 3. Simulate the contract's internal pagination logic using our test helper
+        //    Use the same OFFSET and LIMIT constants defined in your test setup
+        uint256[] memory paginatedExpected = _testSliceArrayForPagination(
+            combinedExpectedRaw,
+            OFFSET,
+            LIMIT
+        );
 
         // Act
-        (
-            uint256[] memory canceled,
-            uint256[] memory expired,
-            uint256[] memory claimed
-        ) = pst.getAllTransfersByAddress(SENDER, OFFSET, LIMIT);
+        // Call the updated function which now returns a single array
+        uint256[] memory actualCombinedPaginated = pst.getAllTransfersByAddress(
+            SENDER,
+            OFFSET,
+            LIMIT
+        );
 
         // Assert
+        // Assert the length of the returned array first
         assertEq(
-            canceled.length,
-            expectedCanceled.length,
-            "Canceled transfers array length should match"
-        );
-        assertEq(
-            expired.length,
-            expectedExpired.length,
-            "Expired transfers array length should match"
-        );
-        assertEq(
-            claimed.length,
-            expectedClaimed.length,
-            "Claimed transfers array length should match"
+            actualCombinedPaginated.length,
+            paginatedExpected.length,
+            "Combined paginated transfers array length should match"
         );
 
-        for (uint256 i = 0; i < canceled.length; i++) {
+        // Then, assert that each element in the returned array matches the expected order and value
+        for (uint256 i = 0; i < actualCombinedPaginated.length; i++) {
             assertEq(
-                canceled[i],
-                expectedCanceled[i],
-                "Canceled transfer ID mismatch"
-            );
-        }
-
-        for (uint256 i = 0; i < expired.length; i++) {
-            assertEq(
-                expired[i],
-                expectedExpired[i],
-                "Expired transfer ID mismatch"
-            );
-        }
-
-        for (uint256 i = 0; i < claimed.length; i++) {
-            assertEq(
-                claimed[i],
-                expectedClaimed[i],
-                "Claimed transfer ID mismatch"
+                actualCombinedPaginated[i],
+                paginatedExpected[i],
+                string.concat(
+                    "Combined paginated transfer ID mismatch at index ",
+                    vm.toString(i)
+                )
             );
         }
     }

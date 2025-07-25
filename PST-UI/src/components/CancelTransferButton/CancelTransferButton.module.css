@@ -43,7 +43,6 @@
 }
 
 .disabledButton {
-    composes: formButton;
     /* Inherit styles from formButton */
     background: #555;
     color: #aaa;

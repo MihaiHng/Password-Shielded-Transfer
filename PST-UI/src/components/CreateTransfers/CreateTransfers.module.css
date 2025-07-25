@@ -1,7 +1,7 @@
 /* src/components/CreateTransfers/CreateTransfers.module.css */
 
-/* Main container for the Uniswap-like card */
-.uniswapCard {
+/* Main container for Create Transfer card */
+.CreateTransferCard {
     background: #1b1b1b;
     border-radius: 20px;
     padding: 20px;
@@ -34,7 +34,6 @@
 
 /* Disconnected network status text */
 .disconnectedNetwork {
-    composes: connectedNetwork;
     /* Inherit styles from connectedNetwork */
     color: red;
 }
