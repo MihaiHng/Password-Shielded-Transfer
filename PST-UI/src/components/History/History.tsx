@@ -11,11 +11,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCopy, faSyncAlt } from '@fortawesome/free-solid-svg-icons';
 
 // Import ABIs
-import abiPstWrapper from '../../lib/abis/abi_pst.json';
-import erc20AbiJson from '../../lib/abis/abi_erc20.json';
+import abiPstWrapper from '../../utils/abis/abi_pst.json';
+import erc20AbiJson from '../../utils/abis/abi_erc20.json';
 
 // Import pre-approved tokens list (needed for token decimals lookup)
-import { ALL_NETWORK_TOKENS } from '../../lib/constants/tokenList';
+import { ALL_NETWORK_TOKENS } from '../../utils/constants/tokenList';
 
 // Import the new CSS Module
 import styles from './History.module.css';

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt, useSimulateContract, useAccount } from 'wagmi';
 import type { Address, Abi } from 'viem';
 
-import abiPstWrapper from '../../lib/abis/abi_pst.json'; // Adjusted path for nested component
+import abiPstWrapper from '../../utils/abis/abi_pst.json'; // Adjusted path for nested component
 
 // Import the new CSS Module
 import styles from './CancelTransferButton.module.css'; // <<< ONLY THIS LINE CHANGED FOR STYLES IMPORT

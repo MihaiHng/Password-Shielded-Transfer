@@ -13,7 +13,7 @@ import PendingTransfers from '../PendingTransfers/PendingTransfers';
 import styles from './ClaimTransfers.module.css';
 
 // Import the ABI for PSTWrapper (Ensure this path is consistent with CreateTransfers.tsx)
-import abiPstWrapper from '../../lib/abis/abi_pst.json';
+import abiPstWrapper from '../../utils/abis/abi_pst.json';
 
 // Consider creating a shared constants file for ABIs and contract addresses
 // if they are used across multiple components to ensure single source of truth

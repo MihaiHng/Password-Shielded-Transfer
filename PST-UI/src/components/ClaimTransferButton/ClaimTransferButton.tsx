@@ -5,7 +5,7 @@ import { useWriteContract, useWaitForTransactionReceipt, useSimulateContract, us
 import type { Address, Abi } from 'viem';
 
 // Import ABIs
-import abiPstWrapper from '../../lib/abis/abi_pst.json'; // Adjusted path for nested component
+import abiPstWrapper from '../../utils/abis/abi_pst.json'; // Adjusted path for nested component
 
 // Import the new CSS Module
 import styles from './ClaimTransferButton.module.css'; // <<< ONLY THIS LINE CHANGED FOR STYLES IMPORT

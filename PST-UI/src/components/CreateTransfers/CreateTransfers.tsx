@@ -17,11 +17,11 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCopy } from '@fortawesome/free-solid-svg-icons';
 
 // Import your ABIs
-import abiPstWrapper from '../../lib/abis/abi_pst.json';
-import erc20AbiJson from '../../lib/abis/abi_erc20.json';
+import abiPstWrapper from '../../utils/abis/abi_pst.json';
+import erc20AbiJson from '../../utils/abis/abi_erc20.json';
 
 // Import your pre-approved tokens list
-import { ALL_NETWORK_TOKENS } from '../../lib/constants/tokenList';
+import { ALL_NETWORK_TOKENS } from '../../utils/constants/tokenList';
 
 // Import the new PendingTransfers component
 // Ensure this path is correct based on your file structure, e.g., if you moved it to 'components/PendingTransfers/PendingTransfers.tsx'

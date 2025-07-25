@@ -8,7 +8,7 @@ import type { Abi } from 'viem';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCopy, faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
-import abiPstWrapper from '../../lib/abis/abi_pst.json'; // Adjusted path if needed
+import abiPstWrapper from '../../utils/abis/abi_pst.json'; // Adjusted path if needed
 
 import CancelTransferButton from '../CancelTransferButton/CancelTransferButton'; // Adjusted path if needed
 import ClaimTransferButton from '../ClaimTransferButton/ClaimTransferButton'; // Adjusted path if needed
