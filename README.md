@@ -4,9 +4,9 @@
 
 ## Contract Address
 
-Testnet:
--> Sepolia ETH: 
--> Sepolia Zksync: 
+- Testnet:
+  - Sepolia ETH: 
+  - Sepolia Zksync: 
 
 ## Description
 
