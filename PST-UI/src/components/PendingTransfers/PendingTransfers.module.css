@@ -20,6 +20,7 @@
     margin-bottom: 20px;
     text-align: center;
     color: #fff;
+    font-family: 'Inter';
 }
 
 /* Informative text / alert messages */
@@ -86,6 +87,7 @@
     color: red;
     text-align: center;
     margin-bottom: 20px;
+    font-family: 'Inter';
 }
 
 /* Message when no transfers are found */

@@ -1,5 +1,8 @@
 // src/lib/constants/tokenList.ts
 
+import ethLogo from '../../assets/token_logo/eth-logo.png';
+
+
 interface TokenInfo {
     name: string;
     symbol: string;
@@ -22,14 +25,14 @@ export const SEPOLIA_TOKENS: TokenInfo[] = [
         address: "0x0000000000000000000000000000000000000000", // Native ETH on Sepolia
         decimals: 18,
         isNative: true,
-        logoURI: "https://www.citypng.com/public/uploads/preview/ethereum-eth-round-logo-icon-png-701751694969815akblwl2552.png"
+        logoURI: ethLogo
     },
     {
         name: "Wrapped Ether",
         symbol: "WETH",
         address: "0xfff9976782d46cc05630d1f6ebab18b2324d6b14", // Sepolia WETH 
         decimals: 18,
-        logoURI: "https://holder.io/wp-content/uploads/coins/h/weth.png"
+        logoURI: ethLogo
     },
     {
         name: "USD Coin",

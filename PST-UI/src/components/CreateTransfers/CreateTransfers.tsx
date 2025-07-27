@@ -552,7 +552,7 @@ const CreateTransfer: React.FC = () => {
     return (
         <>
             <div className={styles.CreateTransferCard}>
-                <h2 className={styles.cardTitle}>Create Transfer</h2>
+                <h2 className={styles.cardTitle}>Create Smart Transfer</h2>
 
                 {isConnected && chain ? (
                     <p className={styles.connectedNetwork}>

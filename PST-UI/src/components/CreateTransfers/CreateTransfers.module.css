@@ -36,6 +36,7 @@
 .disconnectedNetwork {
     /* Inherit styles from connectedNetwork */
     color: red;
+    text-align: center;
 }
 
 /* Input group container (amount, token select) */
