@@ -32,7 +32,7 @@ export const SEPOLIA_TOKENS: TokenInfo[] = [
         symbol: "WETH",
         address: "0xfff9976782d46cc05630d1f6ebab18b2324d6b14", // Sepolia WETH 
         decimals: 18,
-        logoURI: ethLogo
+        logoURI: "https://holder.io/wp-content/uploads/coins/h/weth.png"
     },
     {
         name: "USD Coin",
@@ -60,7 +60,7 @@ export const ZKSYNC_SEPOLIA_TOKENS: TokenInfo[] = [
         address: "0x0000000000000000000000000000000000000000", // Native ETH on zkSync Era Sepolia
         decimals: 18,
         isNative: true,
-        logoURI: "https://www.citypng.com/public/uploads/preview/ethereum-eth-round-logo-icon-png-701751694969815akblwl2552.png"
+        logoURI: ethLogo
     },
     {
         name: "zkSync Era WETH",
