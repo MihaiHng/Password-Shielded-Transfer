@@ -60,8 +60,8 @@ contract PST_Store {
     uint256 internal constant MIN_AMOUNT_TO_SEND = 1e14; // 1 ether / 1e4 => 0.0001 ether
 
     uint256 public s_minPasswordLength = REQ_MIN_PASSWORD_LENGTH;
-    uint256 public s_cancelCooldownPeriod = 3 minutes; // 30 minutes;
-    uint256 public s_availabilityPeriod = 5 minutes; // 7 days;
+    uint256 public s_cancelCooldownPeriod = 60 minutes;
+    uint256 public s_availabilityPeriod = 3 days;
     uint256 public s_cleanupInterval = 12 weeks;
     uint256 public s_inactivityThreshold = 12 weeks;
     uint256 public s_batchLimit = 50;

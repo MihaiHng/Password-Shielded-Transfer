@@ -6,7 +6,7 @@
     border-radius: 20px;
     padding: 20px;
     max-width: 480px;
-    margin: 25px auto;
+    margin: 20px auto;
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     backdrop-filter: blur(4px);
     border: 1px solid rgba(255, 255, 255, 0.18);
@@ -36,7 +36,7 @@
 .disconnectedNetwork {
     /* Inherit styles from connectedNetwork */
     color: red;
-    text-align: center;
+    text-align: center
 }
 
 /* Input group container (amount, token select) */
