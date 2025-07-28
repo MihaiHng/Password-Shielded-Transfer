@@ -8,7 +8,7 @@ import type { Abi } from 'viem';
 
 // Import Font Awesome icons
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCopy, faSyncAlt } from '@fortawesome/free-solid-svg-icons';
+import { faCopy, /*faSyncAlt*/ } from '@fortawesome/free-solid-svg-icons';
 
 // Import ABIs
 import abiPstWrapper from '../../utils/abis/abi_pst.json';
@@ -509,7 +509,7 @@ const HistoryTransfers: React.FC<HistoryTransfersProps> = ({ componentTitle, ref
         <>
             <div className={styles.historyTransfersContainer}>
                 <h2 className={styles.historyTransfersTitle}>{displayedTitle}</h2>
-                {isConnected && userAddress && (
+                {/* {isConnected && userAddress && (
                     <button
                         onClick={handleManualRefresh}
                         className={styles.refreshButton}
@@ -525,7 +525,7 @@ const HistoryTransfers: React.FC<HistoryTransfersProps> = ({ componentTitle, ref
                         />
                         Refresh
                     </button>
-                )}
+                )} */}
 
                 {!isConnected || !userAddress ? (
                     <p className={styles.disconnectedNetwork}>Connect your wallet to see your transfer history.</p>
