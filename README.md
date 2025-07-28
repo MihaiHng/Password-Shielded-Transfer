@@ -5,7 +5,7 @@
 ## Contract Address
 
 - Testnet:
-  - Sepolia ETH: 
+  - Sepolia ETH: 0x3FCACE1f442613ebdB9eCA881428884756B8C80a
   - Sepolia Zksync: 
 
 ## Description
