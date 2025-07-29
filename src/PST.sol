@@ -94,8 +94,8 @@ contract PST is
                             FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     /**
-     * _automationRegistry = 0x6593c7De001fC8542bB1703532EE1E5aA0D458fD -> for Ethereum;
-     *                       0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad -> for Sepolia;
+     * @dev Transfer fee level limits are being set
+     * @notice Takes 3 parameters to establish the transfer fee for different values
      */
     constructor(
         uint256 _transferFeeLvlOne,
