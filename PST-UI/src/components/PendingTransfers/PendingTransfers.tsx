@@ -487,7 +487,6 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({
 
     }, [onTransferActionCompleted, queryClient, pstContractAddressForChain, PST_CONTRACT_ABI, getFunctionName, getFunctionArgs, chain?.id]);
 
-    // Removed: Cleanup for the debounce timeout (no longer needed)
     useEffect(() => {
         // This useEffect is now empty or can be removed if no other side effects are handled.
         // Keeping it if other unrelated cleanups might be added in the future.
@@ -498,9 +497,9 @@ const PendingTransfers: React.FC<PendingTransfersProps> = ({
 
 
     const sortedTransferIds = useMemo(() => {
-        const validIds = transferIds.filter(id => id !== 0n);
-        console.log("[PendingTransfers] Sorted transfer IDs after filter:", validIds);
-        return [...validIds].sort((a, b) => {
+        //const validIds = transferIds.filter(id => id !== 0n);
+        //console.log("[PendingTransfers] Sorted transfer IDs after filter:", validIds);
+        return [...transferIds].sort((a, b) => {
             if (a > b) return -1;
             if (a < b) return 1;
             return 0;

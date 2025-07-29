@@ -60,7 +60,7 @@ export const ZKSYNC_SEPOLIA_TOKENS: TokenInfo[] = [
         address: "0x0000000000000000000000000000000000000000", // Native ETH on zkSync Era Sepolia
         decimals: 18,
         isNative: true,
-        logoURI: "https://www.citypng.com/public/uploads/preview/ethereum-eth-round-logo-icon-png-701751694969815akblwl2552.png"
+        logoURI: ethLogo
     },
     {
         name: "zkSync Era WETH",
