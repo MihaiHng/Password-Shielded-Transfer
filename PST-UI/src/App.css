@@ -87,3 +87,22 @@ body {
   cursor: pointer;
   transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
 }
+
+/* Informative text / alert messages */
+.informativeText {
+  font-size: 11px;
+  font-family: 'sans-serif';
+  color: #0ad1df;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 15px;
+  background-color: rgba(42, 93, 102, 0.1);
+  border-radius: 8px;
+  border: 1px solid #08a5b1;
+  width: fit-content;
+  margin: 0;
+  margin-right: 3.2rem;
+}

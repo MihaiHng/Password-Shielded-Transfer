@@ -4,6 +4,8 @@ import './App.css';
 import CreateTransfer from './components/CreateTransfers/CreateTransfers';
 import ClaimTransfers from './components/ClaimTransfers/ClaimTransfers';
 import History from './components/History/History';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faInfoCircle } from '@fortawesome/free-solid-svg-icons';
 
 // Define heights for fixed elements 
 const FIXED_WALLET_HEADER_HEIGHT = '70px';
@@ -16,6 +18,11 @@ function App() {
   return (
     <div className="app-container">
       <header className="app-header-fixed">
+        <p className="informativeText">
+          <FontAwesomeIcon icon={faInfoCircle} />
+          Currently available for testing on Sepolia ETH and Sepolia Zksync.
+          Automatic refunds are not available on Zksync at the moment.
+        </p>
         <w3m-button />
       </header>
 
