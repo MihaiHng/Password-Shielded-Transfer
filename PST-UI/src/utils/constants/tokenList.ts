@@ -65,7 +65,7 @@ export const ZKSYNC_SEPOLIA_TOKENS: TokenInfo[] = [
     {
         name: "zkSync Era WETH",
         symbol: "WETH",
-        address: "0x000000000000000000000000000000000000800A", // Native ETH on zkSync Era Sepolia
+        address: "0x000000000000000000000000000000000000800A", // Wrapped ETH on zkSync Era Sepolia
         decimals: 18,
         isNative: true,
         logoURI: "https://holder.io/wp-content/uploads/coins/h/weth.png"
