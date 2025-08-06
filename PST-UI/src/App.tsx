@@ -21,7 +21,6 @@ function App() {
         <p className="informativeText">
           <FontAwesomeIcon icon={faInfoCircle} />
           Currently available for testing on Sepolia ETH and Sepolia Zksync.
-          Automatic refunds are not available on Zksync at the moment.
         </p>
         <w3m-button />
       </header>
